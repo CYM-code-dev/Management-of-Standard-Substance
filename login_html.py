@@ -2,6 +2,7 @@
 import sys
 import os
 import json
+import math
 import time
 import threading
 import datetime
@@ -31,6 +32,62 @@ CORS(app, supports_credentials=True)
 
 # ==================== 配置文件路径 ====================
 CONFIG_FILE = 'config.json'
+
+
+# ==================== 数值修约规则 ====================
+# 三项规则：
+#   1) 领用数量：g 限 4 位小数（万分之一天平精度），mL 强制 2 位小数
+#   2) 定容体积：>=10 取 4 位有效数字，<10 取 3 位有效数字
+#   3) 计算浓度：原始浓度单位为 % 时不修约；
+#                单位为 μg/mL 或 mg/L 时，结果 <0.10 取 3 位小数，>=0.10 取 2 位小数
+def _sig_figs(val, n):
+    if not isinstance(val, (int, float)) or val == 0 or not math.isfinite(val):
+        return 0.0
+    magnitude = math.floor(math.log10(abs(val)))
+    decimals = max(0, n - 1 - int(magnitude))
+    factor = 10 ** decimals
+    return round(val * factor) / factor
+
+
+def _vol_decimals(val):
+    n = 4 if val >= 10 else 3
+    if val <= 0 or not math.isfinite(val):
+        return n - 1
+    magnitude = math.floor(math.log10(abs(val)))
+    return max(0, n - 1 - int(magnitude))
+
+
+def _round_vol(val):
+    return _sig_figs(val, 4 if val >= 10 else 3)
+
+
+def _fmt_vol(val):
+    return f"{val:.{_vol_decimals(val)}f}"
+
+
+def _round_qty(val, unit):
+    return round(val, 2) if unit == 'mL' else round(val, 4)
+
+
+def _fmt_qty(val, unit):
+    if unit == 'mL':
+        return f"{val:.2f}"
+    if val == int(val):
+        return str(int(val))
+    return f"{val:.4f}".rstrip('0').rstrip('.')
+
+
+def _round_conc(val, conc_unit):
+    if conc_unit == '%':
+        return val
+    return round(val, 3) if val < 0.10 else round(val, 2)
+
+
+def _fmt_conc(val, conc_unit):
+    if conc_unit == '%':
+        return f"{val:.10f}".rstrip('0').rstrip('.') if isinstance(val, float) else str(val)
+    decimals = 3 if val < 0.10 else 2
+    return f"{val:.{decimals}f}"
 
 
 def load_config():
@@ -619,6 +676,305 @@ def update_lims_unit():
             return jsonify({"success": False, "message": result.get('errorDesc', '更新失败')})
     except Exception as e:
         return jsonify({"success": False, "message": f"LIMS 同步异常: {str(e)}"}), 500
+
+
+@app.route('/api/lims/receive', methods=['POST'])
+def lims_receive():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    data = request.get_json()
+    consumable_id = str(data.get('consumable_id', ''))
+    quantity = data.get('quantity')
+    receive_date = data.get('receive_date') or datetime.datetime.now().strftime("%Y-%m-%d 00:00:00")
+    if not consumable_id or quantity is None:
+        return jsonify({"success": False, "message": "缺少参数"}), 400
+
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+    pid = session.get('pid') or system.current_pid or ''
+    pname = username
+
+    url = f"{system.base_url}/detectionManager/manager/consumableReceive/receive"
+    form_data = {
+        "num": str(quantity),
+        "receiveDate": receive_date,
+        "purpose": "",
+        "receiveType": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE",
+        "ids": consumable_id,
+        "receiveUserName": pname,
+        "isLevelTwo": "NO",
+        "pid": pid,
+        "pname": pname,
+        "loginId": pid
+    }
+    headers = {
+        "Referer": f"{system.base_url}/web/consumablesReceiveListMgt.html?menuId=289",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
+    }
+    try:
+        resp = system.session.post(url, data=form_data, headers=headers)
+        resp.raise_for_status()
+        result = resp.json()
+        if not result.get("success"):
+            return jsonify({"success": False, "message": result.get('errorDesc') or str(result.get('errorCtx', '领用失败'))})
+        time.sleep(1)
+        # 查询最新领用记录 ID
+        rec_url = f"{system.base_url}/detectionManager/manager/consumableReceive/record/{consumable_id}"
+        rec_params = {"_search": "false", "nd": str(int(time.time()*1000)), "pageSize": 9999, "pageNo": 1,
+                      "sidx": "", "sord": "asc", "pid": pid, "pname": pname, "loginId": pid}
+        rec_resp = system.session.get(rec_url, params=rec_params, headers={"Referer": f"{system.base_url}/web/consumablesReceiveListMgt.html?menuId=289"})
+        receive_id = consumable_id
+        if rec_resp.status_code == 200:
+            rec_data = rec_resp.json()
+            records = rec_data.get("resultData", [])
+            if records:
+                receive_id = str(records[0].get("id", consumable_id))
+        return jsonify({"success": True, "receive_id": receive_id})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"领用异常: {str(e)}"}), 500
+
+
+@app.route('/api/lims/save_solution', methods=['POST'])
+def lims_save_solution():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    p = request.get_json()
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+    pid = session.get('pid') or system.current_pid or ''
+    pname = username
+
+    try:
+        purity_str = str(p.get('purity_str', '99.5'))
+        purity_value = float(purity_str.replace('%', '').strip())
+        volume_ml = float(p.get('volume_ml', 1))
+        use_quantity = float(p.get('use_quantity', 1))
+        original_unit = p.get('original_unit', '%')
+        received_unit = p.get('received_unit', 'g')
+        volume_ml = _round_vol(volume_ml)
+        use_quantity = _round_qty(use_quantity, received_unit)
+        if original_unit == '%':
+            config_conc = purity_value / 100.0 * use_quantity * 1_000_000 / volume_ml
+        else:
+            config_conc = purity_value * use_quantity / volume_ml
+        config_conc = _round_conc(config_conc, original_unit)
+    except Exception:
+        config_conc = float(p.get('config_conc', 0))
+        received_unit = p.get('received_unit', 'g')
+
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    receive_id = str(p.get('receive_id', ''))
+    original_id = str(p.get('original_id', ''))
+    original_name = p.get('original_name', '')
+    qty_display = _fmt_qty(use_quantity, received_unit)
+    vol_display = _fmt_vol(volume_ml)
+    conc_display = _fmt_conc(config_conc, original_unit)
+
+    save_detail_item = {
+        "id": None, "createDatetime": now_str, "serialVersionUID": None,
+        "configureId": None, "originalId": receive_id,
+        "originalCode": p.get('original_code', f"L-{receive_id}"),
+        "originalName": original_name,
+        "originalConcentration": f"{purity_str}({original_unit})",
+        "concentrationCount": f"{purity_str}({original_unit})",
+        "originalUnit": original_unit,
+        "receivedQuantity": qty_display, "receivedUint": received_unit,
+        "useUantity": qty_display, "useUnit": received_unit,
+        "medium": p.get('medium', ''),
+        "volume": vol_display, "unit": "mL",
+        "configurationConcentration": conc_display,
+        "configurationUnit": "μg/mL", "configurationUncertainty": None,
+        "remark": None, "consumableReceive": None, "dataid": original_id,
+        "configurationRecordId": None, "creatorName": None, "creatorId": None,
+        "modifierName": None, "modifyDatetime": now_str,
+        "conversionFactor": None if original_unit == "μg/mL" else "1",
+        "dilutionFactor": None,
+        "originalNo": p.get('original_no', f"A-{original_id}\n{p.get('batch_no','')}\n{p.get('solution_code','')}"),
+        "_X_ID": f"row_{int(time.time())}"
+    }
+
+    payload = {
+        "id": None, "createDatetime": now_str, "serialVersionUID": None,
+        "solutionName": p.get('solution_name', original_name),
+        "solutionCode": p.get('solution_code', ''),
+        "deviceIds": None, "deviceNames": p.get('device_names'),
+        "configureDate": p.get('configure_date', datetime.date.today().strftime('%Y-%m-%d')),
+        "validityDate": p.get('validity_date', ''),
+        "storageCondition": p.get('storage_condition'),
+        "storageLocation": p.get('storage_location', '4-1-华业4-1'),
+        "concentration": f"{original_name}:{conc_display}(μg/mL)",
+        "concentrationCount": f"{original_name}:{conc_display}(μg/mL)",
+        "concentrationUnitName": None, "uncertainty": None, "configureOrder": None,
+        "originalCode": f"A-{original_id}",
+        "controlledNo": p.get('batch_no', ''),
+        "medium": None, "configuratorId": None,
+        "solutionType": p.get('solution_type', 'SOLUTION_TYPE_B'),
+        "configuratorName": None, "constantVolume": 0, "totalConstantVolume": 0,
+        "usedConstantVolume": 0, "remark": None, "diluteStatus": False,
+        "consumableReceive": None, "customType": None, "auditUserName": None,
+        "auditTime": None, "diluteConcentrationControl": "[]",
+        "pageType": p.get('page_type', 'SOLUTION_TYPE_A'),
+        "saveDetailList": json.dumps([save_detail_item], ensure_ascii=False),
+        "originalValidityDate": p.get('expiry_date', ''),
+        "configurationTemplateId": None, "intermediateTemplateId": None,
+        "temperature": p.get('temperature'), "humidity": p.get('humidity'),
+        "computingFormula": None, "configurationMethod": None,
+        "configurationProcess": None, "nextAuditUserName": None,
+        "disposeUserName": None, "disposeTime": None, "disposeWay": None,
+        "configurationSolutionTemplateId": None, "configurationRecordId": None,
+        "creatorName": None, "creatorId": None, "modifierName": None,
+        "modifyDatetime": now_str, "receivedUint": original_unit,
+        "pid": pid, "pname": pname, "loginId": pid
+    }
+    try:
+        url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/saveSolutionConfigure"
+        headers = {
+            "Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544",
+            "Content-Type": "application/json;charset=UTF-8"
+        }
+        resp = system.session.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+        result = resp.json()
+        if not result.get("success"):
+            return jsonify({"success": False, "message": result.get('errorDesc') or str(result.get('errorCtx', '配置失败'))})
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"配置异常: {str(e)}"}), 500
+
+
+@app.route('/api/lims/export_docx', methods=['POST'])
+def lims_export_docx():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    from docx import Document as DocxDocument
+    from docx.enum.table import WD_ALIGN_VERTICAL
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    import io
+
+    p = request.get_json()
+    received_unit = p.get('received_unit', 'g')
+    template_name = "RF10-09 标准溶液配制记录(1).docx" if received_unit == 'g' else "RF10-10 标准溶液配制记录（稀释）(1).docx"
+    template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'word_templates', template_name)
+    if not os.path.exists(template_path):
+        return jsonify({"success": False, "message": f"模板文件不存在: {template_name}"}), 404
+
+    solution_name = p.get('solution_name', '')
+    custom_num = p.get('base_custom_num', '') or p.get('custom_num', '')
+    purity_str = str(p.get('purity_str', ''))
+    original_unit = p.get('original_unit', '%')
+    purity_display = f"{purity_str}({original_unit})"
+    device_names = p.get('device_names', '') or ''
+    solution_code = p.get('solution_code', '')
+    validity_date = p.get('validity_date', '')
+    configure_date = p.get('configure_date', datetime.date.today().strftime('%Y-%m-%d'))
+    medium = p.get('medium', '')
+    storage_cond = p.get('storage_condition', '') or ''
+    temp_val = p.get('temperature', '') or ''
+    humid_val = p.get('humidity', '') or ''
+
+    try:
+        purity_value = float(purity_str.replace('%', '').strip())
+        vol_f = _round_vol(float(p.get('volume_ml', '')))
+        qty_f = _round_qty(float(p.get('use_quantity', '')), received_unit)
+        if original_unit == '%':
+            config_conc_raw = purity_value / 100.0 * qty_f * 1_000_000 / vol_f
+        else:
+            config_conc_raw = purity_value * qty_f / vol_f
+        config_conc = _round_conc(config_conc_raw, original_unit)
+        conc = _fmt_conc(config_conc, original_unit)
+        use_qty = _fmt_qty(qty_f, received_unit)
+        volume = _fmt_vol(vol_f)
+    except Exception:
+        conc = str(p.get('config_conc', ''))
+        use_qty = str(p.get('use_quantity', ''))
+        volume = str(p.get('volume_ml', ''))
+
+    doc = DocxDocument(template_path)
+
+    # 填充段落 P1（温度/湿度/储存条件）
+    if len(doc.paragraphs) > 1:
+        p1 = doc.paragraphs[1]
+        p1.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        if temp_val and len(p1.runs) > 4:
+            # run[2] 为温度下划线区（10 字符居中），run[4] 是 ℃ 单位（不带下划线）
+            p1.runs[2].text = f" {str(temp_val).center(10)} "
+            p1.runs[2].font.underline = True
+        if len(p1.runs) > 6:
+            p1.runs[5].text = "\t\t"
+            p1.runs[6].text = "\t\t"
+        if humid_val and len(p1.runs) > 10:
+            # run[9] 为湿度下划线区（10 字符居中），% 移到 run[10] 开头不带下划线
+            p1.runs[9].text = str(humid_val).center(10)
+            p1.runs[9].font.underline = True
+            p1.runs[10].text = "%" + " " * 13
+        elif len(p1.runs) > 10:
+            p1.runs[10].text = "                        "
+        if storage_cond and len(p1.runs) > 12:
+            p1.runs[12].text = f" {storage_cond} "
+            p1.runs[12].font.underline = True
+
+    table = doc.tables[0]
+    if received_unit == 'g':
+        # RF10-09
+        table.cell(0, 1).text = solution_name
+        table.cell(0, 5).text = custom_num
+        table.cell(1, 1).text = purity_display
+        table.cell(1, 5).text = device_names
+        purity_num = purity_str.split('(')[0].strip() if '(' in purity_str else purity_str
+        cell_2_1 = table.cell(2, 1)
+        cell_2_1.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        cell_2_1.paragraphs[0].text = f"称取{use_qty}g标准品，用{medium}定容至{volume}mL容量瓶中，保存于{storage_cond}"
+        cell_3_1 = table.cell(3, 1)
+        cell_3_1.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        cell_3_1.paragraphs[0].text = f"X=（{use_qty}g*{purity_num}%/{volume}mL）*10^6={conc}μg/mL"
+        table.cell(4, 1).text = solution_code
+        table.cell(5, 1).text = validity_date
+        table.cell(7, 6).text = configure_date
+    else:
+        # RF10-10
+        if '(' in purity_display:
+            purity_val = purity_display.split('(')[0].strip()
+            purity_unit = purity_display.split('(')[1].rstrip(')').strip()
+        else:
+            purity_val = purity_display
+            purity_unit = ''
+        table.cell(1, 1).text = solution_name
+        table.cell(1, 5).text = custom_num
+        table.cell(1, 9).text = purity_val
+        cell_1_7 = table.cell(1, 7)
+        if len(cell_1_7.paragraphs) > 1:
+            cell_1_7.paragraphs[1].text = f"({purity_unit})"
+        for ci in range(len(table.row_cells(3))):
+            cell = table.cell(3, ci)
+            p0 = cell.paragraphs[0]
+            if "(      )" in p0.text:
+                p0.text = p0.text.replace("(      )", f"({purity_unit})")
+            elif "(     )" in p0.text:
+                p0.text = p0.text.replace("(     )", "(mL)")
+            elif "(    )" in p0.text:
+                p0.text = p0.text.replace("(    )", "(μg/mL)")
+        table.cell(4, 0).text = purity_val
+        table.cell(4, 1).text = use_qty
+        table.cell(4, 2).text = medium
+        table.cell(4, 3).text = volume
+        table.cell(4, 5).text = conc
+        table.cell(4, 6).text = solution_code
+        table.cell(4, 8).text = configure_date
+        table.cell(4, 10).text = validity_date
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    download_name = (f"{solution_code}_配制记录.docx" if solution_code else "配制记录.docx").replace("/", "-").replace("\\", "-")
+    from flask import send_file
+    return send_file(buf, as_attachment=True, download_name=download_name,
+                     mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 
 
 if __name__ == '__main__':

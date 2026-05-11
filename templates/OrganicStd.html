@@ -166,6 +166,16 @@
         .badge.bg-secondary { background: #6366F1 !important; }
         #recordCount { font-size: 0.7rem; }
 
+        /* 储备液配置图标 */
+        .solution-config-icon {
+            color: #0891b2;
+            cursor: pointer;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+            transition: transform 0.15s;
+        }
+        .solution-config-icon:hover { transform: scale(1.2); }
+
         /* 证书图标 */
         .cert-icon {
             color: #ef4444;
@@ -309,6 +319,50 @@
         .custom-dropdown-item:hover {
             background: rgba(59,130,246,0.1);
         }
+        .duplicate-highlight {
+            background-color: #fee2e2 !important;
+            border-color: #ef4444 !important;
+        }
+        /* ── 标物质配置 modal tabs ── */
+        #solutionModal .sol-modal-tabs {
+            border-bottom: 2px solid rgba(59,130,246,0.18);
+            background: rgba(238,242,255,0.6);
+            gap: 2px;
+        }
+        #solutionModal .sol-modal-tabs .nav-link {
+            font-family: 'DM Sans','Segoe UI',sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #6B7280;
+            padding: 0.45rem 1.2rem;
+            border-radius: 8px 8px 0 0;
+            border: 1px solid transparent;
+            border-bottom: none;
+            background: transparent;
+            transition: color .2s, background .2s, border-color .2s;
+        }
+        #solutionModal .sol-modal-tabs .nav-link:hover {
+            color: #3B82F6;
+            background: rgba(59,130,246,0.08);
+            border-color: rgba(59,130,246,0.2) rgba(59,130,246,0.2) transparent;
+        }
+        #solutionModal .sol-modal-tabs .nav-link.active {
+            color: #3B82F6;
+            background: rgba(255,255,255,0.85);
+            border-color: rgba(59,130,246,0.25) rgba(59,130,246,0.25) rgba(255,255,255,0.85);
+        }
+        /* B-BCD 占位 */
+        .sol-bbcd-placeholder {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            min-height: 220px; gap: 0.75rem;
+        }
+        .sol-bbcd-placeholder i { font-size: 2.5rem; color: #c7d2fe; }
+        .sol-bbcd-placeholder p {
+            margin: 0;
+            font-size: 0.95rem; font-weight: 600; letter-spacing: 0.02em;
+            color: #a5b4fc;
+        }
     </style>
 </head>
 <body>
@@ -322,6 +376,7 @@
         </div>
         <button class="btn btn-outline-secondary me-2" id="manualImportBtn"><i class="fas fa-file-excel me-1"></i>手动导入Excel</button>
         <button class="btn btn-primary shadow-sm me-2" data-bs-toggle="modal" data-bs-target="#standardModal" onclick="openAddModal()"><i class="fas fa-plus-circle me-1"></i>新增标准品</button>
+        <button class="btn btn-outline-info me-2" id="solutionConfigBtn"><i class="fas fa-vial me-1"></i>标物质配置</button>
         <button class="btn btn-outline-secondary" id="settingsBtn"><i class="fas fa-cog me-1"></i>设置</button>
     </div>
 </div>
@@ -461,6 +516,155 @@
 
 <!-- 设置模态框 -->
 <div class="modal fade" id="settingsModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header bg-info text-white"><h5 class="modal-title"><i class="fas fa-cog me-2"></i>系统设置</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label fw-bold">Excel文件UNC路径</label><input type="text" class="form-control" id="settingExcelUrl" placeholder="\\\\server\\share\\folder\\有机标准品.xls"></div><div class="mb-3"><label class="form-label fw-bold">证书文件夹UNC路径</label><input type="text" class="form-control" id="settingCertBaseUrl" placeholder="\\\\server\\share\\证书文件夹"></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button type="button" class="btn btn-primary" id="saveSettingsBtn">保存并加载</button></div></div></div></div>
+
+<!-- 标物质配置模态框 -->
+<div class="modal fade" id="solutionModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header" style="background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;">
+        <h5 class="modal-title"><i class="fas fa-vial me-2"></i>标物质配置</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+
+        <!-- Tab Navigation -->
+        <ul class="nav nav-tabs sol-modal-tabs px-3 pt-3" id="solModalTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="sol-ab-tab"
+              data-bs-toggle="tab" data-bs-target="#abPane"
+              type="button" role="tab" aria-controls="abPane" aria-selected="true">
+              A-B
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="sol-bbcd-tab"
+              data-bs-toggle="tab" data-bs-target="#bbcdPane"
+              type="button" role="tab" aria-controls="bbcdPane" aria-selected="false">
+              B-BCD
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content">
+
+          <!-- A-B Tab Pane: 原储备液配置内容 -->
+          <div class="tab-pane fade show active p-3" id="abPane" role="tabpanel" aria-labelledby="sol-ab-tab">
+            <!-- LIMS 搜索区 -->
+            <div class="card border-0 shadow-sm mb-3">
+              <div class="card-body py-2">
+                <div class="d-flex gap-2 align-items-center">
+                  <label class="form-label mb-0 text-nowrap fw-bold">标准品搜索</label>
+                  <input type="text" id="solSearchInput" class="form-control form-control-sm" placeholder="输入名称关键词...">
+                  <button class="btn btn-sm btn-outline-primary text-nowrap" id="solSearchBtn"><i class="fas fa-search me-1"></i>查询</button>
+                </div>
+                <div id="solSearchResults" class="mt-2" style="max-height:160px;overflow-y:auto;display:none;"></div>
+              </div>
+            </div>
+            <!-- 选中标准品信息 -->
+            <div id="solSelectedInfo" class="alert alert-info py-2 mb-3 small" style="display:none;"></div>
+            <!-- 配置参数表单 -->
+            <div id="solFormArea" style="display:none;">
+              <div class="row g-2">
+                <div class="col-md-3">
+                  <label class="form-label mb-1 small fw-bold">标液名称 *</label>
+                  <input type="text" id="solSolutionName" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label mb-1 small fw-bold">领用数量 *</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" id="solUseQty" class="form-control" step="0.0001" min="0.0001">
+                    <span class="input-group-text" id="solUseUnit">g</span>
+                  </div>
+                  <div id="solUseQtyHint" class="small mt-1" style="display:none;"></div>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label mb-1 small fw-bold">定容体积(mL) *</label>
+                  <input type="number" id="solVolume" class="form-control form-control-sm" step="0.01" min="0.01">
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label mb-1 small fw-bold">溶剂/介质 *</label>
+                  <input id="solMedium" class="form-control form-control-sm" list="solMediumOptions" placeholder="选择或输入" autocomplete="off">
+                  <datalist id="solMediumOptions">
+                    <option value="甲醇"></option>
+                    <option value="乙酸乙酯"></option>
+                    <option value="甲苯"></option>
+                    <option value="正己烷"></option>
+                    <option value="二氯甲烷"></option>
+                    <option value="叔丁基甲醚"></option>
+                    <option value="环己烷"></option>
+                  </datalist>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label mb-1 small fw-bold">储备液类型</label>
+                  <select id="solType" class="form-select form-select-sm">
+                    <option value="SOLUTION_TYPE_B">储备液</option>
+                    <option value="SOLUTION_TYPE_C">应用液</option>
+                    <option value="SOLUTION_TYPE_D">工作液</option>
+                  </select>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label mb-1 small fw-bold">计算浓度(μg/mL) *</label>
+                  <input type="text" id="solConc" class="form-control form-control-sm bg-light" readonly>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label mb-1 small fw-bold">储备液编号 *</label>
+                  <input type="text" id="solCode" class="form-control form-control-sm bg-light" readonly>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label mb-1 small fw-bold">配置日期 *</label>
+                  <input type="date" id="solConfigureDate" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label mb-1 small fw-bold">有效期至 *</label>
+                  <input type="date" id="solValidityDate" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label mb-1 small fw-bold">保存条件 *</label>
+                  <select id="solStorage" class="form-select form-select-sm">
+                    <option value="-4℃冰箱">-4℃冰箱</option>
+                    <option value="-18℃冰箱">-18℃冰箱</option>
+                    <option value="干燥箱">干燥箱</option>
+                  </select>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label mb-1 small fw-bold">温度(℃) *</label>
+                  <input type="text" id="solTemp" class="form-control form-control-sm" placeholder="如 23">
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label mb-1 small fw-bold">湿度(%RH) *</label>
+                  <input type="text" id="solHumid" class="form-control form-control-sm" placeholder="如 50">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label mb-1 small fw-bold">配置设备</label>
+                  <input type="text" id="solDevice" class="form-control form-control-sm" list="solDeviceOptions" placeholder="如天平编号 CK-SB294-CG">
+                  <datalist id="solDeviceOptions">
+                    <option value="CK-SB295-CG"></option>
+                    <option value="CK-SB005-CG"></option>
+                    <option value="CK-SB294-CG"></option>
+                  </datalist>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- B-BCD Tab Pane: 占位 -->
+          <div class="tab-pane fade p-3" id="bbcdPane" role="tabpanel" aria-labelledby="sol-bbcd-tab">
+            <div class="sol-bbcd-placeholder">
+              <i class="fas fa-tools"></i>
+              <p>功能开发中</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <div class="modal-footer gap-2">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+        <button type="button" class="btn btn-outline-secondary" id="solExportBtn" disabled><i class="fas fa-file-word me-1"></i>导出配制记录</button>
+        <button type="button" class="btn btn-primary" id="solSaveBtn" disabled><i class="fas fa-save me-1"></i>确认领用并保存</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- 删除确认模态框 -->
 <div class="modal fade" id="deleteModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header bg-danger"><h5 class="modal-title">确认删除</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">确定要删除 <strong id="deleteItemName"></strong> 吗？</div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-danger" id="confirmDeleteBtn">确认删除</button></div></div></div></div>
@@ -761,7 +965,7 @@
             const originalIdDisplay = (item.originalId && item.originalId.toString().trim() !== '') ? item.originalId : '—';
             const labNoValue = item.labNo || '';
             const labNoCell = (labNoValue && labNoValue !== '/') ? `<div class="labno-cell">${escapeHtml(labNoValue)}<i class="fas fa-file-pdf cert-icon" data-labno="${escapeAttr(labNoValue)}" title="打开证书"></i></div>` : (labNoValue === '/' ? escapeHtml(labNoValue) : '—');
-            html += `<tr class="${expired ? 'expired-row' : ''}"><td>${escapeHtml(originalIdDisplay)}</td><td>${escapeHtml(item.group)}</td><td>${labNoCell}</td><td><strong>${escapeHtml(item.name)}</strong></td><td>${escapeHtml(item.cas)}</td><td>${escapeHtml(item.spec)}</td><td>${expiryDisplay}</td><td>${escapeHtml(item.location)}</td><td>${storageDisplay}</td><td><span class="badge ${item.usage === '开封' ? 'bg-warning text-dark' : 'bg-success'}">${item.usage}</span></td><td class="action-icons"><i class="fas fa-edit text-primary" onclick="openEditModal(${item.id})" title="编辑"></i><i class="fas fa-trash-alt text-danger" onclick="openDeleteModal(${item.id}, '${escapeHtml(item.name).replace(/'/g, "\\'")}')" title="删除"></i></td></tr>`;
+            html += `<tr class="${expired ? 'expired-row' : ''}"><td>${escapeHtml(originalIdDisplay)}</td><td>${escapeHtml(item.group)}</td><td>${labNoCell}</td><td><div class="d-flex align-items-center justify-content-between gap-1"><strong>${escapeHtml(item.name)}</strong><i class="fas fa-vial solution-config-icon" data-name="${escapeAttr(item.name)}" data-labno="${escapeAttr(item.labNo || '')}" title="储备液配置"></i></div></td><td>${escapeHtml(item.cas)}</td><td>${escapeHtml(item.spec)}</td><td>${expiryDisplay}</td><td>${escapeHtml(item.location)}</td><td>${storageDisplay}</td><td><span class="badge ${item.usage === '开封' ? 'bg-warning text-dark' : 'bg-success'}">${item.usage}</span></td><td class="action-icons"><i class="fas fa-edit text-primary" onclick="openEditModal(${item.id})" title="编辑"></i><i class="fas fa-trash-alt text-danger" onclick="openDeleteModal(${item.id}, '${escapeHtml(item.name).replace(/'/g, "\\'")}')" title="删除"></i></td></tr>`;
         });
         tbody.innerHTML = html;
         document.getElementById('recordCount').innerText = data.length;
@@ -932,9 +1136,70 @@
 
     function trimVal(v) { return (v == null ? '' : String(v).trim()) || ''; }
 
+    const DUPLICATE_FIELD_IDS = ['labNo', 'originalId', 'group', 'name', 'cas', 'spec', 'concentration', 'concUnit', 'location', 'storageDate', 'expiry', 'manufacturer', 'usageStatus', 'remarks'];
+
+    function clearDuplicateHighlight() {
+        DUPLICATE_FIELD_IDS.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('duplicate-highlight');
+        });
+    }
+
+    function applyDuplicateHighlight() {
+        DUPLICATE_FIELD_IDS.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('duplicate-highlight');
+        });
+    }
+
+    function fillFormFromExcelRecord(item) {
+        document.getElementById('labNo').value = item.labNo || '';
+        document.getElementById('originalId').value = item.originalId || '';
+        document.getElementById('group').value = item.group || '';
+        document.getElementById('name').value = item.name || '';
+        document.getElementById('cas').value = item.cas || '';
+        const specStr = item.spec || '';
+        const slashIdx = specStr.indexOf(' / ');
+        if (slashIdx !== -1) {
+            document.getElementById('spec').value = specStr.substring(0, slashIdx);
+            const concPart = specStr.substring(slashIdx + 3).trim();
+            const spaceIdx = concPart.lastIndexOf(' ');
+            if (spaceIdx !== -1) {
+                document.getElementById('concentration').value = concPart.substring(0, spaceIdx);
+                document.getElementById('concUnit').value = concPart.substring(spaceIdx + 1);
+            } else {
+                document.getElementById('concentration').value = concPart;
+                document.getElementById('concUnit').value = '';
+            }
+        } else {
+            document.getElementById('spec').value = specStr;
+            document.getElementById('concentration').value = '';
+            document.getElementById('concUnit').value = '';
+        }
+        document.getElementById('manufacturer').value = item.manufacturer || '';
+        document.getElementById('expiry').value = (item.expiry === '/' || !item.expiry) ? '' : item.expiry;
+        document.getElementById('location').value = item.location || '';
+        document.getElementById('storageDate').value = (item.storageDate === '/' || !item.storageDate) ? '' : item.storageDate;
+        document.getElementById('usageStatus').value = item.usage || '未开封';
+        document.getElementById('remarks').value = item.remarks || '';
+    }
+
     function fillFormFromQueryItem(item) {
+        clearDuplicateHighlight();
         currentLimsItem = item;
-        document.getElementById('labNo').value = trimVal(item.customNum);
+        const labNoVal = trimVal(item.customNum);
+        const existing = (labNoVal && labNoVal !== '/')
+            ? standardsData.find(s => (s.labNo || '').trim() === labNoVal)
+            : null;
+        if (existing) {
+            fillFormFromExcelRecord(existing);
+            document.getElementById('limsRecordId').value = trimVal(item.id);
+            originalConcUnit = document.getElementById('concUnit').value;
+            applyDuplicateHighlight();
+            alert(`实验室编号 ${labNoVal} 已存在于 Excel 数据库，下方显示的是 Excel 中已有的记录`);
+            return;
+        }
+        document.getElementById('labNo').value = labNoVal;
         document.getElementById('name').value = trimVal(item.name);
         document.getElementById('cas').value = trimVal(item.casNo);
         document.getElementById('spec').value = trimVal(item.standard);
@@ -1063,6 +1328,7 @@
         document.getElementById('limsRecordId').value = '';
         currentLimsItem = null;
         originalConcUnit = '';
+        clearDuplicateHighlight();
     }
 
     async function saveStandard() {
@@ -1263,8 +1529,466 @@
             });
         }
 
+        document.getElementById('solutionConfigBtn').addEventListener('click', () => openSolutionConfigModal(null));
+
+        // 委托：标品名称列配置图标
+        document.getElementById('standardTableBody').addEventListener('click', e => {
+            const icon = e.target.closest('.solution-config-icon');
+            if (icon) openSolutionConfigModal(icon.dataset.labno || icon.dataset.name);
+        });
+
         initCustomDropdown('group', 'groupDropdown');
         initCustomDropdown('concUnit', 'concUnitDropdown');
+    });
+
+    // ========== 储备液配置 ==========
+    let solCurrentItem = null;
+
+    // 按钮状态控制：用颜色提示当前配置是否已保存 / 已导出
+    function solSetBtnSaved(done) {
+        const btn = document.getElementById('solSaveBtn');
+        if (done) {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-success');
+            btn.innerHTML = '<i class="fas fa-check me-1"></i>已保存';
+        } else {
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-primary');
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>确认领用并保存';
+        }
+    }
+    function solSetBtnExported(done) {
+        const btn = document.getElementById('solExportBtn');
+        if (done) {
+            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('btn-success');
+            btn.innerHTML = '<i class="fas fa-check me-1"></i>已导出';
+        } else {
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-outline-secondary');
+            btn.innerHTML = '<i class="fas fa-file-word me-1"></i>导出配制记录';
+        }
+    }
+    // 用户修改任意配置 → 已保存 / 已导出状态作废
+    function solMarkDirty() {
+        solSetBtnSaved(false);
+        solSetBtnExported(false);
+    }
+
+    // 领用量校验：不得超过剩余量 validNum。返回 true=合法
+    function solCheckQty() {
+        const input = document.getElementById('solUseQty');
+        const hint = document.getElementById('solUseQtyHint');
+        const saveBtn = document.getElementById('solSaveBtn');
+        input.classList.remove('is-invalid');
+        hint.style.display = 'none';
+        hint.className = 'small mt-1';
+        if (!solCurrentItem) return true;
+        const qty = parseFloat(input.value);
+        const dec = (input.value.split('.')[1] || '');
+        const unit = solCurrentItem.numUnitName || 'g';
+        if (unit !== 'mL' && dec.length > 4) {
+            input.classList.add('is-invalid');
+            hint.textContent = '领用数量最多保留 4 位小数';
+            hint.classList.add('text-danger');
+            hint.style.display = 'block';
+            if (saveBtn) saveBtn.disabled = true;
+            return false;
+        }
+        const stock = parseFloat(solCurrentItem.validNum);
+        if (isNaN(qty) || qty <= 0) return true;  // 空值/无效值不在此校验
+        if (!isNaN(stock)) {
+            if (qty > stock) {
+                input.classList.add('is-invalid');
+                hint.textContent = `超过剩余量 ${stock}${unit}`;
+                hint.classList.add('text-danger');
+                hint.style.display = 'block';
+                if (saveBtn) saveBtn.disabled = true;
+                return false;
+            }
+        }
+        if (saveBtn) saveBtn.disabled = false;
+        return true;
+    }
+
+    // 必填校验：导出 / 确认领用并保存 前调用
+    function solValidateRequired() {
+        const fields = [
+            { id: 'solSolutionName', label: '标液名称', type: 'text' },
+            { id: 'solUseQty',       label: '领用数量', type: 'number' },
+            { id: 'solVolume',       label: '定容体积', type: 'number' },
+            { id: 'solMedium',       label: '溶剂/介质', type: 'text' },
+            { id: 'solConc',         label: '计算浓度', type: 'text' },
+            { id: 'solCode',         label: '储备液编号', type: 'text' },
+            { id: 'solConfigureDate',label: '配置日期', type: 'text' },
+            { id: 'solValidityDate', label: '有效期至', type: 'text' },
+            { id: 'solStorage',      label: '保存条件', type: 'text' },
+            { id: 'solTemp',         label: '温度', type: 'text' },
+            { id: 'solHumid',        label: '湿度', type: 'text' },
+        ];
+        // 浓度单位为 % 时，配置设备也必填
+        const concUnit = solCurrentItem
+            ? (solCurrentItem.concentrationUnitName || ((solCurrentItem.numUnitName || 'g') === 'g' ? '%' : 'μg/mL'))
+            : '';
+        if (concUnit === '%') {
+            fields.push({ id: 'solDevice', label: '配置设备', type: 'text' });
+        }
+        const missing = [];
+        fields.forEach(f => {
+            const el = document.getElementById(f.id);
+            if (!el) return;
+            const v = (el.value || '').trim();
+            const empty = !v || (f.type === 'number' && (isNaN(parseFloat(v)) || parseFloat(v) <= 0));
+            if (empty) {
+                el.classList.add('is-invalid');
+                missing.push(f.label);
+            } else {
+                el.classList.remove('is-invalid');
+            }
+        });
+        if (missing.length) {
+            alert('请填写必填项：' + missing.join('、'));
+            return false;
+        }
+        return true;
+    }
+
+    async function openSolutionConfigModal(preName) {
+        const resp = await fetch('/api/status');
+        const st = await resp.json();
+        if (!st.logged_in) { alert('请先登录后再使用储备液配置功能'); return; }
+        // 重置弹窗
+        solCurrentItem = null;
+        document.getElementById('solSearchInput').value = preName || '';
+        document.getElementById('solSearchResults').style.display = 'none';
+        document.getElementById('solSearchResults').innerHTML = '';
+        document.getElementById('solSelectedInfo').style.display = 'none';
+        document.getElementById('solFormArea').style.display = 'none';
+        document.getElementById('solSaveBtn').disabled = true;
+        document.getElementById('solExportBtn').disabled = true;
+        solSetBtnSaved(false);
+        solSetBtnExported(false);
+        // 每次打开重置到 A-B 标签，并恢复 footer
+        const abTab = document.getElementById('sol-ab-tab');
+        if (abTab) bootstrap.Tab.getOrCreateInstance(abTab).show();
+        const footerEl = document.querySelector('#solutionModal .modal-footer');
+        if (footerEl) footerEl.style.display = '';
+        new bootstrap.Modal(document.getElementById('solutionModal')).show();
+        if (preName) setTimeout(solSearchLims, 200);
+    }
+    window.openSolutionConfigModal = openSolutionConfigModal;
+
+    async function solSearchLims() {
+        const kw = document.getElementById('solSearchInput').value.trim();
+        if (!kw) return;
+        const btn = document.getElementById('solSearchBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        const resultsBox = document.getElementById('solSearchResults');
+        resultsBox.innerHTML = '<div class="text-muted small p-1">查询中...</div>';
+        resultsBox.style.display = 'block';
+        try {
+            const resp = await fetch(`/api/query?keyword=${encodeURIComponent(kw)}`);
+            const data = await resp.json();
+            if (!data.success) { resultsBox.innerHTML = `<div class="text-danger small p-1">${data.message}</div>`; return; }
+            const list = data.data || [];
+            if (!list.length) { resultsBox.innerHTML = '<div class="text-muted small p-1">未找到匹配标准品</div>'; return; }
+            if (list.length === 1) {
+                resultsBox.style.display = 'none';
+                solSelectItem(list[0]);
+                return;
+            }
+            resultsBox.innerHTML = list.map((item, i) => {
+                const stock = item.validNum !== undefined ? ` 剩余:${item.validNum}${item.numUnitName||''}` : '';
+                const conc = item.concentration ? ` ${item.concentration}(${item.concentrationUnitName||''})` : '';
+                return `<div class="border-bottom py-1 px-2 small sol-result-item" style="cursor:pointer;" data-idx="${i}">
+                    <strong>${escapeHtml(item.name||'')}</strong>
+                    <span class="text-muted ms-2">${escapeHtml(item.batchNo||'')}${conc}${stock} 效期:${item.validDate||'—'}</span>
+                </div>`;
+            }).join('');
+            resultsBox.querySelectorAll('.sol-result-item').forEach(el => {
+                el.addEventListener('mouseenter', () => el.style.background = '#e0f2fe');
+                el.addEventListener('mouseleave', () => el.style.background = '');
+                el.addEventListener('click', () => solSelectItem(list[parseInt(el.dataset.idx)]));
+            });
+        } catch(e) {
+            resultsBox.innerHTML = `<div class="text-danger small p-1">查询异常: ${e.message}</div>`;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-search me-1"></i>查询';
+        }
+    }
+
+    function solSelectItem(item) {
+        solCurrentItem = item;
+        document.getElementById('solSearchResults').style.display = 'none';
+        const unit = item.numUnitName || 'g';
+        const conc = item.concentration || '99.5';
+        const concUnit = item.concentrationUnitName || (unit === 'g' ? '%' : 'μg/mL');
+        const infoEl = document.getElementById('solSelectedInfo');
+        const stockDisplay = (item.validNum !== undefined && item.validNum !== null && item.validNum !== '')
+            ? `${item.validNum}${item.numUnitName||unit}` : '—';
+        infoEl.innerHTML = `<strong>${escapeHtml(item.name||'')}</strong>
+            &nbsp;|&nbsp; 浓度: ${escapeHtml(conc)}(${escapeHtml(concUnit)})
+            &nbsp;|&nbsp; 效期: ${escapeHtml(item.validDate||'—')}
+            &nbsp;|&nbsp; 剩余量: ${escapeHtml(stockDisplay)}
+            &nbsp;|&nbsp; 实验室编号: ${escapeHtml(item.customNum||item.no||'—')}`;
+        infoEl.style.display = 'block';
+        document.getElementById('solFormArea').style.display = 'block';
+        document.getElementById('solSaveBtn').disabled = false;
+        document.getElementById('solExportBtn').disabled = false;
+        solSetBtnSaved(false);
+        solSetBtnExported(false);
+        // 填充默认值
+        document.getElementById('solSolutionName').value = item.name || '';
+        document.getElementById('solUseUnit').textContent = unit;
+        const useQtyEl = document.getElementById('solUseQty');
+        useQtyEl.value = '';
+        useQtyEl.step = unit === 'mL' ? '0.01' : '0.0001';
+        useQtyEl.min = unit === 'mL' ? '0.01' : '0.0001';
+        document.getElementById('solVolume').value = '10.00';
+        document.getElementById('solConc').value = '';
+        document.getElementById('solCode').value = '';
+        document.getElementById('solConfigureDate').value = new Date().toISOString().slice(0,10);
+        document.getElementById('solValidityDate').value = '';
+        solCheckQty();
+        solCalcConc();
+    }
+
+    function solCalcConc() {
+        if (!solCurrentItem) return;
+        const unit = solCurrentItem.numUnitName || 'g';
+        const concUnit = solCurrentItem.concentrationUnitName || (unit === 'g' ? '%' : 'μg/mL');
+        const purityRaw = parseFloat((solCurrentItem.concentration || '99.5').replace('%','').trim());
+        const qty = parseFloat(document.getElementById('solUseQty').value);
+        const vol = parseFloat(document.getElementById('solVolume').value);
+        const solType = document.getElementById('solType').value;
+        if (isNaN(qty) || isNaN(vol) || qty <= 0 || vol <= 0 || isNaN(purityRaw)) return;
+        const qtyStr = document.getElementById('solUseQty').value;
+        const qtyDec = (qtyStr.split('.')[1] || '');
+        const maxDec = unit === 'mL' ? 2 : 4;
+        if (qtyDec.length > maxDec) {
+            document.getElementById('solConc').value = '';
+            document.getElementById('solCode').value = '';
+            return;
+        }
+        let conc;
+        if (concUnit === '%') {
+            conc = purityRaw / 100.0 * qty * 1000000 / vol;
+        } else {
+            conc = purityRaw * qty / vol;
+        }
+        let concRounded, concStr;
+        if (concUnit === '%') {
+            concRounded = Number(conc.toPrecision(12));
+            concStr = String(concRounded);
+        } else {
+            const decimals = conc < 0.10 ? 3 : 2;
+            concRounded = Number(conc.toFixed(decimals));
+            concStr = concRounded.toFixed(decimals);
+        }
+        document.getElementById('solConc').value = concStr;
+        // 储备液编号
+        const baseNum = solCurrentItem.customNum || solCurrentItem.no || 'CK-CG-UNKNOWN';
+        const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+        document.getElementById('solCode').value = `${baseNum}-${concStr}-${today}`;
+        // 有效期
+        const SHORT_LIFE_CAS = ['584-84-9', '822-06-0', '91-08-7', '101-68-8'];
+        const solName = (document.getElementById('solSolutionName').value || '').toUpperCase();
+        const casNo = (solCurrentItem.casNo || '').trim();
+        let days;
+        if (SHORT_LIFE_CAS.includes(casNo)) days = 14;
+        else if (solName.includes('偶氮') || solName.includes('AZO')) days = 30;
+        else if (solType === 'SOLUTION_TYPE_D') days = 30;
+        else if (concRounded > 1000) days = 365;
+        else if (concRounded >= 500) days = 180;
+        else days = 90;
+        const expiry = new Date();
+        expiry.setDate(expiry.getDate() + days);
+        // 不超过标准品有效期
+        if (solCurrentItem.validDate) {
+            const stdExpiry = new Date(solCurrentItem.validDate);
+            if (expiry > stdExpiry) expiry.setTime(stdExpiry.getTime());
+        }
+        document.getElementById('solValidityDate').value = expiry.toISOString().slice(0,10);
+    }
+
+    async function solSave() {
+        if (!solCurrentItem) return;
+        if (!solCheckQty()) { alert('领用数量超过剩余量，请修改后再保存'); return; }
+        if (!solValidateRequired()) return;
+        const btn = document.getElementById('solSaveBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>领用中...';
+        let saved = false;
+        try {
+            const qty = parseFloat(document.getElementById('solUseQty').value);
+            if (!qty || qty <= 0) { alert('请输入领用数量'); return; }
+            const vol = parseFloat(document.getElementById('solVolume').value);
+            if (!vol || vol <= 0) { alert('请输入定容体积'); return; }
+            // 1. 领用
+            const recResp = await fetch('/api/lims/receive', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({consumable_id: String(solCurrentItem.id), quantity: qty})
+            });
+            const recData = await recResp.json();
+            if (!recData.success) { alert('领用失败: ' + recData.message); return; }
+            const receiveId = recData.receive_id;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>保存配置...';
+            // 2. 保存配置
+            const payload = solBuildPayload(receiveId);
+            const saveResp = await fetch('/api/lims/save_solution', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const saveData = await saveResp.json();
+            if (!saveData.success) { alert('配置保存失败: ' + saveData.message); return; }
+            saved = true;
+        } catch(e) {
+            alert('操作异常: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            if (saved) solSetBtnSaved(true);
+            else solSetBtnSaved(false);
+        }
+    }
+
+    async function solExport() {
+        if (!solCurrentItem) return;
+        if (!solValidateRequired()) return;
+        if (!document.getElementById('solConc').value) {
+            alert('请先填写领用数量和定容体积以计算浓度');
+            return;
+        }
+        const btn = document.getElementById('solExportBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
+        let exported = false;
+        try {
+            const payload = solBuildPayload('');
+            const resp = await fetch('/api/lims/export_docx', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({message: resp.statusText}));
+                alert('导出失败: ' + err.message); return;
+            }
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const cd = resp.headers.get('Content-Disposition') || '';
+            const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)/i);
+            a.download = m ? decodeURIComponent(m[1]) : '配制记录.docx';
+            a.href = url;
+            a.click();
+            URL.revokeObjectURL(url);
+            exported = true;
+        } catch(e) {
+            alert('导出异常: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            if (exported) solSetBtnExported(true);
+            else solSetBtnExported(false);
+        }
+    }
+
+    function solBuildPayload(receiveId) {
+        const item = solCurrentItem;
+        const unit = item.numUnitName || 'g';
+        const concUnit = item.concentrationUnitName || (unit === 'g' ? '%' : 'μg/mL');
+        const purityStr = String(item.concentration || '99.5');
+        const baseNum = item.customNum || item.no || 'CK-CG-UNKNOWN';
+        const qty = parseFloat(document.getElementById('solUseQty').value);
+        const vol = parseFloat(document.getElementById('solVolume').value);
+        return {
+            receive_id: receiveId,
+            original_id: String(item.id),
+            original_name: item.name || '',
+            original_code: receiveId ? `L-${receiveId}` : '',
+            purity_str: purityStr,
+            original_unit: concUnit,
+            received_unit: unit,
+            batch_no: item.batchNo || '',
+            expiry_date: item.validDate || '',
+            base_custom_num: baseNum,
+            solution_name: document.getElementById('solSolutionName').value.trim(),
+            solution_code: document.getElementById('solCode').value.trim(),
+            configure_date: document.getElementById('solConfigureDate').value,
+            validity_date: document.getElementById('solValidityDate').value,
+            medium: document.getElementById('solMedium').value,
+            volume_ml: vol,
+            use_quantity: qty,
+            solution_type: document.getElementById('solType').value,
+            page_type: 'SOLUTION_TYPE_A',
+            storage_location: item.storagePositionName || '4-1-华业4-1',
+            storage_condition: document.getElementById('solStorage').value,
+            temperature: document.getElementById('solTemp').value.trim() || null,
+            humidity: document.getElementById('solHumid').value.trim() || null,
+            device_names: document.getElementById('solDevice').value.trim() || null,
+            original_no: `A-${item.id}\n${item.batchNo||''}\n${document.getElementById('solCode').value.trim()}`,
+            config_conc: parseFloat(document.getElementById('solConc').value) || 0
+        };
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('solSearchBtn').addEventListener('click', solSearchLims);
+        document.getElementById('solSearchInput').addEventListener('keypress', e => { if(e.key==='Enter') solSearchLims(); });
+        document.getElementById('solUseQty').addEventListener('input', solCalcConc);
+        document.getElementById('solUseQty').addEventListener('input', solCheckQty);
+        document.getElementById('solUseQty').addEventListener('blur', () => {
+            if (!solCurrentItem) return;
+            const unit = solCurrentItem.numUnitName || 'g';
+            if (unit !== 'mL') return;
+            const el = document.getElementById('solUseQty');
+            const qty = parseFloat(el.value);
+            if (isNaN(qty) || qty <= 0) return;
+            el.value = qty.toFixed(2);
+            solCalcConc();
+            const ok = solCheckQty();
+            if (ok) {
+                const hint = document.getElementById('solUseQtyHint');
+                hint.classList.remove('text-danger');
+                hint.classList.add('text-muted');
+                hint.textContent = 'mL 单位强制 2 位小数';
+                hint.style.display = 'block';
+            }
+        });
+        document.getElementById('solVolume').addEventListener('input', solCalcConc);
+        document.getElementById('solVolume').addEventListener('blur', () => {
+            const vol = parseFloat(document.getElementById('solVolume').value);
+            if (isNaN(vol) || vol <= 0) return;
+            const n = vol >= 10 ? 4 : 3;
+            const magnitude = Math.floor(Math.log10(Math.abs(vol)));
+            const decimals = Math.max(0, n - 1 - magnitude);
+            const factor = Math.pow(10, decimals);
+            const rounded = Math.round(vol * factor) / factor;
+            document.getElementById('solVolume').value = rounded.toFixed(decimals);
+            solCalcConc();
+        });
+        document.getElementById('solType').addEventListener('change', solCalcConc);
+        document.getElementById('solSolutionName').addEventListener('input', solCalcConc);
+        document.getElementById('solSaveBtn').addEventListener('click', solSave);
+        document.getElementById('solExportBtn').addEventListener('click', solExport);
+
+        // 任意配置字段改动 → 两个按钮回到未完成状态（颜色复原）
+        ['solSolutionName','solUseQty','solVolume','solMedium','solType',
+         'solConfigureDate','solValidityDate','solStorage','solTemp','solHumid','solDevice']
+            .forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('input', solMarkDirty);
+                el.addEventListener('change', solMarkDirty);
+            });
+
+        // 标签页切换时根据当前 tab 显示/隐藏 footer
+        const solTabEls = document.querySelectorAll('#solModalTabs .nav-link');
+        const solModalFooter = document.querySelector('#solutionModal .modal-footer');
+        solTabEls.forEach(tabEl => {
+            tabEl.addEventListener('shown.bs.tab', e => {
+                solModalFooter.style.display = (e.target.id === 'sol-bbcd-tab') ? 'none' : '';
+            });
+        });
     });
 </script>
 </body>
