@@ -351,18 +351,12 @@
             background: rgba(255,255,255,0.85);
             border-color: rgba(59,130,246,0.25) rgba(59,130,246,0.25) rgba(255,255,255,0.85);
         }
-        /* B-BCD 占位 */
-        .sol-bbcd-placeholder {
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            min-height: 220px; gap: 0.75rem;
-        }
-        .sol-bbcd-placeholder i { font-size: 2.5rem; color: #c7d2fe; }
-        .sol-bbcd-placeholder p {
-            margin: 0;
-            font-size: 0.95rem; font-weight: 600; letter-spacing: 0.02em;
-            color: #a5b4fc;
-        }
+        /* 去掉 number 输入框箭头 */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+        /* 自编号需确认时标绿 */
+        .bbcd-code-confirm { border-color: #22c55e !important; box-shadow: 0 0 0 3px rgba(34,197,94,0.2) !important; }
     </style>
 </head>
 <body>
@@ -564,66 +558,37 @@
             <div id="solSelectedInfo" class="alert alert-info py-2 mb-3 small" style="display:none;"></div>
             <!-- 配置参数表单 -->
             <div id="solFormArea" style="display:none;">
-              <!-- 第 1 行: 标液类型 -->
-              <div class="row g-2 mb-2">
-                <div class="col-md-12">
-                  <label class="form-label mb-1 small fw-bold">标液类型</label>
-                  <select id="solType" class="form-select form-select-sm">
-                    <option value="SOLUTION_TYPE_B">储备液</option>
-                    <option value="SOLUTION_TYPE_C">应用液</option>
-                    <option value="SOLUTION_TYPE_D">工作液</option>
-                  </select>
-                </div>
-              </div>
-              <!-- 第 2 行: 标液名称 / 自编号 -->
-              <div class="row g-2 mb-2">
-                <div class="col-md-6">
-                  <label class="form-label mb-1 small fw-bold">标液名称 *</label>
-                  <input type="text" id="solSolutionName" class="form-control form-control-sm">
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label mb-1 small fw-bold">自编号 *</label>
-                  <input type="text" id="solCode" class="form-control form-control-sm bg-light" readonly>
-                </div>
-              </div>
-              <!-- 第 3 行: 配置日期 / 有效期至 / 温度 / 湿度 -->
-              <div class="row g-2 mb-2">
-                <div class="col-md-3">
-                  <label class="form-label mb-1 small fw-bold">配置日期 *</label>
-                  <input type="date" id="solConfigureDate" class="form-control form-control-sm">
-                </div>
-                <div class="col-md-3">
-                  <label class="form-label mb-1 small fw-bold">有效期至 *</label>
-                  <input type="date" id="solValidityDate" class="form-control form-control-sm">
-                </div>
-                <div class="col-md-3">
-                  <label class="form-label mb-1 small fw-bold">温度(℃) *</label>
-                  <input type="text" id="solTemp" class="form-control form-control-sm" placeholder="如 23">
-                </div>
-                <div class="col-md-3">
-                  <label class="form-label mb-1 small fw-bold">湿度(%RH) *</label>
-                  <input type="text" id="solHumid" class="form-control form-control-sm" placeholder="如 50">
-                </div>
-              </div>
-              <!-- 第 4 行: 保存条件 / 配置设备 -->
-              <div class="row g-2 mb-3">
-                <div class="col-md-6">
-                  <label class="form-label mb-1 small fw-bold">保存条件 *</label>
-                  <select id="solStorage" class="form-select form-select-sm">
-                    <option value="-4℃冰箱">-4℃冰箱</option>
-                    <option value="-18℃冰箱">-18℃冰箱</option>
-                    <option value="干燥箱">干燥箱</option>
-                  </select>
-                </div>
-                <div class="col-md-6">
-                  <label class="form-label mb-1 small fw-bold">配置设备</label>
-                  <input type="text" id="solDevice" class="form-control form-control-sm" list="solDeviceOptions" placeholder="如天平编号 CK-SB294-CG">
-                  <datalist id="solDeviceOptions">
-                    <option value="CK-SB295-CG"></option>
-                    <option value="CK-SB005-CG"></option>
-                    <option value="CK-SB294-CG"></option>
-                  </datalist>
-                </div>
+              <input type="hidden" id="solType" value="SOLUTION_TYPE_B">
+              <!-- 3行左右网格 -->
+              <div class="mb-3" style="display:grid;grid-template-columns:auto 1fr auto 1fr auto 1fr auto 1fr;align-items:center;gap:4px 8px;">
+                <!-- 行1：标液名称 + 自编号 -->
+                <label class="form-label mb-0 small fw-bold text-nowrap">标液名称 *</label>
+                <input type="text" id="solSolutionName" class="form-control form-control-sm" style="grid-column:span 3;">
+                <label class="form-label mb-0 small fw-bold text-nowrap">自编号 *</label>
+                <input type="text" id="solCode" class="form-control form-control-sm bg-light" readonly style="grid-column:span 3;">
+                <!-- 行2：配置日期 + 有效期至 + 温度 + 湿度 -->
+                <label class="form-label mb-0 small fw-bold text-nowrap">配置日期 *</label>
+                <input type="date" id="solConfigureDate" class="form-control form-control-sm">
+                <label class="form-label mb-0 small fw-bold text-nowrap">有效期至 *</label>
+                <input type="date" id="solValidityDate" class="form-control form-control-sm">
+                <label class="form-label mb-0 small fw-bold text-nowrap">温度(℃) *</label>
+                <input type="text" id="solTemp" class="form-control form-control-sm">
+                <label class="form-label mb-0 small fw-bold text-nowrap">湿度(%RH) *</label>
+                <input type="text" id="solHumid" class="form-control form-control-sm">
+                <!-- 行3：保存条件 + 配置设备 -->
+                <label class="form-label mb-0 small fw-bold text-nowrap">保存条件 *</label>
+                <select id="solStorage" class="form-select form-select-sm" style="grid-column:span 3;">
+                  <option value="-4℃冰箱">-4℃冰箱</option>
+                  <option value="-18℃冰箱">-18℃冰箱</option>
+                  <option value="干燥箱">干燥箱</option>
+                </select>
+                <label class="form-label mb-0 small fw-bold text-nowrap">配置设备</label>
+                <input type="text" id="solDevice" class="form-control form-control-sm" list="solDeviceOptions" placeholder="如天平编号 CK-SB294-CG" style="grid-column:span 3;">
+                <datalist id="solDeviceOptions">
+                  <option value="CK-SB295-CG"></option>
+                  <option value="CK-SB005-CG"></option>
+                  <option value="CK-SB294-CG"></option>
+                </datalist>
               </div>
               <!-- 配制汇总表格 -->
               <div class="table-responsive">
@@ -644,7 +609,7 @@
                       <td id="solSrcConc">—</td>
                       <td>
                         <div class="input-group input-group-sm">
-                          <input type="number" id="solUseQty" class="form-control" step="0.0001" min="0.0001">
+                          <input type="number" id="solUseQty" class="form-control" step="0.0001" min="0.0001" style="-moz-appearance:textfield;">
                           <span class="input-group-text" id="solUseUnit">g</span>
                         </div>
                         <div id="solUseQtyHint" class="small mt-1" style="display:none;"></div>
@@ -662,7 +627,7 @@
                         </datalist>
                       </td>
                       <td>
-                        <input type="number" id="solVolume" class="form-control form-control-sm" step="0.01" min="0.01">
+                        <input type="number" id="solVolume" class="form-control form-control-sm" step="0.01" min="0.01" style="-moz-appearance:textfield;">
                       </td>
                       <td>
                         <input type="text" id="solConc" class="form-control form-control-sm bg-light" readonly>
@@ -674,11 +639,145 @@
             </div>
           </div>
 
-          <!-- B-BCD Tab Pane: 占位 -->
+          <!-- B-BCD Tab Pane: 从已配储备液 B 配制混合液 -->
           <div class="tab-pane fade p-3" id="bbcdPane" role="tabpanel" aria-labelledby="sol-bbcd-tab">
-            <div class="sol-bbcd-placeholder">
-              <i class="fas fa-tools"></i>
-              <p>功能开发中</p>
+            <!-- 1.1 筛选区 -->
+            <div class="card border-0 shadow-sm mb-3">
+              <div class="card-body py-2">
+                <div class="row g-2 align-items-end">
+                  <div class="col-md-2">
+                    <label class="form-label mb-1 small fw-bold">名称</label>
+                    <input type="text" id="bbcdFilterName" class="form-control form-control-sm" placeholder="名称关键词">
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label mb-1 small fw-bold">自编号</label>
+                    <input type="text" id="bbcdFilterCode" class="form-control form-control-sm" placeholder="自编号关键词">
+                  </div>
+                  <div class="col-md-1">
+                    <label class="form-label mb-1 small fw-bold">类型</label>
+                    <input type="text" id="bbcdFilterCustomType" class="form-control form-control-sm" list="bbcdFilterCustomTypeList" placeholder="可输入">
+                    <datalist id="bbcdFilterCustomTypeList"></datalist>
+                  </div>
+                  <div class="col-md-1">
+                    <label class="form-label mb-1 small fw-bold">配置人</label>
+                    <input type="text" id="bbcdFilterOperator" class="form-control form-control-sm" list="bbcdFilterOperatorList" placeholder="可输入">
+                    <datalist id="bbcdFilterOperatorList"></datalist>
+                  </div>
+                  <div class="col-md-1">
+                    <label class="form-label mb-1 small fw-bold">审核</label>
+                    <select id="bbcdFilterAuditStatus" class="form-select form-select-sm">
+                      <option value="">全部</option>
+                      <option value="1">已审核</option>
+                      <option value="0">未审核</option>
+                    </select>
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label mb-1 small fw-bold">配置日期 起</label>
+                    <input type="date" id="bbcdFilterDateFrom" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label mb-1 small fw-bold">配置日期 止</label>
+                    <input type="date" id="bbcdFilterDateTo" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-md-1 d-flex gap-1 justify-content-end">
+                    <button class="btn btn-sm btn-outline-secondary" id="bbcdResetFilterBtn" title="重置"><i class="fas fa-redo"></i></button>
+                    <button class="btn btn-sm btn-primary" id="bbcdQueryBtn" title="查询"><i class="fas fa-search"></i></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- 1.2 结果列表区 -->
+            <div id="bbcdResultArea" class="mb-3">
+              <div class="table-responsive" style="max-height:300px;overflow-y:auto;">
+                <table class="table table-sm table-bordered table-hover mb-0" id="bbcdResultTable">
+                  <thead class="table-light" style="position:sticky;top:0;z-index:1;">
+                    <tr>
+                      <th style="width:36px;"><input type="checkbox" id="bbcdCheckAll"></th>
+                      <th>编号</th>
+                      <th>自编号</th>
+                      <th>名称</th>
+                      <th>浓度</th>
+                      <th>剩余(mL)</th>
+                      <th>配置人</th>
+                      <th>配置日期</th>
+                      <th>有效期</th>
+                      <th>审核</th>
+                    </tr>
+                  </thead>
+                  <tbody><tr><td colspan="10" class="text-center text-muted small py-3">请先查询</td></tr></tbody>
+                </table>
+              </div>
+              <div class="d-flex justify-content-between align-items-center mt-2">
+                <div class="small text-muted">已选 <span id="bbcdSelectedCount">0</span> 条</div>
+                <button class="btn btn-sm btn-success" id="bbcdConfigBtn" disabled><i class="fas fa-flask me-1"></i>配置选中项</button>
+              </div>
+            </div>
+            <!-- 1.3 配置区 -->
+            <div id="bbcdConfigArea" style="display:none;">
+              <hr>
+              <h6 class="fw-bold mb-3">
+                <i class="fas fa-vial me-1 text-primary"></i>混合液配置参数
+                <span class="badge bg-info ms-2" id="bbcdSolTypeLabel">储备液</span>
+                <input type="hidden" id="bbcdSolType" value="SOLUTION_TYPE_B">
+              </h6>
+              <!-- 表单：8列网格，每行 label+input 各占1列，名称/保存条件输入框跨3列 -->
+              <div class="mb-2" style="display:grid;grid-template-columns:auto 1fr auto 1fr auto 1fr auto 1fr;align-items:center;gap:4px 8px;">
+                <!-- 行1：名称 + 自编号 -->
+                <label class="form-label mb-0 small fw-bold text-nowrap">混合液名称 *</label>
+                <input type="text" id="bbcdSolutionName" class="form-control form-control-sm" style="grid-column:span 3;">
+                <label class="form-label mb-0 small fw-bold text-nowrap">自编号 *</label>
+                <input type="text" id="bbcdSolutionCode" class="form-control form-control-sm" style="grid-column:span 3;">
+                <!-- 行2：配置日期 + 有效期至 + 温度 + 湿度（同行） -->
+                <label class="form-label mb-0 small fw-bold text-nowrap">配置日期 *</label>
+                <input type="date" id="bbcdConfigureDate" class="form-control form-control-sm">
+                <label class="form-label mb-0 small fw-bold text-nowrap">有效期至 *</label>
+                <input type="date" id="bbcdValidityDate" class="form-control form-control-sm">
+                <label class="form-label mb-0 small fw-bold text-nowrap">温度(℃) *</label>
+                <input type="text" id="bbcdTemp" class="form-control form-control-sm">
+                <label class="form-label mb-0 small fw-bold text-nowrap">湿度(%RH) *</label>
+                <input type="text" id="bbcdHumid" class="form-control form-control-sm">
+                <!-- 行3：保存条件 + 类型 -->
+                <label class="form-label mb-0 small fw-bold text-nowrap">保存条件 *</label>
+                <select id="bbcdStorage" class="form-select form-select-sm" style="grid-column:span 3;">
+                  <option value="">--</option>
+                  <option value="-4℃冰箱">-4℃冰箱</option>
+                  <option value="-18℃冰箱">-18℃冰箱</option>
+                  <option value="4℃">4℃</option>
+                  <option value="干燥箱">干燥箱</option>
+                </select>
+                <label class="form-label mb-0 small fw-bold text-nowrap">类型</label>
+                <input type="text" id="bbcdCustomType" class="form-control form-control-sm" placeholder="如 TSCA" style="grid-column:span 3;">
+              </div>
+              <div id="bbcdValidityHint" class="small text-danger mb-2" style="display:none;"></div>
+              <div class="table-responsive">
+                <table class="table table-sm table-bordered text-center align-middle mb-2" id="bbcdConfigTable">
+                  <thead class="table-light">
+                    <tr>
+                      <th>编号</th>
+                      <th>源名称</th>
+                      <th>源浓度</th>
+                      <th>
+                        <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
+                          <span>领用量(mL)</span>
+                          <span id="bbcdFillBar" style="display:none;">
+                            <input type="number" id="bbcdFillQty" step="0.01" min="0.01" style="-moz-appearance:textfield;width:56px;font-size:0.72rem;padding:1px 4px;border:1px solid #ced4da;border-radius:4px;height:22px;">
+                            <button type="button" id="bbcdFillBtn" class="btn btn-outline-secondary btn-sm" style="padding:1px 5px;font-size:0.72rem;height:22px;line-height:1;">↓</button>
+                          </span>
+                        </div>
+                      </th>
+                      <th style="min-width:90px;">溶剂/介质</th>
+                      <th style="min-width:110px;width:110px;">定容体积(mL)</th>
+                      <th style="min-width:160px;">计算浓度</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div class="d-flex justify-content-end gap-2">
+                <button class="btn btn-sm btn-secondary" id="bbcdCancelBtn"><i class="fas fa-times me-1"></i>取消</button>
+                <button class="btn btn-sm btn-outline-secondary" id="bbcdExportBtn" disabled><i class="fas fa-file-word me-1"></i>导出配制记录</button>
+                <button class="btn btn-sm btn-primary" id="bbcdSaveBtn" disabled><i class="fas fa-save me-1"></i>保存配置</button>
+              </div>
             </div>
           </div>
 
@@ -695,6 +794,35 @@
 
 <!-- 删除确认模态框 -->
 <div class="modal fade" id="deleteModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header bg-danger"><h5 class="modal-title">确认删除</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">确定要删除 <strong id="deleteItemName"></strong> 吗？</div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-danger" id="confirmDeleteBtn">确认删除</button></div></div></div></div>
+
+<!-- B-BCD 标液类型选择模态框 -->
+<div class="modal fade" id="bbcdTypePickerModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white py-2">
+                <h6 class="modal-title mb-0"><i class="fas fa-flask me-2"></i>选择配置类型</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">将基于已选 <span id="bbcdTypePickerCount" class="fw-bold text-primary">0</span> 条储备液 B 配制下一级标液，请选择目标类型：</p>
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-primary text-start bbcd-type-pick" data-type="SOLUTION_TYPE_B" data-label="储备液">
+                        <i class="fas fa-flask me-2"></i><strong>储备液</strong>
+                        <span class="small text-muted ms-2">— 储备液 → 储备液</span>
+                    </button>
+                    <button type="button" class="btn btn-outline-success text-start bbcd-type-pick" data-type="SOLUTION_TYPE_C" data-label="应用液">
+                        <i class="fas fa-vial me-2"></i><strong>应用液</strong>
+                        <span class="small text-muted ms-2">— 储备液 → 应用液</span>
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary text-start" id="bbcdTypePickWorking" disabled>
+                        <i class="fas fa-tools me-2"></i><strong>工作液</strong>
+                        <span class="small text-muted ms-2">— 暂未开发</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- 登录模态框 -->
 <div class="modal fade" id="loginModal" tabindex="-1" data-bs-backdrop="static">
@@ -1960,6 +2088,614 @@
             config_conc: parseFloat(document.getElementById('solConc').value) || 0
         };
     }
+
+    // ===== B-BCD: 从已配储备液 B 配制混合液 =====
+    let bbcdLastResults = [];
+
+    function bbcdParseConc(str) {
+        const m = /^([\d.]+)\s*\(([^)]+)\)$/.exec((str || '').trim());
+        return m ? { value: parseFloat(m[1]), unit: m[2] } : { value: NaN, unit: '' };
+    }
+
+    function bbcdEsc(s) { return escapeHtml(s == null ? '' : String(s)); }
+
+    // 修约规则（与 A-B μg/mL 时一致）
+    function bbcdRoundQty(v) { return Math.round(v * 100) / 100; }
+    function bbcdFmtQty(v) { return v.toFixed(2); }
+    function bbcdRoundVol(v) {
+        if (!isFinite(v) || v <= 0) return v;
+        const n = v >= 10 ? 4 : 3;
+        const mag = Math.floor(Math.log10(Math.abs(v)));
+        const decimals = Math.max(0, n - 1 - mag);
+        const f = Math.pow(10, decimals);
+        return Math.round(v * f) / f;
+    }
+    function bbcdFmtVol(v) {
+        if (!isFinite(v) || v <= 0) return '';
+        const n = v >= 10 ? 4 : 3;
+        const mag = Math.floor(Math.log10(Math.abs(v)));
+        const decimals = Math.max(0, n - 1 - mag);
+        return v.toFixed(decimals);
+    }
+    function bbcdRoundConc(v) { return v < 0.10 ? Math.round(v * 1000) / 1000 : Math.round(v * 100) / 100; }
+    function bbcdFmtConc(v) { return v < 0.10 ? v.toFixed(3) : v.toFixed(2); }
+
+    // 自编号自动生成
+    let bbcdCodeAuto = true;
+
+    // 从多个 solutionCode 中提取出现最多的"CK-XX"前缀（取最后一个 - 之前的部分）
+    function bbcdDominantPrefix(codes) {
+        const counts = new Map();
+        codes.forEach(c => {
+            // 取倒数第二段以前，例如 CK-CG-2026033 → CK-CG
+            const parts = c.split('-');
+            const pref = parts.length >= 3 ? parts.slice(0, -1).join('-') : c;
+            counts.set(pref, (counts.get(pref) || 0) + 1);
+        });
+        let prefix = '', max = 0;
+        counts.forEach((n, k) => { if (n > max) { max = n; prefix = k; } });
+        // 只保留 CK-XX 两段，例如 CK-CG-2026 → CK-CG
+        const p = prefix.split('-');
+        return p.length >= 2 ? p.slice(0, 2).join('-') : prefix;
+    }
+
+    function bbcdComputeSingleConc() {
+        // 单行：用实际计算浓度（bbcdRecalcRow 已写入 cell）
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
+        if (rows.length !== 1) return '';
+        const tr = rows[0];
+        const qty = parseFloat(tr.querySelector('.bbcd-c-qty').value);
+        const vol = parseFloat(document.getElementById('bbcdVolume')?.value);
+        if (!qty || !vol || qty <= 0 || vol <= 0 || isNaN(tr._src.concValue)) return '';
+        const c = bbcdRoundConc(tr._src.concValue * qty / vol);
+        return bbcdFmtConc(c);
+    }
+
+    function bbcdComputeAvgConcStr() {
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
+        const vol = parseFloat(document.getElementById('bbcdVolume')?.value);
+        if (!vol || vol <= 0) return '';
+        const vals = [];
+        rows.forEach(tr => {
+            const qty = parseFloat(tr.querySelector('.bbcd-c-qty').value);
+            if (!qty || qty <= 0 || isNaN(tr._src.concValue)) return;
+            vals.push(tr._src.concValue * qty / vol);
+        });
+        if (!vals.length) return '';
+        const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+        return bbcdFmtConc(bbcdRoundConc(mean));
+    }
+
+    function bbcdUpdateCode() {
+        if (!bbcdCodeAuto) return;
+        const codeEl = document.getElementById('bbcdSolutionCode');
+        if (!codeEl) return;
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
+        const srcList = rows.map(tr => tr._src).filter(Boolean);
+        const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+
+        if (srcList.length === 0) { codeEl.value = ''; codeEl.classList.remove('bbcd-code-confirm'); return; }
+
+        if (srcList.length === 1) {
+            const concStr = bbcdComputeSingleConc();
+            if (!concStr) { codeEl.value = ''; codeEl.classList.remove('bbcd-code-confirm'); return; }
+            const sc = (srcList[0].solutionCode || '').replace(/-[\d.]+?-\d{8}$/, '');
+            codeEl.value = `${sc}-${concStr}-${today}`;
+            codeEl.classList.remove('bbcd-code-confirm');
+        } else {
+            const concStr = bbcdComputeAvgConcStr();
+            if (!concStr) { codeEl.value = ''; codeEl.classList.remove('bbcd-code-confirm'); return; }
+            const codes = srcList.map(s => s.solutionCode).filter(Boolean);
+            const prefix = codes.length ? bbcdDominantPrefix(codes) : 'CK-CG';
+            codeEl.value = `${prefix}-${srcList.length}XX-${concStr}-${today}`;
+            codeEl.classList.add('bbcd-code-confirm');
+        }
+    }
+
+    async function bbcdQuery() {
+        const params = new URLSearchParams({
+            name: document.getElementById('bbcdFilterName').value.trim(),
+            code: document.getElementById('bbcdFilterCode').value.trim(),
+            custom_type: document.getElementById('bbcdFilterCustomType').value.trim(),
+            operator: document.getElementById('bbcdFilterOperator').value.trim(),
+            audit_status: document.getElementById('bbcdFilterAuditStatus').value,
+            date_from: document.getElementById('bbcdFilterDateFrom').value,
+            date_to: document.getElementById('bbcdFilterDateTo').value,
+        });
+        const tbody = document.querySelector('#bbcdResultTable tbody');
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted small py-3"><i class="fas fa-spinner fa-spin me-1"></i>查询中...</td></tr>';
+        try {
+            const resp = await fetch('/api/lims/list_configured_solutions?' + params.toString());
+            const data = await resp.json();
+            if (!data.success) {
+                tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger small py-3">查询失败: ${bbcdEsc(data.message)}</td></tr>`;
+                bbcdLastResults = [];
+                return;
+            }
+            bbcdLastResults = data.data || [];
+            bbcdRenderResults(bbcdLastResults);
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger small py-3">查询异常: ${bbcdEsc(e.message)}</td></tr>`;
+            bbcdLastResults = [];
+        }
+    }
+
+    function bbcdRenderResults(list) {
+        const tbody = document.querySelector('#bbcdResultTable tbody');
+        if (!list.length) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted small py-3">无匹配记录</td></tr>';
+        } else {
+            tbody.innerHTML = list.map((item, idx) => `
+                <tr>
+                    <td><input type="checkbox" class="bbcd-row-check" data-idx="${idx}"></td>
+                    <td>${bbcdEsc(item.configureOrder)}</td>
+                    <td class="text-truncate" style="max-width:180px;" title="${bbcdEsc(item.solutionCode)}">${bbcdEsc(item.solutionCode)}</td>
+                    <td class="text-truncate" style="max-width:200px;" title="${bbcdEsc(item.solutionName)}">${bbcdEsc(item.solutionName)}</td>
+                    <td class="text-truncate" style="max-width:240px;" title="${bbcdEsc(item.concentrationCount || item.concentration)}">${bbcdEsc(item.concentration)}</td>
+                    <td>${item.constantVolume != null ? Number(item.constantVolume).toFixed(2) : '—'}</td>
+                    <td>${bbcdEsc(item.configuratorName || item.creatorName || '—')}</td>
+                    <td>${bbcdEsc(item.configureDate || '—')}</td>
+                    <td>${bbcdEsc(item.validityDate || '—')}</td>
+                    <td>${item.auditUserName ? '<span class="badge bg-success">已审核</span>' : '<span class="badge bg-secondary">未审核</span>'}</td>
+                </tr>`).join('');
+        }
+        bbcdRefreshFilterOptions(list);
+        bbcdUpdateSelection();
+    }
+
+    function bbcdRefreshFilterOptions(list) {
+        const fillList = (id, values) => {
+            const dl = document.getElementById(id);
+            dl.innerHTML = values.map(v => `<option value="${bbcdEsc(v)}"></option>`).join('');
+        };
+        const customTypes = [...new Set(list.map(it => it.customType).filter(Boolean))].sort();
+        const operators = [...new Set(list.map(it => it.configuratorName || it.creatorName).filter(Boolean))].sort();
+        fillList('bbcdFilterCustomTypeList', customTypes);
+        fillList('bbcdFilterOperatorList', operators);
+    }
+
+    function bbcdUpdateSelection() {
+        const checks = document.querySelectorAll('.bbcd-row-check');
+        const checked = [...checks].filter(c => c.checked);
+        document.getElementById('bbcdSelectedCount').textContent = checked.length;
+        document.getElementById('bbcdConfigBtn').disabled = checked.length === 0;
+        const all = document.getElementById('bbcdCheckAll');
+        all.checked = checks.length > 0 && checked.length === checks.length;
+        all.indeterminate = checked.length > 0 && checked.length < checks.length;
+    }
+
+    function bbcdResetFilters() {
+        ['bbcdFilterName','bbcdFilterCode','bbcdFilterDateFrom','bbcdFilterDateTo','bbcdFilterCustomType','bbcdFilterOperator'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('bbcdFilterAuditStatus').value = '';
+    }
+
+    function bbcdOpenConfig() {
+        const selectedIdx = [...document.querySelectorAll('.bbcd-row-check')]
+            .filter(c => c.checked).map(c => parseInt(c.dataset.idx, 10));
+        if (!selectedIdx.length) return;
+        const items = selectedIdx.map(i => bbcdLastResults[i]);
+
+        bbcdCodeAuto = true;
+        const customTypes = [...new Set(items.map(it => it.customType).filter(Boolean))];
+        document.getElementById('bbcdCustomType').value = customTypes.length === 1 ? customTypes[0] : '';
+        document.getElementById('bbcdSolutionName').value = '';
+        document.getElementById('bbcdSolutionCode').value = '';
+        document.getElementById('bbcdSolutionCode').classList.remove('bbcd-code-confirm');
+        document.getElementById('bbcdConfigureDate').value = new Date().toISOString().slice(0,10);
+        document.getElementById('bbcdValidityDate').value = '';
+        document.getElementById('bbcdTemp').value = '';
+        document.getElementById('bbcdHumid').value = '';
+        document.getElementById('bbcdStorage').value = '';
+        document.getElementById('bbcdValidityHint').style.display = 'none';
+        document.getElementById('bbcdExportBtn').disabled = true;
+        document.getElementById('bbcdExportBtn').className = 'btn btn-sm btn-outline-secondary';
+        document.getElementById('bbcdExportBtn').innerHTML = '<i class="fas fa-file-word me-1"></i>导出配制记录';
+
+        const tbody = document.querySelector('#bbcdConfigTable tbody');
+        tbody.innerHTML = '';
+        items.forEach((it, idx) => {
+            const parsed = bbcdParseConc(it.concentration);
+            const tr = document.createElement('tr');
+            tr._src = {
+                id: it.id,
+                configureOrder: it.configureOrder || '',
+                solutionName: it.solutionName || '',
+                solutionCode: it.solutionCode || '',
+                originalCode: it.originalCode || '',
+                controlledNo: it.controlledNo || '',
+                concValue: parsed.value,
+                concUnit: parsed.unit,
+                concentrationRaw: it.concentration || '',
+                constantVolume: Number(it.constantVolume || 0),
+                validityDate: it.validityDate || '',
+            };
+            const sharedCells = idx === 0 ? `
+                <td rowspan="${items.length}">
+                    <input id="bbcdMedium" class="form-control form-control-sm" list="solMediumOptions" placeholder="选择或输入" autocomplete="off">
+                </td>
+                <td rowspan="${items.length}">
+                    <input type="number" id="bbcdVolume" class="form-control form-control-sm" step="0.01" min="0.01" value="10.00" style="-moz-appearance:textfield;">
+                </td>` : '';
+            tr.innerHTML = `
+                <td><span class="bbcd-c-order">${bbcdEsc(tr._src.configureOrder)}</span></td>
+                <td class="text-start small"><span class="bbcd-c-srcName">${bbcdEsc(tr._src.solutionName)}</span></td>
+                <td><span class="bbcd-c-srcConc" title="剩余 ${tr._src.constantVolume.toFixed(2)} mL">${isNaN(tr._src.concValue) ? '—' : tr._src.concValue + ' ' + bbcdEsc(tr._src.concUnit)}</span></td>
+                <td><input type="number" class="form-control form-control-sm bbcd-c-qty" step="0.01" min="0.01" max="${tr._src.constantVolume}" style="-moz-appearance:textfield;"></td>
+                ${sharedCells}
+                <td><span class="bbcd-c-conc">—</span><span class="bbcd-c-unit ms-1 text-muted small">${bbcdEsc(tr._src.concUnit)}</span></td>`;
+            tbody.appendChild(tr);
+        });
+        document.getElementById('bbcdFillBar').style.display = items.length > 1 ? 'block' : 'none';
+        document.getElementById('bbcdFillQty').value = '';
+        document.getElementById('bbcdConfigArea').style.display = 'block';
+        bbcdRecalcAll();
+        bbcdCheckValidity();
+    }
+
+    function bbcdRecalcRow(tr) {
+        const src = tr._src;
+        const qty = parseFloat(tr.querySelector('.bbcd-c-qty').value);
+        const vol = parseFloat(document.getElementById('bbcdVolume').value);
+        const cell = tr.querySelector('.bbcd-c-conc');
+        const qtyEl = tr.querySelector('.bbcd-c-qty');
+        qtyEl.classList.remove('is-invalid');
+        if (!isNaN(qty) && (qty <= 0 || qty > src.constantVolume + 1e-9)) {
+            qtyEl.classList.add('is-invalid');
+        }
+        if (!qty || !vol || qty <= 0 || vol <= 0 || isNaN(src.concValue)) {
+            cell.textContent = '—';
+            return;
+        }
+        const c = src.concValue * qty / vol;
+        cell.textContent = bbcdFmtConc(c);
+    }
+
+    function bbcdRecalcAll() {
+        document.querySelectorAll('#bbcdConfigTable tbody tr').forEach(bbcdRecalcRow);
+        bbcdUpdateValidity();
+        bbcdUpdateCode();
+        bbcdCheckValidity();
+    }
+
+    function bbcdUpdateValidity() {
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
+        if (!rows.length) return;
+        const vol = parseFloat(document.getElementById('bbcdVolume').value);
+        const solName = (document.getElementById('bbcdSolutionName').value || '').toUpperCase();
+        const solType = document.getElementById('bbcdSolType').value;
+
+        const concs = rows.map(tr => {
+            const qty = parseFloat(tr.querySelector('.bbcd-c-qty').value);
+            if (!qty || !vol || qty <= 0 || vol <= 0 || isNaN(tr._src.concValue)) return null;
+            return tr._src.concValue * qty / vol;
+        }).filter(c => c != null);
+        const minConc = concs.length ? Math.min(...concs) : null;
+
+        let days;
+        if (solName.includes('偶氮') || solName.includes('AZO')) days = 30;
+        else if (solType === 'SOLUTION_TYPE_D') days = 30;
+        else if (minConc != null && minConc > 1000) days = 365;
+        else if (minConc != null && minConc >= 500) days = 180;
+        else days = 90;
+
+        const expiry = new Date();
+        expiry.setDate(expiry.getDate() + days);
+        const srcEarliest = rows.map(tr => tr._src.validityDate).filter(Boolean).sort()[0];
+        if (srcEarliest) {
+            const srcExp = new Date(srcEarliest);
+            if (expiry > srcExp) expiry.setTime(srcExp.getTime());
+        }
+        document.getElementById('bbcdValidityDate').value = expiry.toISOString().slice(0,10);
+    }
+
+    function bbcdCheckValidity() {
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
+        if (!rows.length) {
+            document.getElementById('bbcdSaveBtn').disabled = true;
+            document.getElementById('bbcdExportBtn').disabled = true;
+            return;
+        }
+
+        const solType = document.getElementById('bbcdSolType').value;
+        const isWorking = solType === 'SOLUTION_TYPE_D';
+        document.getElementById('bbcdSaveBtn').disabled = isWorking;
+        document.getElementById('bbcdExportBtn').disabled = isWorking;
+
+        // 有效期提示
+        const validity = document.getElementById('bbcdValidityDate').value;
+        const hint = document.getElementById('bbcdValidityHint');
+        if (validity) {
+            const tooLate = rows.filter(tr => tr._src.validityDate && tr._src.validityDate < validity);
+            if (tooLate.length) {
+                hint.textContent = `提示：以下源储备液的有效期早于本次有效期：${tooLate.map(tr => tr._src.configureOrder).join(', ')}`;
+                hint.style.display = 'block';
+            } else { hint.style.display = 'none'; }
+        } else { hint.style.display = 'none'; }
+    }
+
+    function bbcdValidate() {
+        let ok = true;
+        const required = ['bbcdSolutionName','bbcdSolutionCode','bbcdConfigureDate','bbcdValidityDate','bbcdTemp','bbcdHumid','bbcdVolume','bbcdMedium','bbcdStorage'];
+        required.forEach(id => {
+            const el = document.getElementById(id);
+            const v = (el.value || '').trim();
+            if (!v) { el.classList.add('is-invalid'); ok = false; }
+            else { el.classList.remove('is-invalid'); }
+        });
+        if (document.getElementById('bbcdSolType').value === 'SOLUTION_TYPE_D') ok = false;
+
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
+        if (!rows.length) ok = false;
+        rows.forEach(tr => {
+            const qtyEl = tr.querySelector('.bbcd-c-qty');
+            const qty = parseFloat(qtyEl.value);
+            if (!qty || qty <= 0 || qty > tr._src.constantVolume + 1e-9) {
+                qtyEl.classList.add('is-invalid'); ok = false;
+            } else { qtyEl.classList.remove('is-invalid'); }
+            // 计算浓度必须有值
+            const concEl = tr.querySelector('.bbcd-c-conc');
+            if (!concEl || !concEl.textContent.trim() || concEl.textContent.trim() === '—') ok = false;
+        });
+        return ok;
+    }
+
+    function bbcdBuildPayload() {
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
+        const volume = bbcdRoundVol(parseFloat(document.getElementById('bbcdVolume').value));
+        const volStr = bbcdFmtVol(volume);
+        const nowStr = new Date().toISOString().slice(0,19).replace('T',' ');
+        const medium = document.getElementById('bbcdMedium').value.trim();
+
+        const concParts = [], orderParts = [], controlledParts = [];
+        const detailList = rows.map((tr, idx) => {
+            const src = tr._src;
+            const qty = bbcdRoundQty(parseFloat(tr.querySelector('.bbcd-c-qty').value));
+            const qtyStr = bbcdFmtQty(qty);
+            const c = bbcdRoundConc(src.concValue * qty / volume);
+            const concStr = bbcdFmtConc(c);
+            concParts.push(`${src.solutionName}:${concStr}(${src.concUnit})`);
+            orderParts.push(src.configureOrder);
+            controlledParts.push(src.controlledNo || '');
+            return {
+                id: null, createDatetime: nowStr, serialVersionUID: null,
+                configureId: null,
+                originalId: src.id,
+                originalCode: src.originalCode,
+                originalName: src.solutionName,
+                originalConcentration: src.concentrationRaw,
+                concentrationCount: src.concentrationRaw,
+                originalUnit: null,
+                receivedQuantity: qtyStr, receivedUint: 'mL',
+                useUantity: qtyStr, useUnit: 'mL',
+                medium: medium,
+                volume: volStr, unit: 'mL',
+                configurationConcentration: concStr,
+                configurationUnit: src.concUnit,
+                configurationUncertainty: null, remark: null,
+                consumableReceive: null,
+                dataid: src.id,
+                configurationRecordId: null, creatorName: null, creatorId: null,
+                modifierName: null, modifyDatetime: nowStr,
+                originalNo: `${src.configureOrder}\n${src.solutionCode}`,
+                _X_ID: `row_${Date.now() + idx}`,
+            };
+        });
+
+        const earliestValidity = rows.map(tr => tr._src.validityDate).filter(Boolean).sort()[0] || '';
+
+        return {
+            id: null, createDatetime: nowStr, serialVersionUID: null,
+            solutionName: document.getElementById('bbcdSolutionName').value.trim(),
+            solutionCode: document.getElementById('bbcdSolutionCode').value.trim(),
+            deviceIds: null, deviceNames: null,
+            configureDate: document.getElementById('bbcdConfigureDate').value,
+            validityDate: document.getElementById('bbcdValidityDate').value,
+            storageCondition: document.getElementById('bbcdStorage').value || null,
+            storageLocation: '4-1-华业4-1',
+            concentration: concParts.join(';'),
+            concentrationCount: concParts.join(';'),
+            concentrationUnitName: null, uncertainty: null, configureOrder: null,
+            originalCode: orderParts.join(','),
+            controlledNo: controlledParts.join(','),
+            medium: null, configuratorId: null,
+            solutionType: document.getElementById('bbcdSolType').value,
+            configuratorName: null,
+            constantVolume: 0, totalConstantVolume: 0, usedConstantVolume: 0,
+            remark: null, diluteStatus: false,
+            consumableReceive: null,
+            customType: document.getElementById('bbcdCustomType').value.trim() || null,
+            auditUserName: null, auditTime: null,
+            diluteConcentrationControl: '[]',
+            pageType: 'SOLUTION_TYPE_B',
+            saveDetailList: JSON.stringify(detailList),
+            originalValidityDate: earliestValidity,
+            configurationTemplateId: null, intermediateTemplateId: null,
+            temperature: document.getElementById('bbcdTemp').value.trim(),
+            humidity: document.getElementById('bbcdHumid').value.trim(),
+            computingFormula: null, configurationMethod: null,
+            configurationProcess: null, nextAuditUserName: null,
+            disposeUserName: null, disposeTime: null, disposeWay: null,
+            configurationSolutionTemplateId: null, configurationRecordId: null,
+            creatorName: null, creatorId: null, modifierName: null,
+            modifyDatetime: nowStr,
+            receivedUint: 'mL',
+        };
+    }
+
+    function bbcdBuildExportPayload() {
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
+        const volume = bbcdRoundVol(parseFloat(document.getElementById('bbcdVolume').value));
+        const volStr = bbcdFmtVol(volume);
+        const medium = document.getElementById('bbcdMedium').value.trim();
+        const detailList = rows.map(tr => {
+            const src = tr._src;
+            const qty = bbcdRoundQty(parseFloat(tr.querySelector('.bbcd-c-qty').value));
+            const c = bbcdRoundConc(src.concValue * qty / volume);
+            return {
+                originalName: src.solutionName,
+                originalConcentration: src.concentrationRaw,
+                receivedQuantity: bbcdFmtQty(qty),
+                medium: medium,
+                volume: volStr,
+                configurationConcentration: bbcdFmtConc(c),
+                configurationUnit: src.concUnit,
+                originalNo: `${src.configureOrder}\n${src.solutionCode}`,
+            };
+        });
+        return {
+            solution_name:     document.getElementById('bbcdSolutionName').value.trim(),
+            solution_code:     document.getElementById('bbcdSolutionCode').value.trim(),
+            configure_date:    document.getElementById('bbcdConfigureDate').value,
+            validity_date:     document.getElementById('bbcdValidityDate').value,
+            temperature:       document.getElementById('bbcdTemp').value.trim(),
+            humidity:          document.getElementById('bbcdHumid').value.trim(),
+            storage_condition: document.getElementById('bbcdStorage').value || '',
+            custom_type:       document.getElementById('bbcdCustomType').value.trim(),
+            detail_list:       detailList,
+        };
+    }
+
+    async function bbcdExport() {
+        if (!bbcdValidate()) return;
+        const btn = document.getElementById('bbcdExportBtn');
+        const orig = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
+        let ok = false;
+        try {
+            const resp = await fetch('/api/lims/export_bbcd_docx', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(bbcdBuildExportPayload()),
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({message: resp.statusText}));
+                alert('导出失败: ' + (err.message || resp.statusText));
+                return;
+            }
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const cd = resp.headers.get('Content-Disposition') || '';
+            const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)/i);
+            a.download = m ? decodeURIComponent(m[1]) : '配制记录.docx';
+            a.href = url;
+            a.click();
+            URL.revokeObjectURL(url);
+            ok = true;
+        } catch (e) {
+            alert('导出异常: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            if (ok) {
+                btn.className = 'btn btn-sm btn-success';
+                btn.innerHTML = '<i class="fas fa-check me-1"></i>已导出';
+            } else {
+                btn.innerHTML = orig;
+            }
+        }
+    }
+
+    async function bbcdSave() {
+        if (!bbcdValidate()) return;
+        const btn = document.getElementById('bbcdSaveBtn');
+        const orig = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>保存中...';
+        try {
+            const resp = await fetch('/api/lims/save_solution_b', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify(bbcdBuildPayload())
+            });
+            const data = await resp.json();
+            if (!data.success) {
+                btn.innerHTML = orig;
+                btn.disabled = false;
+                alert('保存失败: ' + (data.message || '未知错误'));
+                return;
+            }
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-success');
+            btn.innerHTML = '<i class="fas fa-check me-1"></i>已保存';
+            await bbcdQuery();
+        } catch (e) {
+            btn.innerHTML = orig;
+            btn.disabled = false;
+            alert('保存异常: ' + e.message);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('bbcdQueryBtn').addEventListener('click', bbcdQuery);
+        document.getElementById('bbcdResetFilterBtn').addEventListener('click', bbcdResetFilters);
+        ['bbcdFilterName','bbcdFilterCode'].forEach(id => {
+            document.getElementById(id).addEventListener('keypress', e => { if (e.key === 'Enter') bbcdQuery(); });
+        });
+        document.getElementById('bbcdCheckAll').addEventListener('change', e => {
+            document.querySelectorAll('.bbcd-row-check').forEach(c => c.checked = e.target.checked);
+            bbcdUpdateSelection();
+        });
+        document.querySelector('#bbcdResultTable tbody').addEventListener('change', e => {
+            if (e.target.classList.contains('bbcd-row-check')) bbcdUpdateSelection();
+        });
+        document.getElementById('bbcdConfigBtn').addEventListener('click', () => {
+            const count = document.querySelectorAll('.bbcd-row-check:checked').length;
+            if (!count) return;
+            document.getElementById('bbcdTypePickerCount').textContent = count;
+            new bootstrap.Modal(document.getElementById('bbcdTypePickerModal')).show();
+        });
+        document.querySelectorAll('.bbcd-type-pick').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.getElementById('bbcdSolType').value = btn.dataset.type;
+                document.getElementById('bbcdSolTypeLabel').textContent = btn.dataset.label;
+                bootstrap.Modal.getInstance(document.getElementById('bbcdTypePickerModal')).hide();
+                bbcdOpenConfig();
+            });
+        });
+        document.getElementById('bbcdCancelBtn').addEventListener('click', () => {
+            document.getElementById('bbcdConfigArea').style.display = 'none';
+        });
+        document.getElementById('bbcdValidityDate').addEventListener('change', bbcdCheckValidity);
+        document.getElementById('bbcdSolutionName').addEventListener('input', bbcdUpdateValidity);
+        document.getElementById('bbcdSolutionCode').addEventListener('input', () => { bbcdCodeAuto = false; });
+        document.querySelector('#bbcdConfigTable tbody').addEventListener('input', e => {
+            if (e.target.id === 'bbcdVolume') {
+                bbcdRecalcAll();
+            } else if (e.target.classList.contains('bbcd-c-qty')) {
+                bbcdRecalcRow(e.target.closest('tr'));
+                bbcdUpdateValidity();
+                bbcdCheckValidity();
+            }
+        });
+        document.querySelector('#bbcdConfigTable tbody').addEventListener('blur', e => {
+            const t = e.target;
+            const v = parseFloat(t.value);
+            if (!isFinite(v) || v <= 0) return;
+            if (t.id === 'bbcdVolume') {
+                t.value = bbcdFmtVol(bbcdRoundVol(v));
+                bbcdRecalcAll();
+            } else if (t.classList.contains('bbcd-c-qty')) {
+                t.value = bbcdFmtQty(bbcdRoundQty(v));
+                bbcdRecalcRow(t.closest('tr'));
+                bbcdCheckValidity();
+            }
+        }, true);
+        document.getElementById('bbcdSaveBtn').addEventListener('click', bbcdSave);
+        document.getElementById('bbcdExportBtn').addEventListener('click', bbcdExport);
+        document.getElementById('bbcdFillBtn').addEventListener('click', () => {
+            const val = document.getElementById('bbcdFillQty').value.trim();
+            if (!val) return;
+            const rounded = bbcdFmtQty(bbcdRoundQty(parseFloat(val)));
+            document.querySelectorAll('#bbcdConfigTable tbody tr').forEach(tr => {
+                tr.querySelector('.bbcd-c-qty').value = rounded;
+                bbcdRecalcRow(tr);
+            });
+            bbcdUpdateValidity();
+            bbcdUpdateCode();
+            bbcdCheckValidity();
+        });
+    });
+    // ===== /B-BCD =====
 
     document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('solSearchBtn').addEventListener('click', solSearchLims);

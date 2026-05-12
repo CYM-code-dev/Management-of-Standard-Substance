@@ -848,6 +848,94 @@ def lims_save_solution():
         return jsonify({"success": False, "message": f"配置异常: {str(e)}"}), 500
 
 
+@app.route('/api/lims/list_configured_solutions', methods=['GET'])
+def lims_list_configured_solutions():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+    pid = session.get('pid') or system.current_pid or ''
+    pname = session.get('display_name') or system.current_real_name or username
+
+    params = {
+        "_search": "false",
+        "nd": str(int(time.time() * 1000)),
+        "pageSize": int(request.args.get('page_size', 30)),
+        "pageNo": int(request.args.get('page_no', 1)),
+        "sidx": "",
+        "sord": "asc",
+        "solutionName": request.args.get('name', ''),
+        "solutionCode": request.args.get('code', ''),
+        "customType": request.args.get('custom_type', ''),
+        "configStatus": "0",
+        "controlledNo": "",
+        "storageLocation": "",
+        "configureStartDate": request.args.get('date_from', ''),
+        "configureEndDate": request.args.get('date_to', ''),
+        "configureUserName": request.args.get('operator', ''),
+        "receiveUserName": "",
+        "auditStatus": request.args.get('audit_status', ''),
+        "status": "1",
+        "type": "SOLUTION_TYPE_B",
+        "pid": pid,
+        "pname": pname,
+        "loginId": pid,
+    }
+    try:
+        url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/getSolutionAdata"
+        headers = {"Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544"}
+        resp = system.session.get(url, params=params, headers=headers)
+        resp.raise_for_status()
+        result = resp.json()
+        rd = result.get('resultData') or {}
+        return jsonify({
+            "success": True,
+            "data": rd.get('voList', []),
+            "total": rd.get('totalCount', 0),
+        })
+    except Exception as e:
+        return jsonify({"success": False, "message": f"查询异常: {str(e)}"}), 500
+
+
+@app.route('/api/lims/save_solution_b', methods=['POST'])
+def lims_save_solution_b():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    payload = request.get_json() or {}
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+    pid = session.get('pid') or system.current_pid or ''
+    pname = session.get('display_name') or system.current_real_name or username
+
+    payload['pid'] = pid
+    payload['pname'] = pname
+    payload['loginId'] = pid
+
+    try:
+        url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/saveSolutionConfigure"
+        headers = {
+            "Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544",
+            "Content-Type": "application/json;charset=UTF-8",
+        }
+        resp = system.session.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+        result = resp.json()
+        if not result.get('success'):
+            return jsonify({
+                "success": False,
+                "message": result.get('errorDesc') or str(result.get('errorCtx', '配置失败')),
+            })
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"配置异常: {str(e)}"}), 500
+
+
 @app.route('/api/lims/export_docx', methods=['POST'])
 def lims_export_docx():
     if not session.get('logged_in'):
@@ -946,10 +1034,10 @@ def lims_export_docx():
             purity_unit = ''
         table.cell(1, 1).text = solution_name
         table.cell(1, 5).text = custom_num
-        table.cell(1, 9).text = purity_val
-        cell_1_7 = table.cell(1, 7)
-        if len(cell_1_7.paragraphs) > 1:
-            cell_1_7.paragraphs[1].text = f"({purity_unit})"
+        table.cell(1, 7).text = purity_val
+        cell_1_6 = table.cell(1, 6)
+        if len(cell_1_6.paragraphs) > 1:
+            cell_1_6.paragraphs[1].text = f"({purity_unit})"
         for ci in range(len(table.row_cells(3))):
             cell = table.cell(3, ci)
             p0 = cell.paragraphs[0]
@@ -963,10 +1051,10 @@ def lims_export_docx():
         table.cell(4, 1).text = use_qty
         table.cell(4, 2).text = medium
         table.cell(4, 3).text = volume
-        table.cell(4, 5).text = conc
-        table.cell(4, 6).text = solution_code
-        table.cell(4, 8).text = configure_date
-        table.cell(4, 10).text = validity_date
+        table.cell(4, 4).text = conc
+        table.cell(4, 5).text = solution_code
+        table.cell(4, 6).text = configure_date
+        table.cell(4, 8).text = validity_date
 
     buf = io.BytesIO()
     doc.save(buf)
@@ -974,6 +1062,302 @@ def lims_export_docx():
     download_name = (f"{solution_code}_配制记录.docx" if solution_code else "配制记录.docx").replace("/", "-").replace("\\", "-")
     from flask import send_file
     return send_file(buf, as_attachment=True, download_name=download_name,
+                     mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+
+
+@app.route('/api/lims/export_bbcd_docx', methods=['POST'])
+def lims_export_bbcd_docx():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+
+    from docx import Document as DocxDocument
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    import io, copy
+
+    p = request.get_json()
+    solution_name   = p.get('solution_name', '')
+    solution_code   = p.get('solution_code', '')
+    configure_date  = p.get('configure_date', datetime.date.today().strftime('%Y-%m-%d'))
+    validity_date   = p.get('validity_date', '')
+    temperature     = str(p.get('temperature', '') or '')
+    humidity        = str(p.get('humidity', '') or '')
+    storage_cond    = str(p.get('storage_condition', '') or '')
+    custom_type     = str(p.get('custom_type', '') or '')
+    detail_list     = p.get('detail_list', [])
+
+    template_name = 'RF10-10 标准溶液配制记录（稀释）(1).docx'
+    template_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 'word_templates', template_name)
+    if not os.path.exists(template_path):
+        return jsonify({"success": False, "message": f"模板文件不存在: {template_name}"}), 404
+
+    doc = DocxDocument(template_path)
+
+    # ── 辅助函数 ─────────────────────────────────────────────────────────────
+    def _make_run(text, sz=18, underline=False):
+        r_el = OxmlElement('w:r')
+        rPr  = OxmlElement('w:rPr')
+        if underline:
+            u_el = OxmlElement('w:u')
+            u_el.set(qn('w:val'), 'single')
+            rPr.append(u_el)
+        sz_el = OxmlElement('w:sz')
+        sz_el.set(qn('w:val'), str(sz))
+        szCs_el = OxmlElement('w:szCs')
+        szCs_el.set(qn('w:val'), str(sz))
+        rPr.append(sz_el)
+        rPr.append(szCs_el)
+        r_el.append(rPr)
+        t_el = OxmlElement('w:t')
+        t_el.text = text
+        if text and (text[0] == ' ' or text[-1] == ' '):
+            t_el.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+        r_el.append(t_el)
+        return r_el
+
+    def _make_para(text, center=False, sz=18):
+        p_el = OxmlElement('w:p')
+        pPr  = OxmlElement('w:pPr')
+        if center:
+            jc = OxmlElement('w:jc')
+            jc.set(qn('w:val'), 'center')
+            pPr.append(jc)
+        p_el.append(pPr)
+        p_el.append(_make_run(text, sz))
+        return p_el
+
+    def _clear_tc(tc):
+        for p in tc.findall(qn('w:p')):
+            tc.remove(p)
+
+    def _set_tc_text(tc, text, center=True, sz=18):
+        _clear_tc(tc)
+        tc.append(_make_para(text, center=center, sz=sz))
+
+    def _set_tc_two_lines(tc, line1, line2, sz=18):
+        _clear_tc(tc)
+        tc.append(_make_para(line1, center=True, sz=sz))
+        tc.append(_make_para(line2, center=True, sz=sz))
+
+    def _set_vmerge(tc, mode):
+        tcPr = tc.find(qn('w:tcPr'))
+        if tcPr is None:
+            tcPr = OxmlElement('w:tcPr')
+            tc.insert(0, tcPr)
+        vm = tcPr.find(qn('w:vMerge'))
+        if vm is None:
+            vm = OxmlElement('w:vMerge')
+            tcPr.append(vm)
+        if mode == 'restart':
+            vm.set(qn('w:val'), 'restart')
+        else:
+            if qn('w:val') in vm.attrib:
+                del vm.attrib[qn('w:val')]
+
+    def _parse_conc_val(raw):
+        m = re.match(r'^\s*([\d.]+)', str(raw))
+        return m.group(1) if m else str(raw)
+
+    def _extract_conc_from_code(code):
+        parts = str(code).split('-')
+        if len(parts) >= 2:
+            candidate = parts[-2]
+            if re.match(r'^[\d.]+$', candidate):
+                return candidate
+        return ''
+
+    # ── 1. P1：替换下划线占位符，值居中在10字符宽度内 ──────────────────────
+    # 模板 run 结构：
+    #   run2: ' __________ '  → 替换为 ' ' + 值居中10字符 + ' '（带下划线）
+    #   run9: '__________% '  → 替换为 值居中10字符 + '% '（带下划线）
+    #   run12: '______________' → 替换为 值居中14字符（带下划线）
+    if len(doc.paragraphs) > 1:
+        runs = doc.paragraphs[1].runs
+
+        def _centered_underline(run, value, width, suffix=''):
+            padded = value.center(width)
+            run.text = padded + suffix
+            run.font.underline = True
+
+        if temperature and len(runs) > 2:
+            _centered_underline(runs[2], temperature, 10)
+        if humidity and len(runs) > 9:
+            _centered_underline(runs[9], humidity, 10, '%')
+            # 去掉原来 run9 末尾的 '% ' 避免重复（run9 原文是 '__________% '）
+            # 已在 suffix 里加了 %，但原 run9 末尾有 '% '，需要只保留一个 %
+            # 实际 run9 = '__________% '，替换后变成 value.center(10) + '% '
+            # 这样 % 只出现一次，正确
+        if storage_cond and len(runs) > 12:
+            _centered_underline(runs[12], storage_cond, 14)
+
+    table = doc.tables[0]
+
+    # ── 2. Row 1：名称、编号、浓度单位、浓度值 ─────────────────────────────
+    # tc[0]=标准物质名称(固定), tc[1]=名称值(span=3), tc[2]=编号(固定),
+    # tc[3]=编号值(span=2), tc[4]=浓度(    )(span=2), tc[5]=浓度值(span=2)
+    def _fill_tc1(tc, text):
+        """填充 Row1 单元格（tc 为原始 XML 元素）"""
+        for p in tc.findall(qn('w:p')):
+            tc.remove(p)
+        p_el = OxmlElement('w:p')
+        pPr = OxmlElement('w:pPr')
+        jc = OxmlElement('w:jc')
+        jc.set(qn('w:val'), 'center')
+        pPr.append(jc)
+        p_el.append(pPr)
+        r_el = OxmlElement('w:r')
+        rPr = OxmlElement('w:rPr')
+        sz_el = OxmlElement('w:sz')
+        sz_el.set(qn('w:val'), '18')
+        szCs_el = OxmlElement('w:szCs')
+        szCs_el.set(qn('w:val'), '18')
+        rPr.append(sz_el)
+        rPr.append(szCs_el)
+        r_el.append(rPr)
+        t_el = OxmlElement('w:t')
+        t_el.text = text
+        if text and (text[0] == ' ' or text[-1] == ' '):
+            t_el.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+        r_el.append(t_el)
+        p_el.append(r_el)
+        tc.append(p_el)
+
+    _fill_tc1(table.rows[1]._tr.findall(qn('w:tc'))[1], solution_name)
+
+    # 源编号列表（去重保序）
+    source_codes = []
+    for item in detail_list:
+        parts = (item.get('originalNo', '') or '').split('\n')
+        code = parts[1].strip() if len(parts) > 1 else parts[0].strip()
+        if code and code not in source_codes:
+            source_codes.append(code)
+    tc3 = table.rows[1]._tr.findall(qn('w:tc'))[3]
+    _fill_tc1(tc3, source_codes[0] if source_codes else '')
+    for code in source_codes[1:]:
+        p_el = OxmlElement('w:p')
+        pPr = OxmlElement('w:pPr')
+        jc = OxmlElement('w:jc')
+        jc.set(qn('w:val'), 'center')
+        pPr.append(jc)
+        p_el.append(pPr)
+        r_el = OxmlElement('w:r')
+        rPr = OxmlElement('w:rPr')
+        sz_el = OxmlElement('w:sz')
+        sz_el.set(qn('w:val'), '18')
+        szCs_el = OxmlElement('w:szCs')
+        szCs_el.set(qn('w:val'), '18')
+        rPr.append(sz_el)
+        rPr.append(szCs_el)
+        r_el.append(rPr)
+        t_el = OxmlElement('w:t')
+        t_el.text = code
+        r_el.append(t_el)
+        p_el.append(r_el)
+        tc3._tc.append(p_el) if hasattr(tc3, '_tc') else tc3.append(p_el)
+
+    # 浓度单位（取第一条 detail 的 configurationUnit）
+    conc_unit = detail_list[0].get('configurationUnit', '') if detail_list else ''
+    # 取量单位（取第一条 detail 的 receivedUint，前端字段名为 receivedUint）
+    qty_unit = detail_list[0].get('receivedUint', 'mL') if detail_list else 'mL'
+
+    r1_tcs = table.rows[1]._tr.findall(qn('w:tc'))
+    tc4 = r1_tcs[4]
+    tc5 = r1_tcs[5]
+
+    # tc[4]：浓度单位列头
+    _fill_tc1(tc4, f'浓度({conc_unit})')
+
+    # tc[5]：单个母液填浓度值，多个母液填"见下表"
+    if len(detail_list) == 1:
+        src_conc = _parse_conc_val(detail_list[0].get('originalConcentration', ''))
+        _fill_tc1(tc5, src_conc)
+    else:
+        _fill_tc1(tc5, '见下表')
+
+    # ── 3. Row 3：列头单位填充（小五号）──────────────────────────────────────
+    r3_tcs = table.rows[3]._tr.findall(qn('w:tc'))
+    _set_tc_text(r3_tcs[0], f'母体标液({conc_unit})', center=True)
+    _set_tc_text(r3_tcs[1], f'取量({qty_unit})', center=True)
+    _set_tc_text(r3_tcs[2], '溶剂', center=True)
+    _set_tc_text(r3_tcs[3], '稀释至,ml', center=True)
+    _set_tc_text(r3_tcs[4], f'浓度({conc_unit})', center=True)
+    _set_tc_text(r3_tcs[5], '编号', center=True)
+    _set_tc_text(r3_tcs[6], '配制日期', center=True)
+    _set_tc_text(r3_tcs[7], '有效期', center=True)
+
+    # ── 4. 确保有足够数据行（模板有 rows 4–23，共 20 行，备注在 row23）──────
+    n_items  = len(detail_list)
+    n_tpl    = 12  # 模板空白数据行数
+    remark_row_idx = 16
+
+    if n_items > n_tpl:
+        for _ in range(n_items - n_tpl):
+            src_tr    = table.rows[remark_row_idx - 1]._tr
+            new_tr    = copy.deepcopy(src_tr)
+            remark_tr = table.rows[remark_row_idx]._tr
+            table._tbl.insert(list(table._tbl).index(remark_tr), new_tr)
+
+    # ── 5. 填入数据行 ────────────────────────────────────────────────────────
+    # tc 物理布局（每行 8 个 tc）：
+    #   [0] span=1  母体标液名称+浓度（两段落居中）
+    #   [1] span=1  取量(mL)
+    #   [2] span=1  溶剂
+    #   [3] span=2  稀释至(mL)
+    #   [4] span=1  结果浓度
+    #   [5] span=2  混合液自编号
+    #   [6] span=2  配制日期
+    #   [7] span=1  有效期
+
+    row_values = []
+    for item in detail_list:
+        row_values.append({
+            'name':     item.get('originalName', ''),
+            'conc_val': _parse_conc_val(item.get('originalConcentration', '')),
+            'qty':      str(item.get('receivedQuantity', '')),
+            'medium':   item.get('medium', ''),
+            'volume':   str(item.get('volume', '')),
+        })
+
+    # tc[2]~tc[7] 合并判断值
+    result_conc = _extract_conc_from_code(solution_code)
+    merge_col_vals = [
+        [rv['medium']          for rv in row_values],  # tc[2]
+        [rv['volume']          for rv in row_values],  # tc[3]
+        [result_conc           for _ in row_values],   # tc[4]
+        [solution_code         for _ in row_values],   # tc[5]
+        [configure_date        for _ in row_values],   # tc[6]
+        [validity_date         for _ in row_values],   # tc[7]
+    ]
+
+    for i, item in enumerate(detail_list):
+        tr  = table.rows[4 + i]._tr
+        tcs = tr.findall(qn('w:tc'))
+        if len(tcs) < 8:
+            continue
+
+        _set_tc_two_lines(tcs[0], row_values[i]['name'], row_values[i]['conc_val'])
+        _set_tc_text(tcs[1], row_values[i]['qty'])
+
+        for j, col_vals in enumerate(merge_col_vals):
+            tc_idx = j + 2
+            val = col_vals[i]
+            if i > 0 and val == col_vals[i - 1]:
+                _clear_tc(tcs[tc_idx])
+                tcs[tc_idx].append(_make_para('', center=True))
+                _set_vmerge(tcs[tc_idx], 'continue')
+            else:
+                _set_tc_text(tcs[tc_idx], val)
+                _set_vmerge(tcs[tc_idx], 'restart')
+
+    # ── 6. 返回文件 ──────────────────────────────────────────────────────────
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    from flask import send_file
+    dl_name = (f"{solution_code}_配制记录.docx" if solution_code else "配制记录.docx") \
+              .replace('/', '-').replace('\\', '-')
+    return send_file(buf, as_attachment=True, download_name=dl_name,
                      mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 
 
