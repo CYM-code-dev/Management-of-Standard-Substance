@@ -323,7 +323,7 @@
             background-color: #fee2e2 !important;
             border-color: #ef4444 !important;
         }
-        /* ── 标物质配置 modal tabs ── */
+        /* ── 标准物质配置 modal tabs ── */
         #solutionModal .sol-modal-tabs {
             border-bottom: 2px solid rgba(59,130,246,0.18);
             background: rgba(238,242,255,0.6);
@@ -376,7 +376,7 @@
         </div>
         <button class="btn btn-outline-secondary me-2" id="manualImportBtn"><i class="fas fa-file-excel me-1"></i>手动导入Excel</button>
         <button class="btn btn-primary shadow-sm me-2" data-bs-toggle="modal" data-bs-target="#standardModal" onclick="openAddModal()"><i class="fas fa-plus-circle me-1"></i>新增标准品</button>
-        <button class="btn btn-outline-info me-2" id="solutionConfigBtn"><i class="fas fa-vial me-1"></i>标物质配置</button>
+        <button class="btn btn-outline-info me-2" id="solutionConfigBtn"><i class="fas fa-vial me-1"></i>标准物质配置</button>
         <button class="btn btn-outline-secondary" id="settingsBtn"><i class="fas fa-cog me-1"></i>设置</button>
     </div>
 </div>
@@ -517,12 +517,12 @@
 <!-- 设置模态框 -->
 <div class="modal fade" id="settingsModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header bg-info text-white"><h5 class="modal-title"><i class="fas fa-cog me-2"></i>系统设置</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label fw-bold">Excel文件UNC路径</label><input type="text" class="form-control" id="settingExcelUrl" placeholder="\\\\server\\share\\folder\\有机标准品.xls"></div><div class="mb-3"><label class="form-label fw-bold">证书文件夹UNC路径</label><input type="text" class="form-control" id="settingCertBaseUrl" placeholder="\\\\server\\share\\证书文件夹"></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button type="button" class="btn btn-primary" id="saveSettingsBtn">保存并加载</button></div></div></div></div>
 
-<!-- 标物质配置模态框 -->
+<!-- 标准物质配置模态框 -->
 <div class="modal fade" id="solutionModal" tabindex="-1">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header" style="background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;">
-        <h5 class="modal-title"><i class="fas fa-vial me-2"></i>标物质配置</h5>
+        <h5 class="modal-title"><i class="fas fa-vial me-2"></i>标准物质配置</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body p-0">
@@ -564,61 +564,50 @@
             <div id="solSelectedInfo" class="alert alert-info py-2 mb-3 small" style="display:none;"></div>
             <!-- 配置参数表单 -->
             <div id="solFormArea" style="display:none;">
-              <div class="row g-2">
-                <div class="col-md-3">
-                  <label class="form-label mb-1 small fw-bold">标液名称 *</label>
-                  <input type="text" id="solSolutionName" class="form-control form-control-sm">
-                </div>
-                <div class="col-md-2">
-                  <label class="form-label mb-1 small fw-bold">领用数量 *</label>
-                  <div class="input-group input-group-sm">
-                    <input type="number" id="solUseQty" class="form-control" step="0.0001" min="0.0001">
-                    <span class="input-group-text" id="solUseUnit">g</span>
-                  </div>
-                  <div id="solUseQtyHint" class="small mt-1" style="display:none;"></div>
-                </div>
-                <div class="col-md-2">
-                  <label class="form-label mb-1 small fw-bold">定容体积(mL) *</label>
-                  <input type="number" id="solVolume" class="form-control form-control-sm" step="0.01" min="0.01">
-                </div>
-                <div class="col-md-2">
-                  <label class="form-label mb-1 small fw-bold">溶剂/介质 *</label>
-                  <input id="solMedium" class="form-control form-control-sm" list="solMediumOptions" placeholder="选择或输入" autocomplete="off">
-                  <datalist id="solMediumOptions">
-                    <option value="甲醇"></option>
-                    <option value="乙酸乙酯"></option>
-                    <option value="甲苯"></option>
-                    <option value="正己烷"></option>
-                    <option value="二氯甲烷"></option>
-                    <option value="叔丁基甲醚"></option>
-                    <option value="环己烷"></option>
-                  </datalist>
-                </div>
-                <div class="col-md-3">
-                  <label class="form-label mb-1 small fw-bold">储备液类型</label>
+              <!-- 第 1 行: 标液类型 -->
+              <div class="row g-2 mb-2">
+                <div class="col-md-12">
+                  <label class="form-label mb-1 small fw-bold">标液类型</label>
                   <select id="solType" class="form-select form-select-sm">
                     <option value="SOLUTION_TYPE_B">储备液</option>
                     <option value="SOLUTION_TYPE_C">应用液</option>
                     <option value="SOLUTION_TYPE_D">工作液</option>
                   </select>
                 </div>
-                <div class="col-md-2">
-                  <label class="form-label mb-1 small fw-bold">计算浓度(μg/mL) *</label>
-                  <input type="text" id="solConc" class="form-control form-control-sm bg-light" readonly>
+              </div>
+              <!-- 第 2 行: 标液名称 / 自编号 -->
+              <div class="row g-2 mb-2">
+                <div class="col-md-6">
+                  <label class="form-label mb-1 small fw-bold">标液名称 *</label>
+                  <input type="text" id="solSolutionName" class="form-control form-control-sm">
                 </div>
-                <div class="col-md-4">
-                  <label class="form-label mb-1 small fw-bold">储备液编号 *</label>
+                <div class="col-md-6">
+                  <label class="form-label mb-1 small fw-bold">自编号 *</label>
                   <input type="text" id="solCode" class="form-control form-control-sm bg-light" readonly>
                 </div>
-                <div class="col-md-2">
+              </div>
+              <!-- 第 3 行: 配置日期 / 有效期至 / 温度 / 湿度 -->
+              <div class="row g-2 mb-2">
+                <div class="col-md-3">
                   <label class="form-label mb-1 small fw-bold">配置日期 *</label>
                   <input type="date" id="solConfigureDate" class="form-control form-control-sm">
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-3">
                   <label class="form-label mb-1 small fw-bold">有效期至 *</label>
                   <input type="date" id="solValidityDate" class="form-control form-control-sm">
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-3">
+                  <label class="form-label mb-1 small fw-bold">温度(℃) *</label>
+                  <input type="text" id="solTemp" class="form-control form-control-sm" placeholder="如 23">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label mb-1 small fw-bold">湿度(%RH) *</label>
+                  <input type="text" id="solHumid" class="form-control form-control-sm" placeholder="如 50">
+                </div>
+              </div>
+              <!-- 第 4 行: 保存条件 / 配置设备 -->
+              <div class="row g-2 mb-3">
+                <div class="col-md-6">
                   <label class="form-label mb-1 small fw-bold">保存条件 *</label>
                   <select id="solStorage" class="form-select form-select-sm">
                     <option value="-4℃冰箱">-4℃冰箱</option>
@@ -626,15 +615,7 @@
                     <option value="干燥箱">干燥箱</option>
                   </select>
                 </div>
-                <div class="col-md-2">
-                  <label class="form-label mb-1 small fw-bold">温度(℃) *</label>
-                  <input type="text" id="solTemp" class="form-control form-control-sm" placeholder="如 23">
-                </div>
-                <div class="col-md-2">
-                  <label class="form-label mb-1 small fw-bold">湿度(%RH) *</label>
-                  <input type="text" id="solHumid" class="form-control form-control-sm" placeholder="如 50">
-                </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                   <label class="form-label mb-1 small fw-bold">配置设备</label>
                   <input type="text" id="solDevice" class="form-control form-control-sm" list="solDeviceOptions" placeholder="如天平编号 CK-SB294-CG">
                   <datalist id="solDeviceOptions">
@@ -643,6 +624,52 @@
                     <option value="CK-SB294-CG"></option>
                   </datalist>
                 </div>
+              </div>
+              <!-- 配制汇总表格 -->
+              <div class="table-responsive">
+                <table class="table table-bordered table-hover text-center align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th>标液名称</th>
+                      <th>浓度</th>
+                      <th>领用数量</th>
+                      <th>溶剂/介质</th>
+                      <th>定容体积(mL)</th>
+                      <th>计算浓度(μg/mL)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td id="solSrcName">—</td>
+                      <td id="solSrcConc">—</td>
+                      <td>
+                        <div class="input-group input-group-sm">
+                          <input type="number" id="solUseQty" class="form-control" step="0.0001" min="0.0001">
+                          <span class="input-group-text" id="solUseUnit">g</span>
+                        </div>
+                        <div id="solUseQtyHint" class="small mt-1" style="display:none;"></div>
+                      </td>
+                      <td>
+                        <input id="solMedium" class="form-control form-control-sm" list="solMediumOptions" placeholder="选择或输入" autocomplete="off">
+                        <datalist id="solMediumOptions">
+                          <option value="甲醇"></option>
+                          <option value="乙酸乙酯"></option>
+                          <option value="甲苯"></option>
+                          <option value="正己烷"></option>
+                          <option value="二氯甲烷"></option>
+                          <option value="叔丁基甲醚"></option>
+                          <option value="环己烷"></option>
+                        </datalist>
+                      </td>
+                      <td>
+                        <input type="number" id="solVolume" class="form-control form-control-sm" step="0.01" min="0.01">
+                      </td>
+                      <td>
+                        <input type="text" id="solConc" class="form-control form-control-sm bg-light" readonly>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -1619,7 +1646,7 @@
             { id: 'solVolume',       label: '定容体积', type: 'number' },
             { id: 'solMedium',       label: '溶剂/介质', type: 'text' },
             { id: 'solConc',         label: '计算浓度', type: 'text' },
-            { id: 'solCode',         label: '储备液编号', type: 'text' },
+            { id: 'solCode',         label: '自编号', type: 'text' },
             { id: 'solConfigureDate',label: '配置日期', type: 'text' },
             { id: 'solValidityDate', label: '有效期至', type: 'text' },
             { id: 'solStorage',      label: '保存条件', type: 'text' },
@@ -1647,7 +1674,6 @@
             }
         });
         if (missing.length) {
-            alert('请填写必填项：' + missing.join('、'));
             return false;
         }
         return true;
@@ -1664,6 +1690,8 @@
         document.getElementById('solSearchResults').innerHTML = '';
         document.getElementById('solSelectedInfo').style.display = 'none';
         document.getElementById('solFormArea').style.display = 'none';
+        document.getElementById('solSrcName').textContent = '—';
+        document.getElementById('solSrcConc').textContent = '—';
         document.getElementById('solSaveBtn').disabled = true;
         document.getElementById('solExportBtn').disabled = true;
         solSetBtnSaved(false);
@@ -1735,6 +1763,8 @@
             &nbsp;|&nbsp; 实验室编号: ${escapeHtml(item.customNum||item.no||'—')}`;
         infoEl.style.display = 'block';
         document.getElementById('solFormArea').style.display = 'block';
+        document.getElementById('solSrcName').textContent = item.name || '—';
+        document.getElementById('solSrcConc').textContent = (conc && concUnit) ? `${conc} ${concUnit}` : '—';
         document.getElementById('solSaveBtn').disabled = false;
         document.getElementById('solExportBtn').disabled = false;
         solSetBtnSaved(false);
@@ -1788,7 +1818,7 @@
             concStr = concRounded.toFixed(decimals);
         }
         document.getElementById('solConc').value = concStr;
-        // 储备液编号
+        // 自编号
         const baseNum = solCurrentItem.customNum || solCurrentItem.no || 'CK-CG-UNKNOWN';
         const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
         document.getElementById('solCode').value = `${baseNum}-${concStr}-${today}`;

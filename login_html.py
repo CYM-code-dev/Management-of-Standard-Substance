@@ -695,7 +695,7 @@ def lims_receive():
         system.current_user = username
         system.load_session()
     pid = session.get('pid') or system.current_pid or ''
-    pname = username
+    pname = session.get('display_name') or system.current_real_name or username
 
     url = f"{system.base_url}/detectionManager/manager/consumableReceive/receive"
     form_data = {
@@ -748,7 +748,7 @@ def lims_save_solution():
         system.current_user = username
         system.load_session()
     pid = session.get('pid') or system.current_pid or ''
-    pname = username
+    pname = session.get('display_name') or system.current_real_name or username
 
     try:
         purity_str = str(p.get('purity_str', '99.5'))
