@@ -327,6 +327,10 @@ def login_page():
 def organic_std_page():
     return render_template('OrganicStd.html')
 
+@app.route('/solution-config')
+def solution_config_page():
+    return render_template('SolutionConfig.html')
+
 @app.route('/api/captcha')
 def get_captcha():
     system = get_system()
@@ -405,8 +409,8 @@ def query():
         system.load_session()
     params = {
         "_search": "false", "nd": str(int(time.time()*1000)), "pageSize": 30, "pageNo": 1, "sidx": "", "sord": "asc",
-        "type": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE", "orgName": "", "groupId": "", "status": "normal",
-        "keyword": keyword, "state": "normal", "pid": pid, "pname": username, "loginId": pid
+        "type": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE", "orgName": request.args.get('org_name', ''), "groupId": "", "status": request.args.get('status', 'normal'),
+        "keyword": keyword, "state": request.args.get('status', 'normal'), "pid": pid, "pname": username, "loginId": pid
     }
     try:
         resp = system.session.get(f"{system.base_url}/detectionManager/manager/consumableBill/pageObj", params=params)
@@ -870,7 +874,7 @@ def lims_list_configured_solutions():
         "solutionName": request.args.get('name', ''),
         "solutionCode": request.args.get('code', ''),
         "customType": request.args.get('custom_type', ''),
-        "configStatus": "0",
+        "configStatus": request.args.get('config_status', '0'),
         "controlledNo": "",
         "storageLocation": "",
         "configureStartDate": request.args.get('date_from', ''),
@@ -879,7 +883,7 @@ def lims_list_configured_solutions():
         "receiveUserName": "",
         "auditStatus": request.args.get('audit_status', ''),
         "status": "1",
-        "type": "SOLUTION_TYPE_B",
+        "type": "SOLUTION_TYPE_E",
         "pid": pid,
         "pname": pname,
         "loginId": pid,
