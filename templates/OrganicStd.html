@@ -342,19 +342,42 @@
 </div>
 <div class="container-fluid px-3 px-lg-4 py-3">
 
-    <!-- 查询卡片 -->
-    <div class="card mb-4 border-0 shadow-sm">
-        <div class="card-body">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-3"><label class="form-label">标品名称 / CAS / 实验室编号</label><input type="text" id="searchNameCas" class="form-control" placeholder="名称/CAS/实验室编号"></div>
-                <div class="col-md-2"><label class="form-label">组别</label><input type="text" id="searchGroup" class="form-control" placeholder="如 SVHC, PAE"></div>
-                <div class="col-md-2"><label class="form-label">过期状态</label><select id="expiredFilter" class="form-select"><option value="all">全部</option><option value="expired">仅过期</option><option value="valid">仅有效</option></select></div>
-                <div class="col-md-2"><label class="form-label">使用情况</label><select id="usageFilter" class="form-select"><option value="all">全部</option><option value="未开封">未开封</option><option value="开封">已开封</option></select></div>
-                <div class="col-md-3 d-flex gap-2"><button class="btn btn-outline-primary w-50" id="searchBtn">查询</button><button class="btn btn-outline-secondary w-50" id="resetBtn">重置</button></div>
+<!-- 查询卡片 -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">标品名称 / CAS / 实验室编号</label>
+                <input type="text" id="searchNameCas" class="form-control" placeholder="名称/CAS/实验室编号">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">组别</label>
+                <input type="text" id="searchGroup" class="form-control" placeholder="如 SVHC, PAE">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">过期状态</label>
+                <select id="expiredFilter" class="form-select">
+                    <option value="all">全部</option>
+                    <option value="expired">仅过期</option>
+                    <option value="valid">仅有效</option>
+                    <option value="expiring">即将过期 (2个月内)</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">使用情况</label>
+                <select id="usageFilter" class="form-select">
+                    <option value="all">全部</option>
+                    <option value="未开封">未开封</option>
+                    <option value="开封">已开封</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button class="btn btn-outline-primary w-50" id="searchBtn">查询</button>
+                <button class="btn btn-outline-secondary w-50" id="resetBtn">重置</button>
             </div>
         </div>
     </div>
-
+</div>
     <div class="table-responsive">
         <table class="table table-bordered table-hover align-middle mb-0">
             <thead>
@@ -789,20 +812,34 @@
     function certIconClickHandler(e) { e.stopPropagation(); const labNo = this.getAttribute('data-labno'); if (labNo) openCertificate(labNo); }
     function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
     function escapeAttr(str) { return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-    function filterData() {
-        const keyword = document.getElementById('searchNameCas').value.trim().toLowerCase();
-        const groupVal = document.getElementById('searchGroup').value.trim().toLowerCase();
-        const expiredFilter = document.getElementById('expiredFilter').value;
-        const usageFilter = document.getElementById('usageFilter').value;
-        let filtered = standardsData.filter(item => {
-            if (keyword && !(item.name.toLowerCase().includes(keyword) || item.cas.toLowerCase().includes(keyword) || (item.labNo && item.labNo.toLowerCase().includes(keyword)))) return false;
-            if (groupVal && !item.group.toLowerCase().includes(groupVal)) return false;
-            if (usageFilter !== 'all' && item.usage !== usageFilter) return false;
-            if (expiredFilter !== 'all') { const expired = isExpired(item.expiry); if (expiredFilter === 'expired' && !expired) return false; if (expiredFilter === 'valid' && expired) return false; }
-            return true;
-        });
-        renderTable(filtered);
-    }
+function filterData() {
+    const keyword = document.getElementById('searchNameCas').value.trim().toLowerCase();
+    const groupVal = document.getElementById('searchGroup').value.trim().toLowerCase();
+    const expiredFilter = document.getElementById('expiredFilter').value;
+    const usageFilter = document.getElementById('usageFilter').value;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let filtered = standardsData.filter(item => {
+        if (keyword && !(item.name.toLowerCase().includes(keyword) || item.cas.toLowerCase().includes(keyword) || (item.labNo && item.labNo.toLowerCase().includes(keyword)))) return false;
+        if (groupVal && !item.group.toLowerCase().includes(groupVal)) return false;
+        if (usageFilter !== 'all' && item.usage !== usageFilter) return false;
+        if (expiredFilter !== 'all') {
+            const expired = isExpired(item.expiry);
+            if (expiredFilter === 'expired' && !expired) return false;
+            if (expiredFilter === 'valid' && expired) return false;
+            if (expiredFilter === 'expiring') {
+                if (expired) return false; // 已过期的不算即将过期
+                if (!item.expiry || item.expiry === '/') return false;
+                const expiryDate = new Date(item.expiry);
+                if (isNaN(expiryDate)) return false;
+                const diffDays = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+                if (diffDays <= 0 || diffDays > 60) return false;
+            }
+        }
+        return true;
+    });
+    renderTable(filtered);
+}
     function resetFilters() {
         document.getElementById('searchNameCas').value = ''; 
         document.getElementById('searchGroup').value = ''; 

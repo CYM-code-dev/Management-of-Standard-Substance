@@ -1,4 +1,4 @@
-# login_html.py - 完整整合版（修复真实姓名显示）
+# login_html.py - 完整整合版（修复真实姓名显示 + 更新 Excel 使用情况，动态表头检测）
 import sys
 import os
 import json
@@ -35,11 +35,6 @@ CONFIG_FILE = 'config.json'
 
 
 # ==================== 数值修约规则 ====================
-# 三项规则：
-#   1) 领用数量：g 限 4 位小数（万分之一天平精度），mL 强制 2 位小数
-#   2) 定容体积：>=10 取 4 位有效数字，<10 取 3 位有效数字
-#   3) 计算浓度：原始浓度单位为 % 时不修约；
-#                单位为 μg/mL 或 mg/L 时，结果 <0.10 取 3 位小数，>=0.10 取 2 位小数
 def _sig_figs(val, n):
     if not isinstance(val, (int, float)) or val == 0 or not math.isfinite(val):
         return 0.0
@@ -178,7 +173,6 @@ class RemoteSystem:
             result = resp.json()
             if result.get("success"):
                 self.current_user = username
-                # 获取真实姓名
                 real_name = self._fetch_user_info()
                 if not real_name:
                     real_name = result.get("resultData", {}).get("nickName", username)
@@ -193,9 +187,7 @@ class RemoteSystem:
             return False, f"登录异常: {str(e)}"
 
     def _fetch_user_info(self):
-        """获取真实姓名，优先从 getLoginUser 接口获取 realName，其次从 users/info 接口获取"""
         try:
-            # 接口1
             resp = self.session.get(f"{self.base_url}/detectionManager/core/security/getLoginUser")
             if resp.status_code == 200:
                 data = resp.json()
@@ -207,7 +199,6 @@ class RemoteSystem:
                         self.current_pid = str(pid)
                     if real_name:
                         return real_name
-            # 接口2
             resp2 = self.session.get(f"{self.base_url}/detectionManager/core/users/info")
             if resp2.status_code == 200:
                 data2 = resp2.json()
@@ -349,7 +340,6 @@ def login():
     else:
         username = request.form.get('username'); plain_password = request.form.get('password'); captcha = request.form.get('captcha'); client_ua = request.form.get('client_ua'); is_json = False
 
-    # 如果是表单提交且 session 已登录，直接重定向，不再校验
     if not is_json and session.get('logged_in'):
         next_page = request.form.get('next', '/')
         return redirect(next_page)
@@ -582,7 +572,6 @@ def add_to_excel():
             for col, val in enumerate(new_row_data, 1):
                 ws.cell(row=insert_row, column=col, value=val)
 
-            # 复制样式
             source_row = insert_row - 1
             while source_row >= 1:
                 row_empty = all(ws.cell(row=source_row, column=c).value is None for c in range(1, len(headers)+1))
@@ -604,7 +593,7 @@ def add_to_excel():
             wb.save(excel_path)
             wb.close()
 
-        else:  # .xls
+        else:
             rb = xlrd.open_workbook(excel_path, formatting_info=True)
             wb = xl_copy(rb)
             styles = Styles(rb)
@@ -725,7 +714,6 @@ def lims_receive():
         if not result.get("success"):
             return jsonify({"success": False, "message": result.get('errorDesc') or str(result.get('errorCtx', '领用失败'))})
         time.sleep(1)
-        # 查询最新领用记录 ID
         rec_url = f"{system.base_url}/detectionManager/manager/consumableReceive/record/{consumable_id}"
         rec_params = {"_search": "false", "nd": str(int(time.time()*1000)), "pageSize": 9999, "pageNo": 1,
                       "sidx": "", "sord": "asc", "pid": pid, "pname": pname, "loginId": pid}
@@ -989,19 +977,16 @@ def lims_export_docx():
 
     doc = DocxDocument(template_path)
 
-    # 填充段落 P1（温度/湿度/储存条件）
     if len(doc.paragraphs) > 1:
         p1 = doc.paragraphs[1]
         p1.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         if temp_val and len(p1.runs) > 4:
-            # run[2] 为温度下划线区（10 字符居中），run[4] 是 ℃ 单位（不带下划线）
             p1.runs[2].text = f" {str(temp_val).center(10)} "
             p1.runs[2].font.underline = True
         if len(p1.runs) > 6:
             p1.runs[5].text = "\t\t"
             p1.runs[6].text = "\t\t"
         if humid_val and len(p1.runs) > 10:
-            # run[9] 为湿度下划线区（10 字符居中），% 移到 run[10] 开头不带下划线
             p1.runs[9].text = str(humid_val).center(10)
             p1.runs[9].font.underline = True
             p1.runs[10].text = "%" + " " * 13
@@ -1013,7 +998,6 @@ def lims_export_docx():
 
     table = doc.tables[0]
     if received_unit == 'g':
-        # RF10-09
         table.cell(0, 1).text = solution_name
         table.cell(0, 5).text = custom_num
         table.cell(1, 1).text = purity_display
@@ -1029,7 +1013,6 @@ def lims_export_docx():
         table.cell(5, 1).text = validity_date
         table.cell(7, 6).text = configure_date
     else:
-        # RF10-10
         if '(' in purity_display:
             purity_val = purity_display.split('(')[0].strip()
             purity_unit = purity_display.split('(')[1].rstrip(')').strip()
@@ -1098,7 +1081,6 @@ def lims_export_bbcd_docx():
 
     doc = DocxDocument(template_path)
 
-    # ── 辅助函数 ─────────────────────────────────────────────────────────────
     def _make_run(text, sz=18, underline=False):
         r_el = OxmlElement('w:r')
         rPr  = OxmlElement('w:rPr')
@@ -1171,11 +1153,6 @@ def lims_export_bbcd_docx():
                 return candidate
         return ''
 
-    # ── 1. P1：替换下划线占位符，值居中在10字符宽度内 ──────────────────────
-    # 模板 run 结构：
-    #   run2: ' __________ '  → 替换为 ' ' + 值居中10字符 + ' '（带下划线）
-    #   run9: '__________% '  → 替换为 值居中10字符 + '% '（带下划线）
-    #   run12: '______________' → 替换为 值居中14字符（带下划线）
     if len(doc.paragraphs) > 1:
         runs = doc.paragraphs[1].runs
 
@@ -1188,20 +1165,12 @@ def lims_export_bbcd_docx():
             _centered_underline(runs[2], temperature, 10)
         if humidity and len(runs) > 9:
             _centered_underline(runs[9], humidity, 10, '%')
-            # 去掉原来 run9 末尾的 '% ' 避免重复（run9 原文是 '__________% '）
-            # 已在 suffix 里加了 %，但原 run9 末尾有 '% '，需要只保留一个 %
-            # 实际 run9 = '__________% '，替换后变成 value.center(10) + '% '
-            # 这样 % 只出现一次，正确
         if storage_cond and len(runs) > 12:
             _centered_underline(runs[12], storage_cond, 14)
 
     table = doc.tables[0]
 
-    # ── 2. Row 1：名称、编号、浓度单位、浓度值 ─────────────────────────────
-    # tc[0]=标准物质名称(固定), tc[1]=名称值(span=3), tc[2]=编号(固定),
-    # tc[3]=编号值(span=2), tc[4]=浓度(    )(span=2), tc[5]=浓度值(span=2)
     def _fill_tc1(tc, text):
-        """填充 Row1 单元格（tc 为原始 XML 元素）"""
         for p in tc.findall(qn('w:p')):
             tc.remove(p)
         p_el = OxmlElement('w:p')
@@ -1229,7 +1198,6 @@ def lims_export_bbcd_docx():
 
     _fill_tc1(table.rows[1]._tr.findall(qn('w:tc'))[1], solution_name)
 
-    # 源编号列表（去重保序）
     source_codes = []
     for item in detail_list:
         parts = (item.get('originalNo', '') or '').split('\n')
@@ -1260,26 +1228,21 @@ def lims_export_bbcd_docx():
         p_el.append(r_el)
         tc3._tc.append(p_el) if hasattr(tc3, '_tc') else tc3.append(p_el)
 
-    # 浓度单位（取第一条 detail 的 configurationUnit）
     conc_unit = detail_list[0].get('configurationUnit', '') if detail_list else ''
-    # 取量单位（取第一条 detail 的 receivedUint，前端字段名为 receivedUint）
     qty_unit = detail_list[0].get('receivedUint', 'mL') if detail_list else 'mL'
 
     r1_tcs = table.rows[1]._tr.findall(qn('w:tc'))
     tc4 = r1_tcs[4]
     tc5 = r1_tcs[5]
 
-    # tc[4]：浓度单位列头
     _fill_tc1(tc4, f'浓度({conc_unit})')
 
-    # tc[5]：单个母液填浓度值，多个母液填"见下表"
     if len(detail_list) == 1:
         src_conc = _parse_conc_val(detail_list[0].get('originalConcentration', ''))
         _fill_tc1(tc5, src_conc)
     else:
         _fill_tc1(tc5, '见下表')
 
-    # ── 3. Row 3：列头单位填充（小五号）──────────────────────────────────────
     r3_tcs = table.rows[3]._tr.findall(qn('w:tc'))
     _set_tc_text(r3_tcs[0], f'母体标液({conc_unit})', center=True)
     _set_tc_text(r3_tcs[1], f'取量({qty_unit})', center=True)
@@ -1290,9 +1253,8 @@ def lims_export_bbcd_docx():
     _set_tc_text(r3_tcs[6], '配制日期', center=True)
     _set_tc_text(r3_tcs[7], '有效期', center=True)
 
-    # ── 4. 确保有足够数据行（模板有 rows 4–23，共 20 行，备注在 row23）──────
     n_items  = len(detail_list)
-    n_tpl    = 12  # 模板空白数据行数
+    n_tpl    = 12
     remark_row_idx = 16
 
     if n_items > n_tpl:
@@ -1301,17 +1263,6 @@ def lims_export_bbcd_docx():
             new_tr    = copy.deepcopy(src_tr)
             remark_tr = table.rows[remark_row_idx]._tr
             table._tbl.insert(list(table._tbl).index(remark_tr), new_tr)
-
-    # ── 5. 填入数据行 ────────────────────────────────────────────────────────
-    # tc 物理布局（每行 8 个 tc）：
-    #   [0] span=1  母体标液名称+浓度（两段落居中）
-    #   [1] span=1  取量(mL)
-    #   [2] span=1  溶剂
-    #   [3] span=2  稀释至(mL)
-    #   [4] span=1  结果浓度
-    #   [5] span=2  混合液自编号
-    #   [6] span=2  配制日期
-    #   [7] span=1  有效期
 
     row_values = []
     for item in detail_list:
@@ -1323,15 +1274,14 @@ def lims_export_bbcd_docx():
             'volume':   str(item.get('volume', '')),
         })
 
-    # tc[2]~tc[7] 合并判断值
     result_conc = _extract_conc_from_code(solution_code)
     merge_col_vals = [
-        [rv['medium']          for rv in row_values],  # tc[2]
-        [rv['volume']          for rv in row_values],  # tc[3]
-        [result_conc           for _ in row_values],   # tc[4]
-        [solution_code         for _ in row_values],   # tc[5]
-        [configure_date        for _ in row_values],   # tc[6]
-        [validity_date         for _ in row_values],   # tc[7]
+        [rv['medium']          for rv in row_values],
+        [rv['volume']          for rv in row_values],
+        [result_conc           for _ in row_values],
+        [solution_code         for _ in row_values],
+        [configure_date        for _ in row_values],
+        [validity_date         for _ in row_values],
     ]
 
     for i, item in enumerate(detail_list):
@@ -1354,7 +1304,6 @@ def lims_export_bbcd_docx():
                 _set_tc_text(tcs[tc_idx], val)
                 _set_vmerge(tcs[tc_idx], 'restart')
 
-    # ── 6. 返回文件 ──────────────────────────────────────────────────────────
     buf = io.BytesIO()
     doc.save(buf)
     buf.seek(0)
@@ -1365,8 +1314,135 @@ def lims_export_bbcd_docx():
                      mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 
 
+# ==================== 修复版：更新 Excel 使用情况（动态检测表头） ====================
+@app.route('/api/update_excel_usage', methods=['POST'])
+def update_excel_usage():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    
+    # 防御性 JSON 解析
+    data = request.get_json(silent=True) or {}
+    lab_no = data.get('labNo', '').strip()
+    new_usage = data.get('usage', '').strip()
+    
+    # 如果实验室编号为空，直接返回成功（跳过），避免报错
+    if not lab_no:
+        return jsonify({"success": True, "message": "实验室编号为空，跳过更新"})
+    if not new_usage:
+        return jsonify({"success": False, "message": "使用情况不能为空"}), 400
+
+    config = load_config()
+    excel_path = config.get('excelPath', '').strip()
+    if not excel_path:
+        return jsonify({"success": False, "message": "未配置 Excel 路径"}), 400
+
+    ext = os.path.splitext(excel_path)[1].lower()
+    sheet_name = '有机标准物质'
+
+    try:
+        if ext == '.xlsx':
+            wb = openpyxl.load_workbook(excel_path)
+            if sheet_name not in wb.sheetnames:
+                wb.close()
+                return jsonify({"success": True, "message": "工作表不存在，跳过"})
+            ws = wb[sheet_name]
+
+            # 动态查找表头行（前 5 行中包含“实验室编号”和“使用情况”的行）
+            header_row = None
+            lab_col = None
+            usage_col = None
+            for row_idx in range(1, min(6, ws.max_row + 1)):
+                row_cells = list(ws[row_idx])
+                for col_idx, cell in enumerate(row_cells, 1):
+                    val = str(cell.value) if cell.value is not None else ''
+                    if '实验室编号' in val:
+                        lab_col = col_idx
+                    if '使用情况' in val:
+                        usage_col = col_idx
+                if lab_col is not None and usage_col is not None:
+                    header_row = row_idx
+                    break
+
+            if header_row is None:
+                wb.close()
+                return jsonify({"success": False, "message": "未找到包含‘实验室编号’和‘使用情况’的表头行"}), 400
+
+            # 从表头下一行开始查找目标行
+            target_row = None
+            for row in ws.iter_rows(min_row=header_row + 1, values_only=False):
+                cell_val = row[lab_col - 1].value
+                if cell_val and str(cell_val).strip() == lab_no:
+                    target_row = row
+                    break
+
+            if target_row is None:
+                wb.close()
+                return jsonify({"success": True, "message": "未找到匹配记录，跳过"})
+
+            current_usage = target_row[usage_col - 1].value
+            if current_usage == new_usage:
+                wb.close()
+                return jsonify({"success": True, "message": "已是目标状态，无需更新"})
+
+            target_row[usage_col - 1].value = new_usage
+            wb.save(excel_path)
+            wb.close()
+            return jsonify({"success": True, "message": "使用情况已更新为开封"})
+
+        elif ext == '.xls':
+            rb = xlrd.open_workbook(excel_path, formatting_info=True)
+            if sheet_name not in rb.sheet_names():
+                return jsonify({"success": True, "message": "工作表不存在，跳过"})
+            sheet = rb.sheet_by_name(sheet_name)
+            
+            # 动态查找表头行（前 5 行）
+            header_row_idx = None
+            lab_col = None
+            usage_col = None
+            for row_idx in range(min(5, sheet.nrows)):
+                for col_idx in range(sheet.ncols):
+                    val = str(sheet.cell_value(row_idx, col_idx)).strip()
+                    if '实验室编号' in val:
+                        lab_col = col_idx
+                    if '使用情况' in val:
+                        usage_col = col_idx
+                if lab_col is not None and usage_col is not None:
+                    header_row_idx = row_idx
+                    break
+
+            if header_row_idx is None:
+                return jsonify({"success": False, "message": "未找到包含‘实验室编号’和‘使用情况’的表头行"}), 400
+
+            # 查找目标数据行
+            target_row = None
+            for row_idx in range(header_row_idx + 1, sheet.nrows):
+                if str(sheet.cell_value(row_idx, lab_col)).strip() == lab_no:
+                    target_row = row_idx
+                    break
+
+            if target_row is None:
+                return jsonify({"success": True, "message": "未找到匹配记录，跳过"})
+
+            current_usage = sheet.cell_value(target_row, usage_col)
+            if current_usage == new_usage:
+                return jsonify({"success": True, "message": "已是目标状态，无需更新"})
+
+            wb = xl_copy(rb)
+            ws = wb.get_sheet(sheet_name)
+            ws.write(target_row, usage_col, new_usage)
+            wb.save(excel_path)
+            return jsonify({"success": True, "message": "使用情况已更新为开封"})
+
+        else:
+            return jsonify({"success": False, "message": "不支持的 Excel 格式"}), 400
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"更新失败: {str(e)}"}), 500
+
+
 if __name__ == '__main__':
-    if not os.path.exists('templates'): os.makedirs('templates')
+    if not os.path.exists('templates'):
+        os.makedirs('templates')
     print("Flask 服务启动，访问以下地址：")
     print("  登录页面: http://127.0.0.1:5000/login")
     print("  耗材查询主页: http://127.0.0.1:5000/")

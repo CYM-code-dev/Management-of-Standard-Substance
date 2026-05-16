@@ -24,7 +24,6 @@
             color: #111827;
         }
 
-        /* 标题渐变 */
         h2.fw-bold {
             font-size: 1.35rem;
             font-weight: 800;
@@ -35,7 +34,6 @@
             background-clip: text;
         }
 
-        /* 玻璃卡片 */
         .card, .glass-card {
             background: rgba(255,255,255,0.6);
             backdrop-filter: blur(16px);
@@ -62,7 +60,6 @@
         .card:hover::before { opacity: 1; }
         .card-body { padding: 0.85rem 1rem; }
 
-        /* 导航栏 / 标题栏 */
         .top-bar {
             position: sticky;
             top: 0;
@@ -75,7 +72,6 @@
             margin-bottom: 1rem;
         }
 
-        /* 按钮 */
         .btn {
             font-size: 0.78rem;
             font-weight: 500;
@@ -112,7 +108,6 @@
             color: #374151;
         }
 
-        /* 表单 */
         .form-label { font-size: 0.75rem; margin-bottom: 0.2rem; font-weight: 500; color: #6B7280; }
         .form-control, .form-select {
             font-size: 0.78rem;
@@ -132,7 +127,6 @@
             box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
         }
 
-        /* 表格 */
         .table { font-size: 0.78rem; }
         .table thead th {
             font-size: 0.75rem;
@@ -159,14 +153,12 @@
         .action-icons i { font-size: 0.9rem; cursor: pointer; margin: 0 4px; transition: transform 0.15s; }
         .action-icons i:hover { transform: scale(1.15); }
 
-        /* 徽章 */
         .badge { font-size: 0.65rem; font-weight: 500; border-radius: 6px; }
         .badge.bg-success { background-color: #3B82F6 !important; }
         .badge.bg-warning { background: linear-gradient(135deg, #f59e0b, #d97706) !important; color: #fff !important; }
         .badge.bg-secondary { background: #6366F1 !important; }
         #recordCount { font-size: 0.7rem; }
 
-        /* 储备液配置图标 */
         .solution-config-icon {
             color: #0891b2;
             cursor: pointer;
@@ -176,7 +168,6 @@
         }
         .solution-config-icon:hover { transform: scale(1.2); }
 
-        /* 证书图标 */
         .cert-icon {
             color: #ef4444;
             margin-left: 6px;
@@ -187,7 +178,6 @@
         .cert-icon:hover { transform: scale(1.15); color: #dc2626; }
         .labno-cell { display: flex; align-items: center; justify-content: space-between; gap: 5px; width: 100%; }
 
-        /* 登录栏 */
         .login-bar {
             background: rgba(255,255,255,0.5);
             backdrop-filter: blur(12px);
@@ -201,7 +191,6 @@
         }
         .login-bar i { margin-right: 4px; color: #6366F1; }
 
-        /* 模态框 */
         .modal-content {
             border-radius: 10px;
             border: 1px solid rgba(255,255,255,0.7);
@@ -230,7 +219,6 @@
         .modal-body .form-label { font-size: 0.75rem; }
         #loginModal .modal-dialog { max-width: 360px; }
 
-        /* 验证码 */
         .captcha-img-modal {
             height: 38px;
             width: 100px;
@@ -243,15 +231,12 @@
 
         .query-btn { white-space: nowrap; }
 
-        /* 过期行 */
         .expired-row { background-color: rgba(229,231,235,0.5) !important; }
         .expired-row td { background-color: inherit !important; }
 
-        /* 悬停行 */
         .table-hover tbody tr:hover { background-color: rgba(59,130,246,0.08) !important; }
         .table-hover tbody tr:hover td { background-color: inherit !important; }
 
-        /* 退出按钮 */
         #logoutBtn {
             border: none;
             background: transparent;
@@ -266,7 +251,6 @@
             background: rgba(239,68,68,0.08);
         }
 
-        /* 醒目标识（浓度单位、组别） */
         .highlight-input,
         .conc-unit-input {
             border-left: 3px solid #6366F1 !important;
@@ -289,7 +273,6 @@
             vertical-align: middle;
         }
 
-        /* 自定义下拉 */
         .custom-dropdown { position: relative; }
         .custom-dropdown-menu {
             display: none;
@@ -323,7 +306,6 @@
             background-color: #fee2e2 !important;
             border-color: #ef4444 !important;
         }
-        /* ── 标准物质配置 modal tabs ── */
         .sol-modal-tabs {
             border-bottom: 2px solid rgba(59,130,246,0.18);
             background: rgba(238,242,255,0.6);
@@ -351,13 +333,10 @@
             background: rgba(255,255,255,0.85);
             border-color: rgba(59,130,246,0.25) rgba(59,130,246,0.25) rgba(255,255,255,0.85);
         }
-        /* 去掉 number 输入框箭头 */
         input[type=number]::-webkit-inner-spin-button,
         input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input[type=number] { -moz-appearance: textfield; }
-        /* 自编号需确认时标绿 */
         .bbcd-code-confirm { border-color: #22c55e !important; box-shadow: 0 0 0 3px rgba(34,197,94,0.2) !important; }
-
     </style>
 </head>
 <body>
@@ -446,7 +425,7 @@
                           <th>购买日期</th>
                           <th>有效期</th>
                           <th>使用部门</th>
-                        </tr>
+                        </thead> 
                       </thead>
                       <tbody id="solResultTbody"></tbody>
                     </table>
@@ -541,7 +520,8 @@
                       <th>审核</th>
                     </tr>
                   </thead>
-                  <tbody><tr><td colspan="10" class="text-center text-muted small py-3">请先查询</td></tr></tbody>
+                  <tbody><tr><td colspan="10" class="text-center text-muted small py-3">请先查询</td></tr>
+                  </tbody>
                 </table>
               </div>
               <div class="d-flex justify-content-between align-items-center mt-2">
@@ -579,12 +559,13 @@
           </div>
           <div>
             <label class="form-label mb-1 small fw-bold">配置设备</label>
-            <input type="text" id="solDevice" class="form-control form-control-sm" list="solDeviceOptions" placeholder="如天平编号 CK-SB294-CG">
+            <input type="text" id="solDevice" class="form-control form-control-sm" list="solDeviceOptions" >
             <datalist id="solDeviceOptions">
               <option value="CK-SB295-CG"></option>
               <option value="CK-SB005-CG"></option>
               <option value="CK-SB294-CG"></option>
             </datalist>
+            <div class="invalid-feedback" id="solDeviceError" style="display:none;"></div>
           </div>
         </div>
         <div class="d-flex flex-wrap gap-2 align-items-end mb-2 small">
@@ -791,7 +772,6 @@
     const captchaImg = document.getElementById('captchaImg');
     const togglePwdBtn = document.getElementById('togglePwdBtn');
 
-    // ---------- 登录相关函数 ----------
     async function refreshCaptcha() {
         try {
             const resp = await fetch('/api/captcha');
@@ -997,11 +977,10 @@
 
 
         // ========== 储备液配置 ==========
-    let solCurrentItem = null;   // 保留，兼容现有校验函数
-    let solItems = [];           // 多条标准品列表
-    let solLastResults = [];     // 最近一次搜索结果
+    let solCurrentItem = null;
+    let solItems = [];
+    let solLastResults = [];
 
-    // 按钮状态控制：用颜色提示当前配置是否已保存 / 已导出
     function solSetBtnSaved(done) {
         const btn = document.getElementById('solSaveBtn');
         if (done) {
@@ -1026,18 +1005,17 @@
             btn.innerHTML = '<i class="fas fa-file-word me-1"></i>导出配制记录';
         }
     }
-    // 用户修改任意配置 → 已保存 / 已导出状态作废
     function solMarkDirty() {
         solSetBtnSaved(false);
         solSetBtnExported(false);
     }
 
-    // 领用量校验：不得超过剩余量 validNum。返回 true=合法（单行模式遗留，多行模式下不调用）
+    // 领用量校验（单行模式遗留，多行模式下不调用）
     function solCheckQty() {
         const input = document.getElementById('solUseQty');
         const hint = document.getElementById('solUseQtyHint');
         const saveBtn = document.getElementById('solSaveBtn');
-        if (!input || !hint) return true; // 多行模式下这些元素不存在，直接返回合法
+        if (!input || !hint) return true;
         input.classList.remove('is-invalid');
         hint.style.display = 'none';
         hint.className = 'small mt-1';
@@ -1054,7 +1032,7 @@
             return false;
         }
         const stock = parseFloat(solCurrentItem.validNum);
-        if (isNaN(qty) || qty <= 0) return true;  // 空值/无效值不在此校验
+        if (isNaN(qty) || qty <= 0) return true;
         if (!isNaN(stock)) {
             if (qty > stock) {
                 input.classList.add('is-invalid');
@@ -1073,12 +1051,33 @@
     function solValidateRequired() {
         if (!solItems.length) return false;
         let ok = true;
-        ['solConfigureDate','solTemp','solHumid','solDevice'].forEach(id => {
+        // 验证配置日期、温度、湿度（始终必填）
+        ['solConfigureDate','solTemp','solHumid'].forEach(id => {
             const el = document.getElementById(id);
             if (!el) return;
             if (!(el.value||'').trim()) { el.classList.add('is-invalid'); ok = false; }
             else el.classList.remove('is-invalid');
         });
+        // 配置设备：仅当存在 'g' 单位时才必填
+        const deviceEl = document.getElementById('solDevice');
+        const deviceVal = (deviceEl.value || '').trim();
+        const hasGUnit = solItems.some(item => (item.numUnitName || 'g') === 'g');
+        if (hasGUnit && !deviceVal) {
+            deviceEl.classList.add('is-invalid');
+            let errorSpan = document.getElementById('solDeviceError');
+            if (!errorSpan) {
+                errorSpan = document.createElement('div');
+                errorSpan.id = 'solDeviceError';
+                errorSpan.className = 'invalid-feedback';
+                deviceEl.parentNode.appendChild(errorSpan);
+            }
+            errorSpan.style.display = 'block';
+            ok = false;
+        } else {
+            deviceEl.classList.remove('is-invalid');
+            const errorSpan = document.getElementById('solDeviceError');
+            if (errorSpan) errorSpan.style.display = 'none';
+        }
         const tbody = document.getElementById('solItemsTbody');
         solItems.forEach((item, idx) => {
             const valEl = tbody.querySelector(`.sol-row-validity[data-idx="${idx}"]`);
@@ -1086,14 +1085,14 @@
             const volEl = tbody.querySelector(`.sol-row-volume[data-idx="${idx}"]`);
             const codeEl = tbody.querySelector(`.sol-row-code[data-idx="${idx}"]`);
             const stoEl = tbody.querySelector(`.sol-row-storage[data-idx="${idx}"]`);
-            [valEl, qtyEl, volEl, codeEl, stoEl].forEach(el => {
+            const medEl = tbody.querySelector(`.sol-row-medium[data-idx="${idx}"]`);
+            [valEl, qtyEl, volEl, codeEl, stoEl, medEl].forEach(el => {
                 if (!el) return;
                 const v = (el.value||'').trim();
                 const empty = !v || (el.type === 'number' && (isNaN(parseFloat(v)) || parseFloat(v) <= 0));
                 if (empty) { el.classList.add('is-invalid'); ok = false; }
                 else el.classList.remove('is-invalid');
             });
-            // 领用数量不超库存
             if (qtyEl && item.validNum != null) {
                 const qty = parseFloat(qtyEl.value);
                 if (!isNaN(qty) && qty > parseFloat(item.validNum)) {
@@ -1331,7 +1330,17 @@
             const qtyEl = tbody.querySelector(`.sol-row-qty[data-idx="${idx}"]`);
             const volEl = tbody.querySelector(`.sol-row-volume[data-idx="${idx}"]`);
             const delEl = tbody.querySelector(`.sol-row-del[data-idx="${idx}"]`);
-            if (qtyEl) { qtyEl.addEventListener('input', () => solCalcRowConc(idx)); qtyEl.addEventListener('input', solMarkDirty); }
+            if (qtyEl) {
+                qtyEl.addEventListener('input', () => solCalcRowConc(idx));
+                qtyEl.addEventListener('input', solMarkDirty);
+                qtyEl.addEventListener('blur', () => {
+                    const unit = item.numUnitName || 'g';
+                    const val = parseFloat(qtyEl.value);
+                    if (unit === 'g' && !isNaN(val) && val > 0) {
+                        qtyEl.value = val.toFixed(4);
+                    }
+                });
+            }
             if (volEl) { volEl.addEventListener('input', () => solCalcRowConc(idx)); volEl.addEventListener('input', solMarkDirty); }
             if (delEl) delEl.addEventListener('click', () => {
                 solItems.splice(idx, 1);
@@ -1427,6 +1436,26 @@
         if (validEl) validEl.value = expiry.toISOString().slice(0,10);
     }
 
+    // 新增：更新 Excel 使用情况
+    async function updateExcelUsage(labNo, newUsage) {
+        if (!labNo || labNo === '/' || labNo === '') return;
+        try {
+            const resp = await fetch('/api/update_excel_usage', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ labNo: labNo, usage: newUsage })
+            });
+            const data = await resp.json();
+            if (!data.success) {
+                console.warn(`更新使用情况失败 (${labNo}): ${data.message}`);
+            } else {
+                console.log(`更新使用情况成功 (${labNo}) -> ${newUsage}`);
+            }
+        } catch (err) {
+            console.warn(`调用更新接口异常 (${labNo}):`, err);
+        }
+    }
+
     async function solSave() {
         if (!solItems.length) { alert('请先添加标准品'); return; }
         if (!solValidateRequired()) return;
@@ -1443,6 +1472,7 @@
                 const concVal = (tbody.querySelector(`.sol-row-conc[data-idx="${idx}"]`)||{}).value || '';
                 const medium = (tbody.querySelector(`.sol-row-medium[data-idx="${idx}"]`)||{}).value || '';
                 if (!qty || qty <= 0 || !vol || vol <= 0 || !concVal) { continue; }
+
                 // 1. 领用
                 const recResp = await fetch('/api/lims/receive', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -1450,7 +1480,8 @@
                 });
                 const recData = await recResp.json();
                 if (!recData.success) { alert(`第${idx+1}条领用失败: ${recData.message}`); continue; }
-                // 2. 保存
+
+                // 2. 保存配置
                 const payload = solBuildRowPayload(item, idx, recData.receive_id, qty, vol, concVal, medium);
                 const saveResp = await fetch('/api/lims/save_solution', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -1458,6 +1489,13 @@
                 });
                 const saveData = await saveResp.json();
                 if (!saveData.success) { alert(`第${idx+1}条保存失败: ${saveData.message}`); continue; }
+
+                // 3. 更新 Excel 使用情况
+                const labNo = item.customNum ? item.customNum.trim() : '';
+                if (labNo && labNo !== '/' && labNo !== '') {
+                    await updateExcelUsage(labNo, '开封');
+                }
+
                 savedCount++;
             }
         } catch(e) {
@@ -1643,9 +1681,7 @@
         const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
         const srcList = rows.map(tr => tr._src).filter(Boolean);
         const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
-
         if (srcList.length === 0) { codeEl.value = ''; codeEl.classList.remove('bbcd-code-confirm'); return; }
-
         if (srcList.length === 1) {
             const concStr = bbcdComputeSingleConc();
             if (!concStr) { codeEl.value = ''; codeEl.classList.remove('bbcd-code-confirm'); return; }
@@ -1761,10 +1797,19 @@
         document.getElementById('bbcdFilterConfigStatus').value = '0';
     }
 
+    // 用于保存配置弹窗打开前的选中状态
+    let bbcdSelectedIndices = [];
+    // 全局标志：防止 Modal 转换期间重复触发
+    let bbcdModalTransitioning = false;
+    // 标志：用户已选择类型，等待类型选择弹窗关闭后打开配置弹窗
+    let bbcdPendingTypeSelection = false;
+
     function bbcdOpenConfig() {
         const selectedIdx = [...document.querySelectorAll('.bbcd-row-check')]
             .filter(c => c.checked).map(c => parseInt(c.dataset.idx, 10));
         if (!selectedIdx.length) return;
+        // 保存选中状态
+        bbcdSelectedIndices = selectedIdx;
         const items = selectedIdx.map(i => bbcdLastResults[i]);
 
         bbcdCodeAuto = true;
@@ -1782,7 +1827,6 @@
         document.getElementById('bbcdExportBtn').disabled = true;
         document.getElementById('bbcdExportBtn').className = 'btn btn-sm btn-outline-secondary';
         document.getElementById('bbcdExportBtn').innerHTML = '<i class="fas fa-file-word me-1"></i>导出配制记录';
-
         const tbody = document.querySelector('#bbcdConfigTable tbody');
         tbody.innerHTML = '';
         items.forEach((it, idx) => {
@@ -1821,9 +1865,26 @@
         document.getElementById('bbcdFillQty').value = '';
         // 动态修改模态框标题
         const titleMap = { SOLUTION_TYPE_B: '储备液配置参数', SOLUTION_TYPE_C: '应用液配置参数', SOLUTION_TYPE_D: '工作液配置参数' };
-        const solTypeVal = document.getElementById('bbcdSolType').value;
+        const solTypeEl = document.getElementById('bbcdSolType');
+        const solTypeVal = solTypeEl ? solTypeEl.value : 'SOLUTION_TYPE_B';
         const bbcdModalTitle = document.querySelector('#bbcdConfigModal .modal-title');
-        if (bbcdModalTitle) bbcdModalTitle.innerHTML = `<i class="fas fa-vial me-1"></i>${titleMap[solTypeVal] || '混合液配置参数'} <span class="badge bg-light text-dark ms-2" id="bbcdSolTypeLabel">${document.getElementById('bbcdSolTypeLabel').textContent}</span>`;
+        if (bbcdModalTitle) {
+            // 只更新标题文本，不破坏 bbcdSolType 和 bbcdSolTypeLabel 元素
+            const iconHtml = '<i class="fas fa-vial me-1"></i>';
+            const titleText = titleMap[solTypeVal] || '混合液配置参数';
+            // 查找或创建文本节点
+            const firstChild = bbcdModalTitle.firstChild;
+            if (firstChild && firstChild.nodeType === Node.TEXT_NODE) {
+                firstChild.textContent = titleText;
+            } else {
+                bbcdModalTitle.insertBefore(document.createTextNode(titleText), firstChild);
+            }
+            // 确保图标存在
+            const icon = bbcdModalTitle.querySelector('i.fas.fa-vial');
+            if (!icon) {
+                bbcdModalTitle.insertAdjacentHTML('afterbegin', iconHtml);
+            }
+        }
         bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdConfigModal')).show();
         bbcdRecalcAll();
         bbcdCheckValidity();
@@ -2124,6 +2185,8 @@
             btn.classList.remove('btn-primary');
             btn.classList.add('btn-success');
             btn.innerHTML = '<i class="fas fa-check me-1"></i>已保存';
+            // 清除保存的选中状态，因为已成功保存
+            bbcdSelectedIndices = [];
             await bbcdQuery();
             bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdConfigModal')).hide();
         } catch (e) {
@@ -2194,19 +2257,7 @@
                 else if (!hasB && hasC) spanD.textContent = '— 应用液 C → 工作液 D';
                 else spanD.textContent = '— 混合 → 工作液 D';
             }
-            new bootstrap.Modal(document.getElementById('bbcdTypePickerModal')).show();
-        });
-        document.querySelectorAll('.bbcd-type-pick').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (btn.disabled) return;
-                document.getElementById('bbcdSolType').value = btn.dataset.type;
-                document.getElementById('bbcdSolTypeLabel').textContent = btn.dataset.label;
-                bootstrap.Modal.getInstance(document.getElementById('bbcdTypePickerModal')).hide();
-                bbcdOpenConfig();
-            });
-        });
-        document.getElementById('bbcdCancelBtn').addEventListener('click', () => {
-            bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdConfigModal')).hide();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdTypePickerModal')).show();
         });
         document.getElementById('bbcdValidityDate').addEventListener('change', bbcdCheckValidity);
         document.getElementById('bbcdSolutionName').addEventListener('input', bbcdUpdateValidity);
@@ -2318,6 +2369,75 @@
         // Auto initialize on page load, support ?prefill=xxx query
         const prefill = new URLSearchParams(window.location.search).get('prefill');
         openSolutionConfigModal(prefill || null);
+
+        // 使用事件委托处理类型按钮点击，避免重复绑定
+        document.getElementById('bbcdTypePickerModal').addEventListener('click', (e) => {
+            const btn = e.target.closest('.bbcd-type-pick');
+            console.log('[DEBUG] 类型选择弹窗点击事件', { btn, disabled: btn?.disabled, bbcdModalTransitioning });
+            if (!btn) return; // 不是类型按钮的点击，忽略
+            if (btn.disabled || bbcdModalTransitioning) {
+                console.log('[DEBUG] 类型按钮点击被拦截', { disabled: btn.disabled, bbcdModalTransitioning });
+                return;
+            }
+
+            console.log('[DEBUG] 类型按钮点击处理', { type: btn.dataset.type, label: btn.dataset.label });
+
+            // 保存选中的类型到全局变量（而不是直接写入 DOM）
+            window.bbcdSelectedType = btn.dataset.type;
+            window.bbcdSelectedTypeLabel = btn.dataset.label;
+            console.log('[DEBUG] 保存到全局变量', { bbcdSelectedType: window.bbcdSelectedType, bbcdSelectedTypeLabel: window.bbcdSelectedTypeLabel });
+
+            // 设置标志：表示用户已选择类型
+            bbcdPendingTypeSelection = true;
+            bbcdModalTransitioning = true;
+            console.log('[DEBUG] 设置标志', { bbcdPendingTypeSelection, bbcdModalTransitioning });
+
+            // 关闭类型选择弹窗（将触发 hidden.bs.modal 监听器）
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdTypePickerModal')).hide();
+        });
+
+        // 持久监听器：类型选择弹窗关闭时的处理
+        document.getElementById('bbcdTypePickerModal').addEventListener('hidden.bs.modal', () => {
+            console.log('[DEBUG] 类型选择弹窗关闭', { bbcdPendingTypeSelection, bbcdModalTransitioning });
+            // 立即重置转换标志，无论是否选择了类型
+            bbcdModalTransitioning = false;
+
+            if (bbcdPendingTypeSelection) {
+                console.log('[DEBUG] 准备打开配置弹窗');
+                // 用户已选择类型，准备打开配置弹窗
+                bbcdPendingTypeSelection = false;
+
+                // 先设置类型值（在 bbcdOpenConfig 读取之前）
+                const solTypeEl = document.getElementById('bbcdSolType');
+                const solTypeLabelEl = document.getElementById('bbcdSolTypeLabel');
+                if (solTypeEl && window.bbcdSelectedType) {
+                    solTypeEl.value = window.bbcdSelectedType;
+                    console.log('[DEBUG] 设置 bbcdSolType（调用前）', solTypeEl.value);
+                }
+                if (solTypeLabelEl && window.bbcdSelectedTypeLabel) {
+                    solTypeLabelEl.textContent = window.bbcdSelectedTypeLabel;
+                    console.log('[DEBUG] 设置 bbcdSolTypeLabel（调用前）', solTypeLabelEl.textContent);
+                }
+
+                // 等待 Modal 动画完成（Bootstrap 默认 300ms）
+                setTimeout(() => {
+                    console.log('[DEBUG] 调用 bbcdOpenConfig');
+                    bbcdOpenConfig();
+                }, 350);
+            }
+        });
+
+        // 配置弹窗关闭时恢复选中状态（如果未保存）
+        document.getElementById('bbcdConfigModal').addEventListener('hidden.bs.modal', () => {
+            if (bbcdSelectedIndices.length > 0) {
+                // 恢复之前保存的选中状态
+                document.querySelectorAll('.bbcd-row-check').forEach(checkbox => {
+                    const idx = parseInt(checkbox.dataset.idx, 10);
+                    checkbox.checked = bbcdSelectedIndices.includes(idx);
+                });
+                bbcdUpdateSelection();
+            }
+        });
     });
 
     // Load cert path config
