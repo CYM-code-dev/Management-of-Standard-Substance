@@ -2373,24 +2373,16 @@
         // 使用事件委托处理类型按钮点击，避免重复绑定
         document.getElementById('bbcdTypePickerModal').addEventListener('click', (e) => {
             const btn = e.target.closest('.bbcd-type-pick');
-            console.log('[DEBUG] 类型选择弹窗点击事件', { btn, disabled: btn?.disabled, bbcdModalTransitioning });
             if (!btn) return; // 不是类型按钮的点击，忽略
-            if (btn.disabled || bbcdModalTransitioning) {
-                console.log('[DEBUG] 类型按钮点击被拦截', { disabled: btn.disabled, bbcdModalTransitioning });
-                return;
-            }
-
-            console.log('[DEBUG] 类型按钮点击处理', { type: btn.dataset.type, label: btn.dataset.label });
+            if (btn.disabled || bbcdModalTransitioning) return;
 
             // 保存选中的类型到全局变量（而不是直接写入 DOM）
             window.bbcdSelectedType = btn.dataset.type;
             window.bbcdSelectedTypeLabel = btn.dataset.label;
-            console.log('[DEBUG] 保存到全局变量', { bbcdSelectedType: window.bbcdSelectedType, bbcdSelectedTypeLabel: window.bbcdSelectedTypeLabel });
 
             // 设置标志：表示用户已选择类型
             bbcdPendingTypeSelection = true;
             bbcdModalTransitioning = true;
-            console.log('[DEBUG] 设置标志', { bbcdPendingTypeSelection, bbcdModalTransitioning });
 
             // 关闭类型选择弹窗（将触发 hidden.bs.modal 监听器）
             bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdTypePickerModal')).hide();
@@ -2398,12 +2390,10 @@
 
         // 持久监听器：类型选择弹窗关闭时的处理
         document.getElementById('bbcdTypePickerModal').addEventListener('hidden.bs.modal', () => {
-            console.log('[DEBUG] 类型选择弹窗关闭', { bbcdPendingTypeSelection, bbcdModalTransitioning });
             // 立即重置转换标志，无论是否选择了类型
             bbcdModalTransitioning = false;
 
             if (bbcdPendingTypeSelection) {
-                console.log('[DEBUG] 准备打开配置弹窗');
                 // 用户已选择类型，准备打开配置弹窗
                 bbcdPendingTypeSelection = false;
 
@@ -2412,16 +2402,13 @@
                 const solTypeLabelEl = document.getElementById('bbcdSolTypeLabel');
                 if (solTypeEl && window.bbcdSelectedType) {
                     solTypeEl.value = window.bbcdSelectedType;
-                    console.log('[DEBUG] 设置 bbcdSolType（调用前）', solTypeEl.value);
                 }
                 if (solTypeLabelEl && window.bbcdSelectedTypeLabel) {
                     solTypeLabelEl.textContent = window.bbcdSelectedTypeLabel;
-                    console.log('[DEBUG] 设置 bbcdSolTypeLabel（调用前）', solTypeLabelEl.textContent);
                 }
 
                 // 等待 Modal 动画完成（Bootstrap 默认 300ms）
                 setTimeout(() => {
-                    console.log('[DEBUG] 调用 bbcdOpenConfig');
                     bbcdOpenConfig();
                 }, 350);
             }
