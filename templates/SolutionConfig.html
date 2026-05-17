@@ -667,7 +667,7 @@
     <div class="modal-content">
       <div class="modal-header bg-primary text-white py-2">
         <h6 class="modal-title mb-0">
-          <i class="fas fa-vial me-1"></i>混合液配置参数
+          <i class="fas fa-vial me-1"></i><span id="bbcdModalTitleText">混合液配置参数</span>
           <span class="badge bg-light text-dark ms-2" id="bbcdSolTypeLabel">储备液</span>
           <input type="hidden" id="bbcdSolType" value="SOLUTION_TYPE_B">
         </h6>
@@ -737,7 +737,7 @@
                     <span>领用量(mL)</span>
                     <span id="bbcdFillBar" style="display:none;">
                       <input type="number" id="bbcdFillQty" step="0.01" min="0.01" style="-moz-appearance:textfield;width:56px;font-size:0.72rem;padding:1px 4px;border:1px solid #ced4da;border-radius:4px;height:22px;">
-                      <button type="button" id="bbcdFillBtn" class="btn btn-outline-secondary btn-sm" style="padding:1px 5px;font-size:0.72rem;height:22px;line-height:1;">↓</button>
+                      <button type="button" id="bbcdFillBtn" class="btn btn-sm" style="padding:1px 5px;font-size:0.72rem;height:22px;line-height:1;background:transparent;border:none;color:#fff;">↓</button>
                     </span>
                   </div>
                 </th>
@@ -1763,8 +1763,22 @@
             if (!concStr) { codeEl.value = ''; codeEl.classList.remove('bbcd-code-confirm'); return; }
             const codes = srcList.map(s => s.solutionCode).filter(Boolean);
             const prefix = codes.length ? bbcdDominantPrefix(codes) : 'CK-CG';
-            codeEl.value = `${prefix}-${srcList.length}XX-${concStr}-${today}`;
-            codeEl.classList.add('bbcd-code-confirm');
+
+            // 使用类型字段替换 XX
+            const customTypeEl = document.getElementById('bbcdCustomType');
+            const customType = customTypeEl?.value.trim() || '';
+
+            if (!customType) {
+                // 类型为空，标红提示
+                if (customTypeEl) customTypeEl.classList.add('is-invalid');
+                codeEl.value = `${prefix}-${srcList.length}XX-${concStr}-${today}`;
+                codeEl.classList.add('bbcd-code-confirm');
+            } else {
+                // 类型不为空，移除标红
+                if (customTypeEl) customTypeEl.classList.remove('is-invalid');
+                codeEl.value = `${prefix}-${srcList.length}${customType}-${concStr}-${today}`;
+                codeEl.classList.add('bbcd-code-confirm');
+            }
         }
     }
 
@@ -1842,8 +1856,22 @@
 
             const codes = srcList.map(s => s.solutionCode).filter(Boolean);
             const prefix = codes.length ? bbcdDominantPrefix(codes) : 'CK-CG';
-            codeEl.value = `${prefix}-${srcList.length}XX-[${concRange}]-${today}`;
-            codeEl.classList.add('bbcd-code-confirm');
+
+            // 使用类型字段替换 XX
+            const customTypeEl = document.getElementById('bbcdCustomType');
+            const customType = customTypeEl?.value.trim() || '';
+
+            if (!customType) {
+                // 类型为空，标红提示
+                if (customTypeEl) customTypeEl.classList.add('is-invalid');
+                codeEl.value = `${prefix}-${srcList.length}XX-[${concRange}]-${today}`;
+                codeEl.classList.add('bbcd-code-confirm');
+            } else {
+                // 类型不为空，移除标红
+                if (customTypeEl) customTypeEl.classList.remove('is-invalid');
+                codeEl.value = `${prefix}-${srcList.length}${customType}-[${concRange}]-${today}`;
+                codeEl.classList.add('bbcd-code-confirm');
+            }
         }
     }
 
@@ -2049,30 +2077,16 @@
             });
         }
 
-        document.getElementById('bbcdFillBar').style.display = items.length > 1 && !isWorkingSolution ? 'block' : 'none';
-        document.getElementById('bbcdFillQty').value = '';
-        // 动态修改模态框标题
-        const titleMap = { SOLUTION_TYPE_B: '储备液配置参数', SOLUTION_TYPE_C: '应用液配置参数', SOLUTION_TYPE_D: '工作液配置参数' };
-        const solTypeEl = document.getElementById('bbcdSolType');
-        const solTypeVal = solTypeEl ? solTypeEl.value : 'SOLUTION_TYPE_B';
-        const bbcdModalTitle = document.querySelector('#bbcdConfigModal .modal-title');
-        if (bbcdModalTitle) {
-            // 只更新标题文本，不破坏 bbcdSolType 和 bbcdSolTypeLabel 元素
-            const iconHtml = '<i class="fas fa-vial me-1"></i>';
-            const titleText = titleMap[solTypeVal] || '混合液配置参数';
-            // 查找或创建文本节点
-            const firstChild = bbcdModalTitle.firstChild;
-            if (firstChild && firstChild.nodeType === Node.TEXT_NODE) {
-                firstChild.textContent = titleText;
-            } else {
-                bbcdModalTitle.insertBefore(document.createTextNode(titleText), firstChild);
-            }
-            // 确保图标存在
-            const icon = bbcdModalTitle.querySelector('i.fas.fa-vial');
-            if (!icon) {
-                bbcdModalTitle.insertAdjacentHTML('afterbegin', iconHtml);
-            }
+        const fillBar = document.getElementById('bbcdFillBar');
+        if (fillBar) {
+            fillBar.style.display = items.length > 1 && !isWorkingSolution ? 'block' : 'none';
         }
+        const fillQty = document.getElementById('bbcdFillQty');
+        if (fillQty) {
+            fillQty.value = '';
+        }
+
+        // 标题已在类型选择时更新，直接打开模态框
         bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdConfigModal')).show();
         if (document.getElementById('bbcdSolType').value !== 'SOLUTION_TYPE_D') {
             bbcdRecalcAll();
@@ -2168,6 +2182,38 @@
         bbcdCheckValidity();
     }
 
+    // 批量填充所有列的移取体积（将每个点的输入框内容填充到对应列）
+    function bbcdBatchFillAllColumns() {
+        const count = window.bbcdCurrentDilutionCount || 0;
+        let hasValue = false;
+
+        // 遍历所有稀释点
+        for (let i = 0; i < count; i++) {
+            const input = document.querySelector(`.bbcd-batch-qty[data-idx="${i}"]`);
+            const val = input?.value;
+            if (!val) continue;
+
+            const v = parseFloat(val);
+            if (!isFinite(v) || v <= 0) continue;
+
+            hasValue = true;
+            const formatted = bbcdFmtQty(bbcdRoundQty(v));
+
+            // 填充该稀释点的所有源储备液的移取体积
+            document.querySelectorAll(`.bbcd-d-qty[data-dilution="${i}"]`).forEach(qtyInput => {
+                qtyInput.value = formatted;
+            });
+        }
+
+        if (!hasValue) {
+            alert('请先在点1、点2等输入框中输入移取体积');
+            return;
+        }
+
+        bbcdRecalcWorkingSolution();
+        bbcdCheckValidity();
+    }
+
     // 渲染工作液配置表格
     function bbcdRenderWorkingSolutionTable(items) {
         const count = window.bbcdCurrentDilutionCount || 5;
@@ -2180,7 +2226,13 @@
                 <th rowspan="2">编号</th>
                 <th rowspan="2">源名称</th>
                 <th rowspan="2">源浓度</th>
-                <th colspan="${count}">移取体积 (mL)</th>
+                <th colspan="${count}">
+                    <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+                        <span>移取体积 (mL)</span>
+                        <button type="button" onclick="bbcdBatchFillAllColumns()" class="btn btn-sm"
+                                style="padding:1px 5px;font-size:0.75rem;height:22px;line-height:1;background:transparent;border:none;color:#fff;" title="将所有点的输入框内容填充到对应列">↓</button>
+                    </div>
+                </th>
                 <th colspan="${count}">计算浓度</th>
             </tr>
             <tr>`;
@@ -2193,8 +2245,8 @@
                     <span>
                         <input type="number" class="bbcd-batch-qty" data-idx="${i-1}" step="0.01" min="0.01"
                                style="-moz-appearance:textfield;width:56px;font-size:0.72rem;padding:1px 4px;border:1px solid #ced4da;border-radius:4px;height:22px;">
-                        <button type="button" onclick="bbcdBatchFillQty(${i-1})" class="btn btn-outline-secondary btn-sm"
-                                style="padding:1px 5px;font-size:0.72rem;height:22px;line-height:1;">↓</button>
+                        <button type="button" onclick="bbcdBatchFillQty(${i-1})" class="btn btn-sm"
+                                style="padding:1px 5px;font-size:0.72rem;height:22px;line-height:1;background:transparent;border:none;color:#fff;">↓</button>
                     </span>
                 </div>
             </th>`;
@@ -2222,7 +2274,7 @@
                 </div>
             </td>`;
         for (let i = 0; i < count; i++) {
-            volumeHTML += `<td><input type="number" class="form-control form-control-sm bbcd-dilution-vol" data-idx="${i}" step="0.01" min="0.01" placeholder="定容" style="-moz-appearance:textfield;"></td>`;
+            volumeHTML += `<td><input type="number" class="form-control form-control-sm bbcd-dilution-vol" data-idx="${i}" step="0.01" min="0.01" value="10.00" placeholder="定容" style="-moz-appearance:textfield;"></td>`;
         }
         for (let i = 0; i < count; i++) {
             volumeHTML += `<td>—</td>`;
@@ -2409,18 +2461,6 @@
                 hint.style.display = 'block';
             } else { hint.style.display = 'none'; }
         } else { hint.style.display = 'none'; }
-        // 工作液固定有效期提示
-        if (solType === 'SOLUTION_TYPE_D') {
-            if (!hint.querySelector('.bbcd-d-hint')) {
-                const span = document.createElement('span');
-                span.className = 'bbcd-d-hint text-info d-block';
-                span.textContent = '工作液有效期上限为 30 天';
-                hint.appendChild(span);
-                hint.style.display = 'block';
-            }
-        } else {
-            hint.querySelector('.bbcd-d-hint')?.remove();
-        }
     }
 
     function bbcdValidate() {
@@ -2430,9 +2470,9 @@
 
         // 通用必填字段
         const required = ['bbcdSolutionName','bbcdSolutionCode','bbcdConfigureDate','bbcdValidityDate','bbcdTemp','bbcdHumid','bbcdStorage'];
-        // B/C 类型额外需要定容体积和溶剂
+        // B/C 类型额外需要定容体积（溶剂在表格中验证）
         if (!isWorkingSolution) {
-            required.push('bbcdVolume', 'bbcdMedium');
+            required.push('bbcdVolume');
         }
         required.forEach(id => {
             const el = document.getElementById(id);
@@ -2481,6 +2521,13 @@
                 const concEl = tr.querySelector('.bbcd-c-conc');
                 if (!concEl || !concEl.textContent.trim() || concEl.textContent.trim() === '—') ok = false;
             });
+            // 验证表格中的溶剂/介质
+            const mediumEl = document.getElementById('bbcdMedium');
+            if (mediumEl) {
+                const v = (mediumEl.value || '').trim();
+                if (!v) { mediumEl.classList.add('is-invalid'); ok = false; }
+                else { mediumEl.classList.remove('is-invalid'); }
+            }
         }
         return ok;
     }
@@ -2597,6 +2644,9 @@
         const saveDetailList = [];
         let dataSeq = 1;
 
+        // 判断是否为单物质
+        const isSingleSource = dataRows.length === 1;
+
         // 1. 移取体积行（每个源储备液一行）
         dataRows.forEach(tr => {
             const src = tr._src;
@@ -2604,11 +2654,11 @@
             const qtyInputs = tr.querySelectorAll('.bbcd-d-qty');
             const row = {
                 id: null, createDatetime: nowStr, serialVersionUID: null,
-                configureId: null, originalId: src.id,
-                originalCode: src.configureOrder,
-                originalName: src.solutionName,
+                configureId: null, originalId: null,
+                originalCode: null,
+                originalName: null,
                 originalConcentration: null, concentrationCount: null, originalUnit: null,
-                groupName: `${src.configureOrder}移取体积`,
+                groupName: isSingleSource ? '移取体积' : `${src.configureOrder}移取体积`,
                 groupUnit: 'mL',
                 dilutionSix: null, dilutionSeven: null, dilutionEight: null,
                 dilutionNine: null, dilutionTen: null, dilutionEleven: null, dilutionTwelve: null,
@@ -2643,7 +2693,7 @@
         };
         for (let i = 0; i < count; i++) {
             const fieldName = bbcdGetDilutionFieldName(i);
-            if (fieldName) volumeRow[fieldName] = String(dilutionVols[i]);
+            if (fieldName) volumeRow[fieldName] = dilutionVols[i].toFixed(2);
         }
         saveDetailList.push(volumeRow);
 
@@ -2658,8 +2708,8 @@
                 configureId: null, originalId: src.id,
                 originalCode: src.configureOrder,
                 originalName: src.solutionName,
-                originalConcentration: src.concentrationRaw,
-                concentrationCount: src.concentrationRaw,
+                originalConcentration: String(src.concValue),
+                concentrationCount: `${src.solutionName}:${src.concValue}(${src.concUnit})`,
                 originalUnit: src.concUnit,
                 groupName: src.solutionName,
                 groupUnit: src.concUnit,
@@ -2668,7 +2718,7 @@
                 remark: null, dataSeq: dataSeq++,
                 receivedQuantity: qtyInputs[0]?.value || '1',
                 receivedUint: 'mL',
-                medium: document.getElementById('bbcdMedium')?.value.trim() || null,
+                medium: document.getElementById('bbcdMedium')?.value.trim() || '四氢呋喃',
                 consumableReceive: null, configurationProcess: null,
                 configurationRecordId: null, creatorName: null, creatorId: null,
                 modifierName: null, modifyDatetime: nowStr,
@@ -2683,6 +2733,44 @@
         const originalCodes = dataRows.map(tr => tr._src?.configureOrder).filter(Boolean).join(',');
         const controlledNos = dataRows.map(tr => tr._src?.controlledNo).filter(Boolean).join(',');
 
+        // 构建 concentration 字符串：物质名:浓度1单位,浓度2单位,...;物质名:...
+        const concentrationParts = [];
+        const concentrationCountParts = [];
+        const receivedQuantityParts = [];
+
+        dataRows.forEach(tr => {
+            const src = tr._src;
+            if (!src) return;
+            const concCells = tr.querySelectorAll('.bbcd-d-conc');
+            const qtyInputs = tr.querySelectorAll('.bbcd-d-qty');
+
+            // 收集该物质的所有浓度值
+            const concValues = [];
+            const concCountValues = [];
+            for (let i = 0; i < count; i++) {
+                const concText = concCells[i]?.textContent.trim();
+                if (concText && concText !== '—') {
+                    concValues.push(`${concText}${src.concUnit}`);
+                    concCountValues.push(`${concText}(${src.concUnit})`);
+                }
+            }
+
+            if (concValues.length > 0) {
+                concentrationParts.push(`${src.solutionName}:${concValues.join(',')}`);
+                concentrationCountParts.push(`${src.solutionName}:${concCountValues.join(',')}`);
+            }
+
+            // receivedQuantity：使用第一个移取体积
+            const firstQty = qtyInputs[0]?.value || '1';
+            receivedQuantityParts.push(`${src.solutionName}:${firstQty}`);
+        });
+
+        // 获取最早的源储备液有效期
+        const validityDates = dataRows.map(tr => tr._src?.validityDate).filter(Boolean);
+        const originalValidityDate = validityDates.length > 0
+            ? validityDates.sort()[0]  // 取最早的日期
+            : null;
+
         return {
             id: null, createDatetime: nowStr, serialVersionUID: null,
             solutionName: document.getElementById('bbcdSolutionName').value.trim(),
@@ -2692,11 +2780,12 @@
             validityDate: document.getElementById('bbcdValidityDate').value,
             storageCondition: document.getElementById('bbcdStorage').value || null,
             storageLocation: '4-1-华业4-1',
-            concentration: null, concentrationCount: null,
+            concentration: concentrationParts.join(';'),
+            concentrationCount: concentrationCountParts.join(';'),
             concentrationUnitName: null, uncertainty: null, configureOrder: null,
             originalCode: originalCodes,
             controlledNo: controlledNos,
-            medium: document.getElementById('bbcdMedium')?.value.trim() || null,
+            medium: document.getElementById('bbcdMedium')?.value.trim() || '四氢呋喃',
             configuratorId: null,
             solutionType: 'SOLUTION_TYPE_D',
             configuratorName: null,
@@ -2708,6 +2797,7 @@
             diluteConcentrationControl: '[]',
             pageType: 'SOLUTION_TYPE_B',
             saveDetailList: JSON.stringify(saveDetailList),
+            originalValidityDate: originalValidityDate,
             configurationTemplateId: null, intermediateTemplateId: null,
             temperature: document.getElementById('bbcdTemp').value.trim(),
             humidity: document.getElementById('bbcdHumid').value.trim(),
@@ -2718,6 +2808,7 @@
             creatorName: null, creatorId: null, modifierName: null,
             modifyDatetime: nowStr,
             receivedUint: 'mL',
+            receivedQuantity: receivedQuantityParts.join(';'),
         };
     }
 
@@ -2806,25 +2897,74 @@
             const solType = document.getElementById('bbcdSolType').value;
             const isWorkingSolution = (solType === 'SOLUTION_TYPE_D');
 
-            const endpoint = isWorkingSolution
-                ? 'http://192.168.12.234:60015/detectionManager/manager/dtSolutionConfigure/saveSolutionConfigure'
-                : '/api/lims/save_solution_b';
-
             const payload = isWorkingSolution
                 ? bbcdBuildWorkingSolutionPayload()
                 : bbcdBuildPayload();
 
-            const resp = await fetch(endpoint, {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify(payload)
-            });
-            const data = await resp.json();
-            if (!data.success) {
-                btn.innerHTML = orig;
-                btn.disabled = false;
-                alert('保存失败: ' + (data.message || '未知错误'));
-                return;
+            // 工作液需要先检查编号并添加用户参数
+            if (isWorkingSolution) {
+                // 获取用户信息
+                const statusResp = await fetch('/api/status', { credentials: 'include' });
+                const statusData = await statusResp.json();
+                if (!statusData.logged_in) {
+                    alert('请先登录');
+                    btn.innerHTML = orig;
+                    btn.disabled = false;
+                    return;
+                }
+
+                const userId = statusData.user_id || statusData.id || 377;
+                const userName = statusData.username || statusData.display_name || 'cym';
+
+                // 检查编号
+                const solutionCode = encodeURIComponent(document.getElementById('bbcdSolutionCode').value.trim());
+                const checkUrl = `/api/lims/solution_code_check?solutionCode=${solutionCode}&pid=${userId}&pname=${userName}&loginId=${userId}&_=${Date.now()}`;
+
+                const checkResp = await fetch(checkUrl);
+                const checkData = await checkResp.json();
+                if (!checkData.success) {
+                    btn.innerHTML = orig;
+                    btn.disabled = false;
+                    alert('编号检查失败: ' + (checkData.message || '编号已存在或无效'));
+                    return;
+                }
+
+                // 添加用户参数到 payload
+                payload.pid = userId;
+                payload.pname = userName;
+                payload.loginId = userId;
+
+                // 保存
+                const endpoint = '/api/lims/save_working_solution';
+                const resp = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    btn.innerHTML = orig;
+                    btn.disabled = false;
+                    alert('保存失败: ' + (data.message || '未知错误'));
+                    return;
+                }
+            } else {
+                // 储备液/应用液的保存逻辑
+                const endpoint = '/api/lims/save_solution_b';
+                const resp = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    btn.innerHTML = orig;
+                    btn.disabled = false;
+                    alert('保存失败: ' + (data.message || '未知错误'));
+                    return;
+                }
             }
+
             btn.classList.remove('btn-primary');
             btn.classList.add('btn-success');
             btn.innerHTML = '<i class="fas fa-check me-1"></i>已保存';
@@ -2905,6 +3045,10 @@
         document.getElementById('bbcdValidityDate').addEventListener('change', bbcdCheckValidity);
         document.getElementById('bbcdSolutionName').addEventListener('input', bbcdUpdateValidity);
         document.getElementById('bbcdSolutionCode').addEventListener('input', () => { bbcdCodeAuto = false; });
+        document.getElementById('bbcdCustomType').addEventListener('input', () => {
+            // 类型输入时自动更新自编号
+            bbcdUpdateCode();
+        });
         document.querySelector('#bbcdConfigTable tbody').addEventListener('input', e => {
             const solType = document.getElementById('bbcdSolType').value;
 
@@ -2922,6 +3066,7 @@
                 } else if (e.target.classList.contains('bbcd-c-qty')) {
                     bbcdRecalcRow(e.target.closest('tr'));
                     bbcdUpdateValidity();
+                    bbcdUpdateCode();
                     bbcdCheckValidity();
                 }
             }
@@ -2961,6 +3106,7 @@
             } else if (t.classList.contains('bbcd-c-qty')) {
                 t.value = bbcdFmtQty(bbcdRoundQty(v));
                 bbcdRecalcRow(t.closest('tr'));
+                bbcdUpdateCode();
                 bbcdCheckValidity();
             } else if (t.classList.contains('bbcd-dilution-vol')) {
                 // 工作液的定容体积：使用体积格式化（有效数字规则）
@@ -3094,11 +3240,23 @@
                 // 先设置类型值（在 bbcdOpenConfig 读取之前）
                 const solTypeEl = document.getElementById('bbcdSolType');
                 const solTypeLabelEl = document.getElementById('bbcdSolTypeLabel');
+                const titleTextEl = document.getElementById('bbcdModalTitleText');
+
                 if (solTypeEl && window.bbcdSelectedType) {
                     solTypeEl.value = window.bbcdSelectedType;
                 }
                 if (solTypeLabelEl && window.bbcdSelectedTypeLabel) {
                     solTypeLabelEl.textContent = window.bbcdSelectedTypeLabel;
+                }
+
+                // 同时更新模态框标题文本
+                if (titleTextEl && window.bbcdSelectedType) {
+                    const titleMap = {
+                        SOLUTION_TYPE_B: '储备液配置参数',
+                        SOLUTION_TYPE_C: '应用液配置参数',
+                        SOLUTION_TYPE_D: '工作液配置参数'
+                    };
+                    titleTextEl.textContent = titleMap[window.bbcdSelectedType] || '混合液配置参数';
                 }
 
                 // 等待 Modal 动画完成（Bootstrap 默认 300ms）
@@ -3117,6 +3275,32 @@
                     checkbox.checked = bbcdSelectedIndices.includes(idx);
                 });
                 bbcdUpdateSelection();
+            }
+
+            // 重置工作液 D 类型的全局状态，确保下次打开时处于干净状态
+            const solType = document.getElementById('bbcdSolType')?.value;
+            if (solType === 'SOLUTION_TYPE_D') {
+                // 清除稀释点数量缓存
+                window.bbcdCurrentDilutionCount = null;
+
+                // 重置表格为初始占位符状态
+                const tbody = document.querySelector('#bbcdConfigTable tbody');
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">请先输入稀释点数量并点击"生成稀释点"按钮</td></tr>';
+                }
+
+                // 重置表头为默认状态
+                const thead = document.querySelector('#bbcdConfigTable thead');
+                if (thead) {
+                    thead.innerHTML = `
+                        <tr>
+                            <th>编号</th>
+                            <th>源名称</th>
+                            <th>源浓度</th>
+                            <th>移取体积</th>
+                            <th>计算浓度</th>
+                        </tr>`;
+                }
             }
         });
     });

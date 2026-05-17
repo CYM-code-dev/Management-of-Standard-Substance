@@ -928,6 +928,63 @@ def lims_save_solution_b():
         return jsonify({"success": False, "message": f"配置异常: {str(e)}"}), 500
 
 
+@app.route('/api/lims/solution_code_check', methods=['GET'])
+def solution_code_check():
+    """代理工作液编号检查请求"""
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+
+    params = request.args.to_dict()
+    url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/solutionCodeCheck"
+
+    try:
+        resp = system.session.get(url, params=params)
+        resp.raise_for_status()
+        return jsonify(resp.json()), resp.status_code
+    except Exception as e:
+        return jsonify({"success": False, "message": f"检查异常: {str(e)}"}), 500
+
+
+@app.route('/api/lims/save_working_solution', methods=['POST'])
+def save_working_solution():
+    """代理工作液保存请求"""
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+
+    payload = request.get_json() or {}
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+
+    # pid/pname/loginId 应该已经在前端添加了，这里不需要再添加
+    url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/saveSolutionConfigure"
+    headers = {
+        "Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544",
+        "Content-Type": "application/json;charset=UTF-8",
+    }
+
+    try:
+        resp = system.session.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+        result = resp.json()
+        if not result.get('success'):
+            return jsonify({
+                "success": False,
+                "message": result.get('errorDesc') or str(result.get('errorCtx', '配置失败')),
+            })
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"配置异常: {str(e)}"}), 500
+
+
 @app.route('/api/lims/export_docx', methods=['POST'])
 def lims_export_docx():
     if not session.get('logged_in'):
