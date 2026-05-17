@@ -700,7 +700,9 @@
             <option value="干燥箱">
           </datalist>
           <label class="form-label mb-0 small fw-bold text-nowrap">类型</label>
-          <input type="text" id="bbcdCustomType" class="form-control form-control-sm" placeholder="如 TSCA" style="grid-column:span 3;">
+          <input type="text" id="bbcdCustomType" class="form-control form-control-sm" placeholder="如 TSCA" style="grid-column:span 1;">
+          <label class="form-label mb-0 small fw-bold text-nowrap" id="bbcdMediumLabel" style="display:none;">溶剂/介质 *</label>
+          <input type="text" id="bbcdMediumD" class="form-control form-control-sm" list="solMediumOptions" placeholder="选择或输入" autocomplete="off" style="display:none;">
         </div>
 
         <!-- 工作液稀释点配置区域（仅对 SOLUTION_TYPE_D 可见） -->
@@ -1667,6 +1669,23 @@
         return m ? { value: parseFloat(m[1]), unit: m[2] } : { value: NaN, unit: '' };
     }
 
+    function bbcdParseMultiConc(str) {
+        if (!str || !str.includes(':')) return null;
+        const parts = str.split(';').map(s => s.trim()).filter(Boolean);
+        const components = [];
+        for (const part of parts) {
+            const colonIdx = part.lastIndexOf(':');
+            if (colonIdx < 0) continue;
+            const name = part.substring(0, colonIdx).trim();
+            const concStr = part.substring(colonIdx + 1).trim();
+            const m = /^([\d.]+)\s*\(([^)]+)\)$/.exec(concStr);
+            if (m) {
+                components.push({ name, value: parseFloat(m[1]), unit: m[2] });
+            }
+        }
+        return components.length > 1 ? components : null;
+    }
+
     function bbcdEsc(s) { return escapeHtml(s == null ? '' : String(s)); }
 
     // 修约规则（与 A-B μg/mL 时一致）
@@ -1752,16 +1771,28 @@
         const srcList = rows.map(tr => tr._src).filter(Boolean);
         const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
         if (srcList.length === 0) { codeEl.value = ''; codeEl.classList.remove('bbcd-code-confirm'); return; }
-        if (srcList.length === 1) {
+
+        // 按唯一源溶液分组（多组分行共享同一个源）
+        const uniqueSources = [];
+        const seenIds = new Set();
+        srcList.forEach(src => {
+            const key = src.configureOrder || src.id;
+            if (!seenIds.has(key)) {
+                seenIds.add(key);
+                uniqueSources.push(src);
+            }
+        });
+
+        if (uniqueSources.length === 1) {
             const concStr = bbcdComputeSingleConc();
             if (!concStr) { codeEl.value = ''; codeEl.classList.remove('bbcd-code-confirm'); return; }
-            const sc = (srcList[0].solutionCode || '').replace(/-[\d.]+?-\d{8}$/, '');
+            const sc = (uniqueSources[0].solutionCode || '').replace(/-[\d.]+?-\d{8}$/, '');
             codeEl.value = `${sc}-${concStr}-${today}`;
             codeEl.classList.remove('bbcd-code-confirm');
         } else {
             const concStr = bbcdComputeAvgConcStr();
             if (!concStr) { codeEl.value = ''; codeEl.classList.remove('bbcd-code-confirm'); return; }
-            const codes = srcList.map(s => s.solutionCode).filter(Boolean);
+            const codes = uniqueSources.map(s => s.solutionCode).filter(Boolean);
             const prefix = codes.length ? bbcdDominantPrefix(codes) : 'CK-CG';
 
             // 使用类型字段替换 XX
@@ -1771,12 +1802,12 @@
             if (!customType) {
                 // 类型为空，标红提示
                 if (customTypeEl) customTypeEl.classList.add('is-invalid');
-                codeEl.value = `${prefix}-${srcList.length}XX-${concStr}-${today}`;
+                codeEl.value = `${prefix}-${uniqueSources.length}XX-${concStr}-${today}`;
                 codeEl.classList.add('bbcd-code-confirm');
             } else {
                 // 类型不为空，移除标红
                 if (customTypeEl) customTypeEl.classList.remove('is-invalid');
-                codeEl.value = `${prefix}-${srcList.length}${customType}-${concStr}-${today}`;
+                codeEl.value = `${prefix}-${uniqueSources.length}${customType}-${concStr}-${today}`;
                 codeEl.classList.add('bbcd-code-confirm');
             }
         }
@@ -1799,8 +1830,19 @@
 
         const count = window.bbcdCurrentDilutionCount || 5;
 
-        if (srcList.length === 1) {
-            // 单源：收集所有计算浓度
+        // 按唯一源溶液分组（多组分行共享同一个源）
+        const uniqueSources = [];
+        const seenIds = new Set();
+        srcList.forEach(src => {
+            const key = src.configureOrder || src.id;
+            if (!seenIds.has(key)) {
+                seenIds.add(key);
+                uniqueSources.push(src);
+            }
+        });
+
+        if (uniqueSources.length === 1) {
+            // 单源（含多组分）：收集所有计算浓度
             const allConcs = [];
             rows.forEach(tr => {
                 tr.querySelectorAll('.bbcd-d-conc').forEach(span => {
@@ -1822,7 +1864,7 @@
             const maxConc = Math.max(...allConcs);
             const concRange = `${bbcdFmtConc(minConc)}-${bbcdFmtConc(maxConc)}`;
 
-            const sc = (srcList[0].solutionCode || '').replace(/-[\d.\[\]]+?-\d{8}$/, '');
+            const sc = (uniqueSources[0].solutionCode || '').replace(/-[\d.\[\]]+?-\d{8}$/, '');
             codeEl.value = `${sc}-[${concRange}]-${today}`;
             codeEl.classList.remove('bbcd-code-confirm');
         } else {
@@ -1854,7 +1896,7 @@
             const maxAvg = Math.max(...avgConcs);
             const concRange = `${bbcdFmtConc(minAvg)}-${bbcdFmtConc(maxAvg)}`;
 
-            const codes = srcList.map(s => s.solutionCode).filter(Boolean);
+            const codes = uniqueSources.map(s => s.solutionCode).filter(Boolean);
             const prefix = codes.length ? bbcdDominantPrefix(codes) : 'CK-CG';
 
             // 使用类型字段替换 XX
@@ -1864,12 +1906,12 @@
             if (!customType) {
                 // 类型为空，标红提示
                 if (customTypeEl) customTypeEl.classList.add('is-invalid');
-                codeEl.value = `${prefix}-${srcList.length}XX-[${concRange}]-${today}`;
+                codeEl.value = `${prefix}-${uniqueSources.length}XX-[${concRange}]-${today}`;
                 codeEl.classList.add('bbcd-code-confirm');
             } else {
                 // 类型不为空，移除标红
                 if (customTypeEl) customTypeEl.classList.remove('is-invalid');
-                codeEl.value = `${prefix}-${srcList.length}${customType}-[${concRange}]-${today}`;
+                codeEl.value = `${prefix}-${uniqueSources.length}${customType}-[${concRange}]-${today}`;
                 codeEl.classList.add('bbcd-code-confirm');
             }
         }
@@ -2029,6 +2071,15 @@
             dilutionSection.style.display = isWorkingSolution ? 'block' : 'none';
         }
 
+        // 显示/隐藏工作液溶剂/介质输入框
+        const mediumLabel = document.getElementById('bbcdMediumLabel');
+        const mediumD = document.getElementById('bbcdMediumD');
+        if (mediumLabel) mediumLabel.style.display = isWorkingSolution ? '' : 'none';
+        if (mediumD) {
+            mediumD.style.display = isWorkingSolution ? '' : 'none';
+            if (isWorkingSolution) mediumD.value = '';
+        }
+
         // 根据类型隐藏/显示标准字段（仅在元素存在时操作）
         const volumeCol = document.getElementById('bbcdVolume')?.closest('td');
         if (volumeCol) {
@@ -2042,38 +2093,95 @@
             // 工作液：等待用户生成稀释点后再渲染表格
             tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">请先输入稀释点数量并点击"生成稀释点"按钮</td></tr>';
         } else {
-            // B/C 类型的现有渲染逻辑
+            // B/C 类型的渲染逻辑（支持多组分）
+            // 计算总行数（用于 sharedCells 的 rowspan）
+            let totalRows = 0;
+            items.forEach(it => {
+                const mc = bbcdParseMultiConc(it.concentration);
+                totalRows += mc ? mc.length : 1;
+            });
+
+            let rowIdx = 0;
             items.forEach((it, idx) => {
-                const parsed = bbcdParseConc(it.concentration);
-                const tr = document.createElement('tr');
-                tr._src = {
-                    id: it.id,
-                    configureOrder: it.configureOrder || '',
-                    solutionName: it.solutionName || '',
-                    solutionCode: it.solutionCode || '',
-                    originalCode: it.originalCode || '',
-                    controlledNo: it.controlledNo || '',
-                    concValue: parsed.value,
-                    concUnit: parsed.unit,
-                    concentrationRaw: it.concentration || '',
-                    constantVolume: Number(it.constantVolume || 0),
-                    validityDate: it.validityDate || '',
-                };
-                const sharedCells = idx === 0 ? `
-                    <td rowspan="${items.length}">
-                        <input id="bbcdMedium" class="form-control form-control-sm" list="solMediumOptions" placeholder="选择或输入" autocomplete="off">
-                    </td>
-                    <td rowspan="${items.length}">
-                        <input type="number" id="bbcdVolume" class="form-control form-control-sm" step="0.01" min="0.01" value="10.00" style="-moz-appearance:textfield;">
-                    </td>` : '';
-                tr.innerHTML = `
-                    <td><span class="bbcd-c-order">${bbcdEsc(tr._src.configureOrder)}</span></td>
-                    <td class="text-start small"><span class="bbcd-c-srcName">${bbcdEsc(tr._src.solutionName)}</span></td>
-                    <td><span class="bbcd-c-srcConc" title="剩余 ${tr._src.constantVolume.toFixed(2)} mL">${isNaN(tr._src.concValue) ? '—' : tr._src.concValue + ' ' + bbcdEsc(tr._src.concUnit)}</span></td>
-                    <td><input type="number" class="form-control form-control-sm bbcd-c-qty" step="0.01" min="0.01" max="${tr._src.constantVolume}" style="-moz-appearance:textfield;"></td>
-                    ${sharedCells}
-                    <td><span class="bbcd-c-conc">—</span><span class="bbcd-c-unit ms-1 text-muted small">${bbcdEsc(tr._src.concUnit)}</span></td>`;
-                tbody.appendChild(tr);
+                const multiConc = bbcdParseMultiConc(it.concentration);
+
+                if (multiConc) {
+                    // 多组分源溶液
+                    const compCount = multiConc.length;
+                    multiConc.forEach((comp, compIdx) => {
+                        const tr = document.createElement('tr');
+                        tr._src = {
+                            id: it.id,
+                            configureOrder: it.configureOrder || '',
+                            solutionName: it.solutionName || '',
+                            solutionCode: it.solutionCode || '',
+                            originalCode: it.originalCode || '',
+                            controlledNo: it.controlledNo || '',
+                            concValue: comp.value,
+                            concUnit: comp.unit,
+                            componentName: comp.name,
+                            concentrationRaw: it.concentration || '',
+                            constantVolume: Number(it.constantVolume || 0),
+                            validityDate: it.validityDate || '',
+                            isComponent: true,
+                            componentIdx: compIdx,
+                            componentCount: compCount,
+                        };
+
+                        let rowHTML = '';
+                        if (compIdx === 0) {
+                            rowHTML += `<td rowspan="${compCount}"><span class="bbcd-c-order">${bbcdEsc(tr._src.configureOrder)}</span></td>`;
+                            rowHTML += `<td rowspan="${compCount}" class="text-start small"><span class="bbcd-c-srcName">${bbcdEsc(tr._src.solutionName)}</span></td>`;
+                        }
+                        rowHTML += `<td class="text-start small"><span class="bbcd-c-srcConc" title="剩余 ${tr._src.constantVolume.toFixed(2)} mL">${bbcdEsc(comp.name)}: ${comp.value} ${bbcdEsc(comp.unit)}</span></td>`;
+                        if (compIdx === 0) {
+                            rowHTML += `<td rowspan="${compCount}"><input type="number" class="form-control form-control-sm bbcd-c-qty" step="0.01" min="0.01" max="${tr._src.constantVolume}" style="-moz-appearance:textfield;"></td>`;
+                            // sharedCells（溶剂/介质 + 定容体积）只在第一个 item 的第一个组分行渲染
+                            if (rowIdx === 0) {
+                                rowHTML += `<td rowspan="${totalRows}"><input id="bbcdMedium" class="form-control form-control-sm" list="solMediumOptions" placeholder="选择或输入" autocomplete="off"></td>`;
+                                rowHTML += `<td rowspan="${totalRows}"><input type="number" id="bbcdVolume" class="form-control form-control-sm" step="0.01" min="0.01" value="10.00" style="-moz-appearance:textfield;"></td>`;
+                            }
+                        }
+                        rowHTML += `<td><span class="bbcd-c-conc">—</span><span class="bbcd-c-unit ms-1 text-muted small">${bbcdEsc(comp.unit)}</span></td>`;
+
+                        tr.innerHTML = rowHTML;
+                        tbody.appendChild(tr);
+                    });
+                    rowIdx += compCount;
+                } else {
+                    // 单组分源溶液
+                    const parsed = bbcdParseConc(it.concentration);
+                    const tr = document.createElement('tr');
+                    tr._src = {
+                        id: it.id,
+                        configureOrder: it.configureOrder || '',
+                        solutionName: it.solutionName || '',
+                        solutionCode: it.solutionCode || '',
+                        originalCode: it.originalCode || '',
+                        controlledNo: it.controlledNo || '',
+                        concValue: parsed.value,
+                        concUnit: parsed.unit,
+                        concentrationRaw: it.concentration || '',
+                        constantVolume: Number(it.constantVolume || 0),
+                        validityDate: it.validityDate || '',
+                    };
+                    const sharedCells = rowIdx === 0 ? `
+                        <td rowspan="${totalRows}">
+                            <input id="bbcdMedium" class="form-control form-control-sm" list="solMediumOptions" placeholder="选择或输入" autocomplete="off">
+                        </td>
+                        <td rowspan="${totalRows}">
+                            <input type="number" id="bbcdVolume" class="form-control form-control-sm" step="0.01" min="0.01" value="10.00" style="-moz-appearance:textfield;">
+                        </td>` : '';
+                    tr.innerHTML = `
+                        <td><span class="bbcd-c-order">${bbcdEsc(tr._src.configureOrder)}</span></td>
+                        <td class="text-start small"><span class="bbcd-c-srcName">${bbcdEsc(tr._src.solutionName)}</span></td>
+                        <td><span class="bbcd-c-srcConc" title="剩余 ${tr._src.constantVolume.toFixed(2)} mL">${isNaN(tr._src.concValue) ? '—' : tr._src.concValue + ' ' + bbcdEsc(tr._src.concUnit)}</span></td>
+                        <td><input type="number" class="form-control form-control-sm bbcd-c-qty" step="0.01" min="0.01" max="${tr._src.constantVolume}" style="-moz-appearance:textfield;"></td>
+                        ${sharedCells}
+                        <td><span class="bbcd-c-conc">—</span><span class="bbcd-c-unit ms-1 text-muted small">${bbcdEsc(tr._src.concUnit)}</span></td>`;
+                    tbody.appendChild(tr);
+                    rowIdx++;
+                }
             });
         }
 
@@ -2282,57 +2390,128 @@
         volumeRow.innerHTML = volumeHTML;
         tbody.appendChild(volumeRow);
 
-        // 后续行：源储备液数据
+        // 后续行：源储备液数据（支持多组分）
         items.forEach((it, idx) => {
-            const parsed = bbcdParseConc(it.concentration);
-            const tr = document.createElement('tr');
-            tr._src = {
-                id: it.id,
-                configureOrder: it.configureOrder || '',
-                solutionName: it.solutionName || '',
-                solutionCode: it.solutionCode || '',
-                originalCode: it.originalCode || '',
-                controlledNo: it.controlledNo || '',
-                concValue: parsed.value,
-                concUnit: parsed.unit,
-                concentrationRaw: it.concentration || '',
-                constantVolume: Number(it.constantVolume || 0),
-                validityDate: it.validityDate || '',
-            };
+            const multiConc = bbcdParseMultiConc(it.concentration);
 
-            let rowHTML = `
-                <td>${bbcdEsc(tr._src.configureOrder)}</td>
-                <td class="text-start small">${bbcdEsc(tr._src.solutionName)}</td>
-                <td>${isNaN(tr._src.concValue) ? '—' : tr._src.concValue + ' ' + bbcdEsc(tr._src.concUnit)}</td>`;
+            if (multiConc) {
+                // 多组分源溶液：每个组分一行，编号/名称/移取体积用 rowspan
+                const compCount = multiConc.length;
+                multiConc.forEach((comp, compIdx) => {
+                    const tr = document.createElement('tr');
+                    tr._src = {
+                        id: it.id,
+                        configureOrder: it.configureOrder || '',
+                        solutionName: it.solutionName || '',
+                        solutionCode: it.solutionCode || '',
+                        originalCode: it.originalCode || '',
+                        controlledNo: it.controlledNo || '',
+                        concValue: comp.value,
+                        concUnit: comp.unit,
+                        componentName: comp.name,
+                        concentrationRaw: it.concentration || '',
+                        constantVolume: Number(it.constantVolume || 0),
+                        validityDate: it.validityDate || '',
+                        isComponent: true,
+                        componentIdx: compIdx,
+                        componentCount: compCount,
+                        sourceIdx: idx,
+                    };
 
-            // 添加移取体积输入框
-            for (let i = 0; i < count; i++) {
-                rowHTML += `<td><input type="number" class="form-control form-control-sm bbcd-d-qty" data-dilution="${i}" data-row="${idx}" step="0.01" min="0.01" placeholder="移取" style="-moz-appearance:textfield;"></td>`;
+                    let rowHTML = '';
+                    if (compIdx === 0) {
+                        // 第一个组分行：包含 rowspan 的编号、名称、移取体积
+                        rowHTML += `<td rowspan="${compCount}">${bbcdEsc(tr._src.configureOrder)}</td>`;
+                        rowHTML += `<td rowspan="${compCount}" class="text-start small">${bbcdEsc(tr._src.solutionName)}</td>`;
+                    }
+                    // 源浓度：每个组分一行
+                    rowHTML += `<td class="text-start small">${bbcdEsc(comp.name)}: ${comp.value} ${bbcdEsc(comp.unit)}</td>`;
+
+                    if (compIdx === 0) {
+                        // 移取体积输入框：rowspan 跨所有组分行
+                        for (let i = 0; i < count; i++) {
+                            rowHTML += `<td rowspan="${compCount}"><input type="number" class="form-control form-control-sm bbcd-d-qty" data-dilution="${i}" data-row="${idx}" step="0.01" min="0.01" placeholder="移取" style="-moz-appearance:textfield;"></td>`;
+                        }
+                    }
+
+                    // 计算浓度显示：每个组分一行
+                    for (let i = 0; i < count; i++) {
+                        rowHTML += `<td><span class="bbcd-d-conc" data-dilution="${i}" data-comp="${compIdx}">—</span></td>`;
+                    }
+
+                    tr.innerHTML = rowHTML;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                // 单组分源溶液：保持现有逻辑
+                const parsed = bbcdParseConc(it.concentration);
+                const tr = document.createElement('tr');
+                tr._src = {
+                    id: it.id,
+                    configureOrder: it.configureOrder || '',
+                    solutionName: it.solutionName || '',
+                    solutionCode: it.solutionCode || '',
+                    originalCode: it.originalCode || '',
+                    controlledNo: it.controlledNo || '',
+                    concValue: parsed.value,
+                    concUnit: parsed.unit,
+                    concentrationRaw: it.concentration || '',
+                    constantVolume: Number(it.constantVolume || 0),
+                    validityDate: it.validityDate || '',
+                };
+
+                let rowHTML = `
+                    <td>${bbcdEsc(tr._src.configureOrder)}</td>
+                    <td class="text-start small">${bbcdEsc(tr._src.solutionName)}</td>
+                    <td>${isNaN(tr._src.concValue) ? '—' : tr._src.concValue + ' ' + bbcdEsc(tr._src.concUnit)}</td>`;
+
+                for (let i = 0; i < count; i++) {
+                    rowHTML += `<td><input type="number" class="form-control form-control-sm bbcd-d-qty" data-dilution="${i}" data-row="${idx}" step="0.01" min="0.01" placeholder="移取" style="-moz-appearance:textfield;"></td>`;
+                }
+
+                for (let i = 0; i < count; i++) {
+                    rowHTML += `<td><span class="bbcd-d-conc" data-dilution="${i}">—</span></td>`;
+                }
+
+                tr.innerHTML = rowHTML;
+                tbody.appendChild(tr);
             }
-
-            // 添加计算浓度显示
-            for (let i = 0; i < count; i++) {
-                rowHTML += `<td><span class="bbcd-d-conc" data-dilution="${i}">—</span></td>`;
-            }
-
-            tr.innerHTML = rowHTML;
-            tbody.appendChild(tr);
         });
     }
 
     function bbcdRecalcRow(tr) {
         const src = tr._src;
-        const qtyEl = tr.querySelector('.bbcd-c-qty');
-        if (!qtyEl) return; // 工作液模式下没有此元素
+        if (!src) return;
+
+        // 获取移取体积输入框：多组分后续行没有自己的输入框，需要向前查找
+        let qtyEl = tr.querySelector('.bbcd-c-qty');
+        if (!qtyEl) {
+            if (src.isComponent && src.componentIdx > 0) {
+                // 多组分后续行：向前查找第一个组分行的输入框
+                let prev = tr.previousElementSibling;
+                while (prev && !prev.querySelector('.bbcd-c-qty')) {
+                    prev = prev.previousElementSibling;
+                }
+                qtyEl = prev?.querySelector('.bbcd-c-qty');
+            }
+            if (!qtyEl) return;
+        }
+
         const qty = parseFloat(qtyEl.value);
         const volEl = document.getElementById('bbcdVolume');
         if (!volEl) return;
         const vol = parseFloat(volEl.value);
         const cell = tr.querySelector('.bbcd-c-conc');
-        qtyEl.classList.remove('is-invalid');
-        if (!isNaN(qty) && (qty <= 0 || qty > src.constantVolume + 1e-9)) {
-            qtyEl.classList.add('is-invalid');
+        if (!cell) return;
+
+        // 只在有输入框的行做验证标记
+        if (tr.querySelector('.bbcd-c-qty')) {
+            qtyEl.classList.remove('is-invalid');
+            if (!isNaN(qty) && (qty <= 0 || qty > src.constantVolume + 1e-9)) {
+                qtyEl.classList.add('is-invalid');
+            }
         }
+
         if (!qty || !vol || qty <= 0 || vol <= 0 || isNaN(src.concValue)) {
             cell.textContent = '—';
             return;
@@ -2363,33 +2542,68 @@
         // 读取逐级稀释开关状态
         const isGradual = document.getElementById('bbcdGradualDilution')?.checked || false;
 
+        // 收集每个源溶液的移取体积输入框（多组分共享）
+        let currentQtyInputs = null;
+
         rows.forEach(tr => {
             const src = tr._src;
             if (!src) return;
 
-            const qtyInputs = tr.querySelectorAll('.bbcd-d-qty');
-            const concCells = tr.querySelectorAll('.bbcd-d-conc');
+            // 获取移取体积输入框：多组分行只有第一个组分行有输入框
+            const ownQtyInputs = tr.querySelectorAll('.bbcd-d-qty');
+            if (ownQtyInputs.length > 0) {
+                currentQtyInputs = ownQtyInputs;
+            }
 
-            let prevConc = src.concValue; // 初始浓度为源浓度
+            const concCells = tr.querySelectorAll('.bbcd-d-conc');
+            if (!concCells.length) return;
+
+            let prevConc = src.concValue;
 
             for (let i = 0; i < count; i++) {
-                const qty = parseFloat(qtyInputs[i]?.value) || 0;
+                const qty = parseFloat(currentQtyInputs?.[i]?.value) || 0;
                 const vol = dilutionVols[i];
 
                 if (qty > 0 && vol > 0) {
                     if (isGradual) {
-                        // 逐级稀释：从上一个稀释点的浓度计算
                         const conc = prevConc * qty / vol;
                         concCells[i].textContent = bbcdFmtConc(conc);
-                        prevConc = conc; // 更新为当前浓度，供下一个稀释点使用
+                        prevConc = conc;
                     } else {
-                        // 平行稀释：都从源浓度计算
                         const conc = src.concValue * qty / vol;
                         concCells[i].textContent = bbcdFmtConc(conc);
                     }
                 } else {
                     concCells[i].textContent = '—';
-                    if (isGradual) prevConc = 0; // 如果某个点无效，后续点也无法计算
+                    if (isGradual) prevConc = 0;
+                }
+            }
+
+            // 移取体积上限校验（仅在拥有输入框的行执行）
+            if (ownQtyInputs.length > 0) {
+                const stock = src.constantVolume;
+                if (isGradual) {
+                    for (let i = 0; i < count; i++) {
+                        const qtyInput = currentQtyInputs[i];
+                        if (!qtyInput) continue;
+                        const qty = parseFloat(qtyInput.value) || 0;
+                        const maxQty = (i === 0) ? stock : dilutionVols[i - 1];
+                        if (qty > 0 && maxQty > 0 && qty > maxQty + 1e-9) {
+                            qtyInput.classList.add('is-invalid');
+                        } else {
+                            qtyInput.classList.remove('is-invalid');
+                        }
+                    }
+                } else {
+                    let totalQty = 0;
+                    for (let i = 0; i < count; i++) { totalQty += parseFloat(currentQtyInputs[i]?.value) || 0; }
+                    const exceed = stock > 0 && totalQty > stock + 1e-9;
+                    for (let i = 0; i < count; i++) {
+                        const qtyInput = currentQtyInputs[i];
+                        if (!qtyInput) continue;
+                        if (exceed && parseFloat(qtyInput.value) > 0) qtyInput.classList.add('is-invalid');
+                        else qtyInput.classList.remove('is-invalid');
+                    }
                 }
             }
         });
@@ -2473,6 +2687,8 @@
         // B/C 类型额外需要定容体积（溶剂在表格中验证）
         if (!isWorkingSolution) {
             required.push('bbcdVolume');
+        } else {
+            required.push('bbcdMediumD');
         }
         required.forEach(id => {
             const el = document.getElementById(id);
@@ -2492,21 +2708,40 @@
                 ok = false;
             }
             // 验证稀释体积
+            const dilutionVols = [];
             for (let i = 0; i < count; i++) {
                 const el = document.querySelector(`.bbcd-dilution-vol[data-idx="${i}"]`);
-                if (!el) continue;
+                if (!el) { dilutionVols.push(0); continue; }
                 const v = parseFloat(el.value);
-                if (!v || v <= 0) { el.classList.add('is-invalid'); ok = false; }
-                else { el.classList.remove('is-invalid'); }
+                if (!v || v <= 0) { el.classList.add('is-invalid'); ok = false; dilutionVols.push(0); }
+                else { el.classList.remove('is-invalid'); dilutionVols.push(v); }
             }
-            // 验证移取体积
+            // 验证移取体积（含上限校验）
+            const isGradual = document.getElementById('bbcdGradualDilution')?.checked || false;
             rows.forEach(tr => {
                 if (!tr._src) return;
-                tr.querySelectorAll('.bbcd-d-qty').forEach(input => {
-                    const qty = parseFloat(input.value);
-                    if (!qty || qty <= 0) { input.classList.add('is-invalid'); ok = false; }
-                    else { input.classList.remove('is-invalid'); }
-                });
+                const qtyInputs = tr.querySelectorAll('.bbcd-d-qty');
+                if (!qtyInputs.length) return;
+                const stock = tr._src.constantVolume;
+                if (isGradual) {
+                    qtyInputs.forEach((input, i) => {
+                        const qty = parseFloat(input.value);
+                        const maxQty = (i === 0) ? stock : dilutionVols[i - 1];
+                        if (!qty || qty <= 0 || (maxQty > 0 && qty > maxQty + 1e-9)) {
+                            input.classList.add('is-invalid'); ok = false;
+                        } else { input.classList.remove('is-invalid'); }
+                    });
+                } else {
+                    let total = 0;
+                    qtyInputs.forEach(input => { total += parseFloat(input.value) || 0; });
+                    const exceed = stock > 0 && total > stock + 1e-9;
+                    qtyInputs.forEach(input => {
+                        const qty = parseFloat(input.value);
+                        if (!qty || qty <= 0 || exceed) {
+                            input.classList.add('is-invalid'); ok = false;
+                        } else { input.classList.remove('is-invalid'); }
+                    });
+                }
             });
         } else {
             // B/C 类型的现有验证
@@ -2533,45 +2768,106 @@
     }
 
     function bbcdBuildPayload() {
-        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')].filter(tr => tr._src);
         const volume = bbcdRoundVol(parseFloat(document.getElementById('bbcdVolume').value));
         const volStr = bbcdFmtVol(volume);
         const nowStr = new Date().toISOString().slice(0,19).replace('T',' ');
         const medium = document.getElementById('bbcdMedium').value.trim();
 
         const concParts = [], orderParts = [], controlledParts = [];
-        const detailList = rows.map((tr, idx) => {
+        let hasMultiComponent = false;
+
+        // 按源溶液分组
+        const sourceGroups = [];
+        rows.forEach(tr => {
             const src = tr._src;
-            const qty = bbcdRoundQty(parseFloat(tr.querySelector('.bbcd-c-qty').value));
+            if (src.isComponent) {
+                hasMultiComponent = true;
+                if (src.componentIdx === 0) {
+                    sourceGroups.push({ rows: [tr], isMulti: true });
+                } else {
+                    sourceGroups[sourceGroups.length - 1].rows.push(tr);
+                }
+            } else {
+                sourceGroups.push({ rows: [tr], isMulti: false });
+            }
+        });
+
+        const detailList = sourceGroups.map((group, idx) => {
+            const firstTr = group.rows[0];
+            const firstSrc = firstTr._src;
+            const qtyEl = firstTr.querySelector('.bbcd-c-qty');
+            const qty = bbcdRoundQty(parseFloat(qtyEl?.value));
             const qtyStr = bbcdFmtQty(qty);
-            const c = bbcdRoundConc(src.concValue * qty / volume);
-            const concStr = bbcdFmtConc(c);
-            concParts.push(`${src.solutionName}:${concStr}(${src.concUnit})`);
-            orderParts.push(src.configureOrder);
-            controlledParts.push(src.controlledNo || '');
-            return {
-                id: null, createDatetime: nowStr, serialVersionUID: null,
-                configureId: null,
-                originalId: src.id,
-                originalCode: src.originalCode,
-                originalName: src.solutionName,
-                originalConcentration: src.concentrationRaw,
-                concentrationCount: src.concentrationRaw,
-                originalUnit: null,
-                receivedQuantity: qtyStr, receivedUint: 'mL',
-                useUantity: qtyStr, useUnit: 'mL',
-                medium: medium,
-                volume: volStr, unit: 'mL',
-                configurationConcentration: concStr,
-                configurationUnit: src.concUnit,
-                configurationUncertainty: null, remark: null,
-                consumableReceive: null,
-                dataid: src.id,
-                configurationRecordId: null, creatorName: null, creatorId: null,
-                modifierName: null, modifyDatetime: nowStr,
-                originalNo: `${src.configureOrder}\n${src.solutionCode}`,
-                _X_ID: `row_${Date.now() + idx}`,
-            };
+
+            orderParts.push(firstSrc.configureOrder);
+            controlledParts.push(firstSrc.controlledNo || '');
+
+            if (group.isMulti) {
+                // 多组分：计算每个组分的浓度，合并为一个 detail
+                const configConcParts = [];
+                group.rows.forEach(tr => {
+                    const src = tr._src;
+                    const c = bbcdRoundConc(src.concValue * qty / volume);
+                    const concStr = bbcdFmtConc(c);
+                    configConcParts.push(`${src.componentName}:${concStr}`);
+                    concParts.push(`${src.componentName}:${concStr}(${src.concUnit})`);
+                });
+
+                return {
+                    id: null, createDatetime: nowStr, serialVersionUID: null,
+                    configureId: null,
+                    originalId: firstSrc.id,
+                    originalCode: firstSrc.originalCode,
+                    originalName: firstSrc.solutionName,
+                    originalConcentration: firstSrc.concentrationRaw,
+                    concentrationCount: firstSrc.concentrationRaw,
+                    originalUnit: null,
+                    receivedQuantity: qtyStr, receivedUint: 'mL',
+                    useUantity: qtyStr, useUnit: 'mL',
+                    medium: medium,
+                    volume: volStr, unit: 'mL',
+                    configurationConcentration: configConcParts.join(';'),
+                    configurationUnit: firstSrc.concUnit,
+                    configurationUncertainty: null, remark: null,
+                    consumableReceive: null,
+                    dataid: firstSrc.id,
+                    configurationRecordId: null, creatorName: null, creatorId: null,
+                    modifierName: null, modifyDatetime: nowStr,
+                    originalNo: `${firstSrc.configureOrder}\n${firstSrc.solutionCode}`,
+                    _X_ID: `row_${Date.now() + idx}`,
+                };
+            } else {
+                // 单组分：保持现有逻辑
+                const src = firstSrc;
+                const c = bbcdRoundConc(src.concValue * qty / volume);
+                const concStr = bbcdFmtConc(c);
+                concParts.push(`${src.solutionName}:${concStr}(${src.concUnit})`);
+
+                return {
+                    id: null, createDatetime: nowStr, serialVersionUID: null,
+                    configureId: null,
+                    originalId: src.id,
+                    originalCode: src.originalCode,
+                    originalName: src.solutionName,
+                    originalConcentration: src.concentrationRaw,
+                    concentrationCount: src.concentrationRaw,
+                    originalUnit: null,
+                    receivedQuantity: qtyStr, receivedUint: 'mL',
+                    useUantity: qtyStr, useUnit: 'mL',
+                    medium: medium,
+                    volume: volStr, unit: 'mL',
+                    configurationConcentration: concStr,
+                    configurationUnit: src.concUnit,
+                    configurationUncertainty: null, remark: null,
+                    consumableReceive: null,
+                    dataid: src.id,
+                    configurationRecordId: null, creatorName: null, creatorId: null,
+                    modifierName: null, modifyDatetime: nowStr,
+                    originalNo: `${src.configureOrder}\n${src.solutionCode}`,
+                    _X_ID: `row_${Date.now() + idx}`,
+                };
+            }
         });
 
         const earliestValidity = rows.map(tr => tr._src.validityDate).filter(Boolean).sort()[0] || '';
@@ -2599,7 +2895,7 @@
             customType: document.getElementById('bbcdCustomType').value.trim() || null,
             auditUserName: null, auditTime: null,
             diluteConcentrationControl: '[]',
-            pageType: 'SOLUTION_TYPE_B',
+            pageType: hasMultiComponent ? 'SOLUTION_TYPE_E' : 'SOLUTION_TYPE_B',
             saveDetailList: JSON.stringify(detailList),
             originalValidityDate: earliestValidity,
             configurationTemplateId: null, intermediateTemplateId: null,
@@ -2641,22 +2937,37 @@
         // 过滤掉第一行（定容体积行），只处理数据行
         const dataRows = rows.slice(1).filter(tr => tr._src);
 
-        const saveDetailList = [];
-        let dataSeq = 1;
-
-        // 判断是否为单物质
-        const isSingleSource = dataRows.length === 1;
-
-        // 1. 移取体积行（每个源储备液一行）
+        // 按源溶液分组（多组分行共享同一个 sourceIdx）
+        const sourceGroups = [];
+        let hasMultiComponent = false;
         dataRows.forEach(tr => {
             const src = tr._src;
             if (!src) return;
-            const qtyInputs = tr.querySelectorAll('.bbcd-d-qty');
+            if (src.isComponent) {
+                hasMultiComponent = true;
+                if (src.componentIdx === 0) {
+                    sourceGroups.push({ rows: [tr], isMulti: true });
+                } else {
+                    sourceGroups[sourceGroups.length - 1].rows.push(tr);
+                }
+            } else {
+                sourceGroups.push({ rows: [tr], isMulti: false });
+            }
+        });
+
+        const isSingleSource = sourceGroups.length === 1;
+        const saveDetailList = [];
+        let dataSeq = 1;
+
+        // 1. 移取体积行（每个源溶液一行，多组分共享）
+        sourceGroups.forEach(group => {
+            const firstTr = group.rows[0];
+            const src = firstTr._src;
+            const qtyInputs = firstTr.querySelectorAll('.bbcd-d-qty');
             const row = {
                 id: null, createDatetime: nowStr, serialVersionUID: null,
                 configureId: null, originalId: null,
-                originalCode: null,
-                originalName: null,
+                originalCode: null, originalName: null,
                 originalConcentration: null, concentrationCount: null, originalUnit: null,
                 groupName: isSingleSource ? '移取体积' : `${src.configureOrder}移取体积`,
                 groupUnit: 'mL',
@@ -2697,78 +3008,75 @@
         }
         saveDetailList.push(volumeRow);
 
-        // 3. 浓度行（每个物质一行，从显示文本读取，originalId 对应源储备液）
-        dataRows.forEach(tr => {
-            const src = tr._src;
-            if (!src) return;
-            const concCells = tr.querySelectorAll('.bbcd-d-conc');
-            const qtyInputs = tr.querySelectorAll('.bbcd-d-qty');
-            const row = {
-                id: null, createDatetime: nowStr, serialVersionUID: null,
-                configureId: null, originalId: src.id,
-                originalCode: src.configureOrder,
-                originalName: src.solutionName,
-                originalConcentration: String(src.concValue),
-                concentrationCount: `${src.solutionName}:${src.concValue}(${src.concUnit})`,
-                originalUnit: src.concUnit,
-                groupName: src.solutionName,
-                groupUnit: src.concUnit,
-                dilutionSix: null, dilutionSeven: null, dilutionEight: null,
-                dilutionNine: null, dilutionTen: null, dilutionEleven: null, dilutionTwelve: null,
-                remark: null, dataSeq: dataSeq++,
-                receivedQuantity: qtyInputs[0]?.value || '1',
-                receivedUint: 'mL',
-                medium: document.getElementById('bbcdMedium')?.value.trim() || '四氢呋喃',
-                consumableReceive: null, configurationProcess: null,
-                configurationRecordId: null, creatorName: null, creatorId: null,
-                modifierName: null, modifyDatetime: nowStr,
-            };
-            for (let i = 0; i < count; i++) {
-                const fieldName = bbcdGetDilutionFieldName(i);
-                if (fieldName) row[fieldName] = concCells[i]?.textContent.trim() || '';
-            }
-            saveDetailList.push(row);
-        });
-
-        const originalCodes = dataRows.map(tr => tr._src?.configureOrder).filter(Boolean).join(',');
-        const controlledNos = dataRows.map(tr => tr._src?.controlledNo).filter(Boolean).join(',');
-
-        // 构建 concentration 字符串：物质名:浓度1单位,浓度2单位,...;物质名:...
+        // 3. 浓度行（每个组分一行）
         const concentrationParts = [];
         const concentrationCountParts = [];
         const receivedQuantityParts = [];
 
-        dataRows.forEach(tr => {
-            const src = tr._src;
-            if (!src) return;
-            const concCells = tr.querySelectorAll('.bbcd-d-conc');
-            const qtyInputs = tr.querySelectorAll('.bbcd-d-qty');
-
-            // 收集该物质的所有浓度值
-            const concValues = [];
-            const concCountValues = [];
-            for (let i = 0; i < count; i++) {
-                const concText = concCells[i]?.textContent.trim();
-                if (concText && concText !== '—') {
-                    concValues.push(`${concText}${src.concUnit}`);
-                    concCountValues.push(`${concText}(${src.concUnit})`);
-                }
-            }
-
-            if (concValues.length > 0) {
-                concentrationParts.push(`${src.solutionName}:${concValues.join(',')}`);
-                concentrationCountParts.push(`${src.solutionName}:${concCountValues.join(',')}`);
-            }
-
-            // receivedQuantity：使用第一个移取体积
+        sourceGroups.forEach(group => {
+            const firstTr = group.rows[0];
+            const firstSrc = firstTr._src;
+            const qtyInputs = firstTr.querySelectorAll('.bbcd-d-qty');
             const firstQty = qtyInputs[0]?.value || '1';
-            receivedQuantityParts.push(`${src.solutionName}:${firstQty}`);
+
+            group.rows.forEach(tr => {
+                const src = tr._src;
+                if (!src) return;
+                const concCells = tr.querySelectorAll('.bbcd-d-conc');
+                const groupName = src.isComponent ? src.componentName : src.solutionName;
+                const row = {
+                    id: null, createDatetime: nowStr, serialVersionUID: null,
+                    configureId: null, originalId: src.id,
+                    originalCode: src.configureOrder,
+                    originalName: src.solutionName,
+                    originalConcentration: String(src.concValue),
+                    concentrationCount: `${groupName}:${src.concValue}(${src.concUnit})`,
+                    originalUnit: src.concUnit,
+                    groupName: groupName,
+                    groupUnit: src.concUnit,
+                    dilutionSix: null, dilutionSeven: null, dilutionEight: null,
+                    dilutionNine: null, dilutionTen: null, dilutionEleven: null, dilutionTwelve: null,
+                    remark: null, dataSeq: dataSeq++,
+                    receivedQuantity: firstQty,
+                    receivedUint: 'mL',
+                    medium: document.getElementById('bbcdMediumD')?.value.trim() || null,
+                    consumableReceive: null, configurationProcess: null,
+                    configurationRecordId: null, creatorName: null, creatorId: null,
+                    modifierName: null, modifyDatetime: nowStr,
+                };
+                for (let i = 0; i < count; i++) {
+                    const fieldName = bbcdGetDilutionFieldName(i);
+                    if (fieldName) row[fieldName] = concCells[i]?.textContent.trim() || '';
+                }
+                saveDetailList.push(row);
+
+                // 收集浓度字符串
+                const concValues = [];
+                const concCountValues = [];
+                for (let i = 0; i < count; i++) {
+                    const concText = concCells[i]?.textContent.trim();
+                    if (concText && concText !== '—') {
+                        concValues.push(`${concText}${src.concUnit}`);
+                        concCountValues.push(`${concText}(${src.concUnit})`);
+                    }
+                }
+                if (concValues.length > 0) {
+                    concentrationParts.push(`${groupName}:${concValues.join(',')}`);
+                    concentrationCountParts.push(`${groupName}:${concCountValues.join(',')}`);
+                }
+            });
+
+            receivedQuantityParts.push(`${firstSrc.solutionName}:${firstQty}`);
         });
 
+        // 获取唯一的 originalCode 和 controlledNo
+        const originalCodes = [...new Set(sourceGroups.map(g => g.rows[0]._src?.configureOrder).filter(Boolean))].join(',');
+        const controlledNos = [...new Set(sourceGroups.map(g => g.rows[0]._src?.controlledNo).filter(Boolean))].join(',');
+
         // 获取最早的源储备液有效期
-        const validityDates = dataRows.map(tr => tr._src?.validityDate).filter(Boolean);
+        const validityDates = sourceGroups.map(g => g.rows[0]._src?.validityDate).filter(Boolean);
         const originalValidityDate = validityDates.length > 0
-            ? validityDates.sort()[0]  // 取最早的日期
+            ? validityDates.sort()[0]
             : null;
 
         return {
@@ -2785,7 +3093,7 @@
             concentrationUnitName: null, uncertainty: null, configureOrder: null,
             originalCode: originalCodes,
             controlledNo: controlledNos,
-            medium: document.getElementById('bbcdMedium')?.value.trim() || '四氢呋喃',
+            medium: document.getElementById('bbcdMediumD')?.value.trim() || null,
             configuratorId: null,
             solutionType: 'SOLUTION_TYPE_D',
             configuratorName: null,
@@ -2795,7 +3103,7 @@
             customType: document.getElementById('bbcdCustomType').value.trim() || null,
             auditUserName: null, auditTime: null,
             diluteConcentrationControl: '[]',
-            pageType: 'SOLUTION_TYPE_B',
+            pageType: hasMultiComponent ? 'SOLUTION_TYPE_E' : 'SOLUTION_TYPE_B',
             saveDetailList: JSON.stringify(saveDetailList),
             originalValidityDate: originalValidityDate,
             configurationTemplateId: null, intermediateTemplateId: null,
@@ -3064,7 +3372,17 @@
                 if (e.target.id === 'bbcdVolume') {
                     bbcdRecalcAll();
                 } else if (e.target.classList.contains('bbcd-c-qty')) {
-                    bbcdRecalcRow(e.target.closest('tr'));
+                    // 重新计算当前行及其后续多组分行
+                    const currentTr = e.target.closest('tr');
+                    bbcdRecalcRow(currentTr);
+                    const src = currentTr._src;
+                    if (src && src.isComponent && src.componentIdx === 0) {
+                        let next = currentTr.nextElementSibling;
+                        while (next && next._src && next._src.isComponent && next._src.componentIdx > 0) {
+                            bbcdRecalcRow(next);
+                            next = next.nextElementSibling;
+                        }
+                    }
                     bbcdUpdateValidity();
                     bbcdUpdateCode();
                     bbcdCheckValidity();
@@ -3289,7 +3607,7 @@
                     tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">请先输入稀释点数量并点击"生成稀释点"按钮</td></tr>';
                 }
 
-                // 重置表头为默认状态
+                // 重置表头为默认状态（B/C 类型完整表头）
                 const thead = document.querySelector('#bbcdConfigTable thead');
                 if (thead) {
                     thead.innerHTML = `
@@ -3297,8 +3615,18 @@
                             <th>编号</th>
                             <th>源名称</th>
                             <th>源浓度</th>
-                            <th>移取体积</th>
-                            <th>计算浓度</th>
+                            <th>
+                              <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
+                                <span>领用量(mL)</span>
+                                <span id="bbcdFillBar" style="display:none;">
+                                  <input type="number" id="bbcdFillQty" step="0.01" min="0.01" style="-moz-appearance:textfield;width:56px;font-size:0.72rem;padding:1px 4px;border:1px solid #ced4da;border-radius:4px;height:22px;">
+                                  <button type="button" id="bbcdFillBtn" class="btn btn-sm" style="padding:1px 5px;font-size:0.72rem;height:22px;line-height:1;background:transparent;border:none;color:#fff;">↓</button>
+                                </span>
+                              </div>
+                            </th>
+                            <th style="min-width:90px;">溶剂/介质</th>
+                            <th style="min-width:110px;width:110px;">定容体积(mL)</th>
+                            <th style="min-width:160px;">计算浓度</th>
                         </tr>`;
                 }
             }
