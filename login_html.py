@@ -840,6 +840,118 @@ def lims_save_solution():
         return jsonify({"success": False, "message": f"配置异常: {str(e)}"}), 500
 
 
+def _extract_direct_source_codes(original_code):
+    text = str(original_code or '').strip()
+    if not text:
+        return []
+    seen = []
+    seen_set = set()
+    for match in re.findall(r'([ABC])-\s*(\d+)', text, flags=re.IGNORECASE):
+        code = f"{match[0].upper()}-{match[1]}"
+        if code not in seen_set:
+            seen.append(code)
+            seen_set.add(code)
+    return seen
+
+
+def _normalize_solution_type(value):
+    if isinstance(value, dict):
+        return str(value.get('key') or '').strip()
+    return str(value or '').strip()
+
+
+def _extract_a_source_codes(original_code):
+    text = str(original_code or '').strip()
+    if not text:
+        return []
+    seen = []
+    seen_set = set()
+    for match in re.findall(r'A-\s*(\d+)', text, flags=re.IGNORECASE):
+        code = f"A-{match}"
+        if code not in seen_set:
+            seen.append(code)
+            seen_set.add(code)
+    return seen
+
+
+def _fetch_solution_detail(system, solution_id):
+    url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/detail"
+    headers = {"Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544"}
+    resp = system.session.get(url, params={"id": solution_id}, headers=headers)
+    resp.raise_for_status()
+    data = resp.json()
+    return data.get('resultData') or {}
+
+
+def _resolve_bottom_a_codes(system, item, cache=None, visiting=None):
+    if cache is None:
+        cache = {}
+    if visiting is None:
+        visiting = set()
+
+    item_id = str(item.get('id') or '').strip()
+    configure_order = str(item.get('configureOrder') or '').strip()
+    cache_key = item_id or configure_order
+    if cache_key and cache_key in cache:
+        return cache[cache_key]
+    if cache_key and cache_key in visiting:
+        return []
+
+    if cache_key:
+        visiting.add(cache_key)
+
+    original_code = item.get('originalCode')
+    solution_type = _normalize_solution_type(item.get('solutionType'))
+    direct_a_codes = _extract_a_source_codes(original_code)
+    if direct_a_codes and solution_type != 'SOLUTION_TYPE_C':
+        result = direct_a_codes
+    else:
+        result = []
+        nested_codes = []
+        text = str(original_code or '')
+        pattern = r'([BC])-\s*(\d+)'
+        if solution_type == 'SOLUTION_TYPE_C':
+            pattern = r'B-\s*(\d+)'
+        for match in re.findall(pattern, text, flags=re.IGNORECASE):
+            if isinstance(match, tuple):
+                nested_code = f"{match[0].upper()}-{match[1]}"
+            else:
+                nested_code = f"B-{match}"
+            if nested_code not in nested_codes:
+                nested_codes.append(nested_code)
+        if nested_codes:
+            seen = set()
+            for nested_code in nested_codes:
+                nested_detail = _fetch_solution_detail(system, nested_code.split('-')[1])
+                nested_result = _resolve_bottom_a_codes(system, nested_detail, cache, visiting)
+                for code in nested_result:
+                    if code not in seen:
+                        seen.add(code)
+                        result.append(code)
+        elif direct_a_codes:
+            result = direct_a_codes
+
+    if cache_key:
+        visiting.discard(cache_key)
+        cache[cache_key] = result
+    return result
+
+
+def _extract_a_source_count_from_original_code(original_code):
+    codes = _extract_a_source_codes(original_code)
+    return len(codes) or 1
+
+
+def _enrich_solution_a_source_count(items, system):
+    cache = {}
+    for item in items:
+        item['sourceCodes'] = _extract_direct_source_codes(item.get('originalCode'))
+        source_codes = _resolve_bottom_a_codes(system, item, cache)
+        item['aSourceCodes'] = source_codes
+        item['aSourceCount'] = len(source_codes) or 1
+    return items
+
+
 @app.route('/api/lims/list_configured_solutions', methods=['GET'])
 def lims_list_configured_solutions():
     if not session.get('logged_in'):
@@ -883,9 +995,11 @@ def lims_list_configured_solutions():
         resp.raise_for_status()
         result = resp.json()
         rd = result.get('resultData') or {}
+        items = rd.get('voList', [])
+        _enrich_solution_a_source_count(items, system)
         return jsonify({
             "success": True,
-            "data": rd.get('voList', []),
+            "data": items,
             "total": rd.get('totalCount', 0),
         })
     except Exception as e:

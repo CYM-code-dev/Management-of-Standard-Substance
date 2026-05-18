@@ -1711,6 +1711,51 @@
 
     // 自编号自动生成
     let bbcdCodeAuto = true;
+    let bbcdNameAuto = true;
+
+    function bbcdGetUniqueSourcesFromRows() {
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')].filter(tr => tr._src);
+        const uniqueSources = [];
+        const seenIds = new Set();
+        rows.forEach(tr => {
+            const src = tr._src;
+            const key = src.configureOrder || src.id;
+            if (!seenIds.has(key)) {
+                seenIds.add(key);
+                uniqueSources.push(src);
+            }
+        });
+        return uniqueSources;
+    }
+
+    function bbcdUpdateName() {
+        if (!bbcdNameAuto) return;
+        const nameEl = document.getElementById('bbcdSolutionName');
+        if (!nameEl) return;
+        const uniqueSources = bbcdGetUniqueSourcesFromRows();
+        if (!uniqueSources.length) {
+            const selectedItems = window.bbcdSelectedItems || [];
+            if (!selectedItems.length) {
+                nameEl.value = '';
+                return;
+            }
+            const effectiveCount = bbcdGetEffectiveSourceCount(selectedItems);
+            if (effectiveCount <= 1) {
+                nameEl.value = selectedItems[0]?.solutionName || '';
+                return;
+            }
+            const customType = document.getElementById('bbcdCustomType')?.value.trim() || '';
+            nameEl.value = customType ? `${effectiveCount}${customType}` : '';
+            return;
+        }
+        const effectiveCount = bbcdGetEffectiveSourceCount(uniqueSources);
+        if (effectiveCount <= 1) {
+            nameEl.value = uniqueSources[0].solutionName || '';
+            return;
+        }
+        const customType = document.getElementById('bbcdCustomType')?.value.trim() || '';
+        nameEl.value = customType ? `${effectiveCount}${customType}` : '';
+    }
 
     // 从多个 solutionCode 中提取出现最多的"CK-XX"前缀（取最后一个 - 之前的部分）
     function bbcdDominantPrefix(codes) {
@@ -1741,18 +1786,89 @@
     }
 
     function bbcdComputeAvgConcStr() {
-        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')].filter(tr => tr._src);
         const vol = parseFloat(document.getElementById('bbcdVolume')?.value);
         if (!vol || vol <= 0) return '';
         const vals = [];
         rows.forEach(tr => {
-            const qty = parseFloat(tr.querySelector('.bbcd-c-qty').value);
+            const qtyInput = tr.querySelector('.bbcd-c-qty');
+            const qty = parseFloat(qtyInput?.value);
             if (!qty || qty <= 0 || isNaN(tr._src.concValue)) return;
             vals.push(tr._src.concValue * qty / vol);
         });
         if (!vals.length) return '';
         const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
         return bbcdFmtConc(bbcdRoundConc(mean));
+    }
+
+    function bbcdGetEffectiveSourceCount(srcList) {
+        return Math.max(1, srcList.reduce((sum, src) => {
+            const count = Number(src?.aSourceCount);
+            return sum + ((Number.isInteger(count) && count > 0) ? count : 1);
+        }, 0));
+    }
+
+    function bbcdGetDuplicateASourceCodes(srcList) {
+        const counts = new Map();
+        srcList.forEach(src => {
+            const codes = Array.isArray(src?.aSourceCodes) ? src.aSourceCodes : [];
+            codes.forEach(code => {
+                const key = String(code || '').trim();
+                if (!key) return;
+                counts.set(key, (counts.get(key) || 0) + 1);
+            });
+        });
+        return [...counts.entries()].filter(([, count]) => count > 1).map(([code]) => code);
+    }
+
+    function bbcdGetDuplicateDirectSourceCodes(srcList) {
+        const selectedOrders = new Set(srcList.map(src => String(src?.configureOrder || '').trim()).filter(Boolean));
+        const duplicates = new Set();
+        srcList.forEach(src => {
+            const codes = Array.isArray(src?.sourceCodes) ? src.sourceCodes : [];
+            codes.forEach(code => {
+                const key = String(code || '').trim();
+                if (key && selectedOrders.has(key)) duplicates.add(key);
+            });
+        });
+        return [...duplicates];
+    }
+
+    function bbcdApplyDuplicateASourceState() {
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')].filter(tr => tr._src);
+        const uniqueSources = [];
+        const seenIds = new Set();
+        rows.forEach(tr => {
+            const src = tr._src;
+            const key = src.configureOrder || src.id;
+            if (!seenIds.has(key)) {
+                seenIds.add(key);
+                uniqueSources.push(src);
+            }
+        });
+        const duplicateDirectSources = bbcdGetDuplicateDirectSourceCodes(uniqueSources);
+        const duplicateASources = bbcdGetDuplicateASourceCodes(uniqueSources);
+        const hint = document.getElementById('bbcdValidityHint');
+        const codeEl = document.getElementById('bbcdSolutionCode');
+        const hasDuplicate = duplicateDirectSources.length > 0 || duplicateASources.length > 0;
+        if (hint) {
+            if (duplicateDirectSources.length > 0) {
+                hint.textContent = `错误：来源链重复，禁止重复混合：${duplicateDirectSources.join(', ')}`;
+                hint.style.display = 'block';
+            } else if (duplicateASources.length > 0) {
+                hint.textContent = `错误：存在重复 A 源，禁止重复混合：${duplicateASources.join(', ')}`;
+                hint.style.display = 'block';
+            } else if (hint.dataset.duplicateSource === '1') {
+                hint.textContent = '';
+                hint.style.display = 'none';
+            }
+            hint.dataset.duplicateSource = hasDuplicate ? '1' : '0';
+        }
+        if (codeEl) {
+            if (hasDuplicate) codeEl.classList.add('is-invalid');
+            else codeEl.classList.remove('is-invalid');
+        }
+        return { duplicateDirectSources, duplicateASources };
     }
 
     function bbcdUpdateCode() {
@@ -1783,6 +1899,13 @@
             }
         });
 
+        const duplicateState = bbcdApplyDuplicateASourceState();
+        if (duplicateState.duplicateDirectSources.length || duplicateState.duplicateASources.length) {
+            codeEl.value = '';
+            codeEl.classList.remove('bbcd-code-confirm');
+            return;
+        }
+
         if (uniqueSources.length === 1) {
             const concStr = bbcdComputeSingleConc();
             if (!concStr) { codeEl.value = ''; codeEl.classList.remove('bbcd-code-confirm'); return; }
@@ -1794,6 +1917,7 @@
             if (!concStr) { codeEl.value = ''; codeEl.classList.remove('bbcd-code-confirm'); return; }
             const codes = uniqueSources.map(s => s.solutionCode).filter(Boolean);
             const prefix = codes.length ? bbcdDominantPrefix(codes) : 'CK-CG';
+            const effectiveCount = bbcdGetEffectiveSourceCount(uniqueSources);
 
             // 使用类型字段替换 XX
             const customTypeEl = document.getElementById('bbcdCustomType');
@@ -1802,12 +1926,12 @@
             if (!customType) {
                 // 类型为空，标红提示
                 if (customTypeEl) customTypeEl.classList.add('is-invalid');
-                codeEl.value = `${prefix}-${uniqueSources.length}XX-${concStr}-${today}`;
+                codeEl.value = `${prefix}-${effectiveCount}XX-${concStr}-${today}`;
                 codeEl.classList.add('bbcd-code-confirm');
             } else {
                 // 类型不为空，移除标红
                 if (customTypeEl) customTypeEl.classList.remove('is-invalid');
-                codeEl.value = `${prefix}-${uniqueSources.length}${customType}-${concStr}-${today}`;
+                codeEl.value = `${prefix}-${effectiveCount}${customType}-${concStr}-${today}`;
                 codeEl.classList.add('bbcd-code-confirm');
             }
         }
@@ -1841,6 +1965,13 @@
             }
         });
 
+        const duplicateState = bbcdApplyDuplicateASourceState();
+        if (duplicateState.duplicateDirectSources.length || duplicateState.duplicateASources.length) {
+            codeEl.value = '';
+            codeEl.classList.remove('bbcd-code-confirm');
+            return;
+        }
+
         if (uniqueSources.length === 1) {
             // 单源（含多组分）：收集所有计算浓度
             const allConcs = [];
@@ -1863,6 +1994,22 @@
             const minConc = Math.min(...allConcs);
             const maxConc = Math.max(...allConcs);
             const concRange = `${bbcdFmtConc(minConc)}-${bbcdFmtConc(maxConc)}`;
+            const sourceCount = bbcdGetEffectiveSourceCount(uniqueSources);
+            const customTypeEl = document.getElementById('bbcdCustomType');
+            const customType = customTypeEl?.value.trim() || '';
+
+            if (sourceCount > 1) {
+                const prefix = bbcdDominantPrefix(uniqueSources.map(s => s.solutionCode).filter(Boolean)) || 'CK-CG';
+                if (!customType) {
+                    if (customTypeEl) customTypeEl.classList.add('is-invalid');
+                    codeEl.value = `${prefix}-${sourceCount}XX-[${concRange}]-${today}`;
+                } else {
+                    if (customTypeEl) customTypeEl.classList.remove('is-invalid');
+                    codeEl.value = `${prefix}-${sourceCount}${customType}-[${concRange}]-${today}`;
+                }
+                codeEl.classList.add('bbcd-code-confirm');
+                return;
+            }
 
             const sc = (uniqueSources[0].solutionCode || '').replace(/-[\d.\[\]]+?-\d{8}$/, '');
             codeEl.value = `${sc}-[${concRange}]-${today}`;
@@ -1898,6 +2045,7 @@
 
             const codes = uniqueSources.map(s => s.solutionCode).filter(Boolean);
             const prefix = codes.length ? bbcdDominantPrefix(codes) : 'CK-CG';
+            const effectiveCount = bbcdGetEffectiveSourceCount(uniqueSources);
 
             // 使用类型字段替换 XX
             const customTypeEl = document.getElementById('bbcdCustomType');
@@ -1906,12 +2054,12 @@
             if (!customType) {
                 // 类型为空，标红提示
                 if (customTypeEl) customTypeEl.classList.add('is-invalid');
-                codeEl.value = `${prefix}-${uniqueSources.length}XX-[${concRange}]-${today}`;
+                codeEl.value = `${prefix}-${effectiveCount}XX-[${concRange}]-${today}`;
                 codeEl.classList.add('bbcd-code-confirm');
             } else {
                 // 类型不为空，移除标红
                 if (customTypeEl) customTypeEl.classList.remove('is-invalid');
-                codeEl.value = `${prefix}-${uniqueSources.length}${customType}-[${concRange}]-${today}`;
+                codeEl.value = `${prefix}-${effectiveCount}${customType}-[${concRange}]-${today}`;
                 codeEl.classList.add('bbcd-code-confirm');
             }
         }
@@ -2035,6 +2183,7 @@
         window.bbcdSelectedItems = items;
 
         bbcdCodeAuto = true;
+        bbcdNameAuto = true;
         const customTypes = [...new Set(items.map(it => it.customType).filter(Boolean))];
         document.getElementById('bbcdCustomType').value = customTypes.length === 1 ? customTypes[0] : '';
         document.getElementById('bbcdSolutionName').value = '';
@@ -2117,6 +2266,9 @@
                             solutionCode: it.solutionCode || '',
                             originalCode: it.originalCode || '',
                             controlledNo: it.controlledNo || '',
+                            aSourceCount: Number(it.aSourceCount || 1),
+                            sourceCodes: Array.isArray(it.sourceCodes) ? it.sourceCodes : [],
+                            aSourceCodes: Array.isArray(it.aSourceCodes) ? it.aSourceCodes : [],
                             concValue: comp.value,
                             concUnit: comp.unit,
                             componentName: comp.name,
@@ -2159,6 +2311,9 @@
                         solutionCode: it.solutionCode || '',
                         originalCode: it.originalCode || '',
                         controlledNo: it.controlledNo || '',
+                        aSourceCount: Number(it.aSourceCount || 1),
+                        sourceCodes: Array.isArray(it.sourceCodes) ? it.sourceCodes : [],
+                        aSourceCodes: Array.isArray(it.aSourceCodes) ? it.aSourceCodes : [],
                         concValue: parsed.value,
                         concUnit: parsed.unit,
                         concentrationRaw: it.concentration || '',
@@ -2198,6 +2353,9 @@
         bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdConfigModal')).show();
         if (document.getElementById('bbcdSolType').value !== 'SOLUTION_TYPE_D') {
             bbcdRecalcAll();
+        } else {
+            bbcdUpdateName();
+            bbcdUpdateCode();
         }
         bbcdCheckValidity();
     }
@@ -2406,6 +2564,9 @@
                         solutionCode: it.solutionCode || '',
                         originalCode: it.originalCode || '',
                         controlledNo: it.controlledNo || '',
+                        aSourceCount: Number(it.aSourceCount || 1),
+                        sourceCodes: Array.isArray(it.sourceCodes) ? it.sourceCodes : [],
+                        aSourceCodes: Array.isArray(it.aSourceCodes) ? it.aSourceCodes : [],
                         concValue: comp.value,
                         concUnit: comp.unit,
                         componentName: comp.name,
@@ -2453,6 +2614,9 @@
                     solutionCode: it.solutionCode || '',
                     originalCode: it.originalCode || '',
                     controlledNo: it.controlledNo || '',
+                    aSourceCount: Number(it.aSourceCount || 1),
+                    sourceCodes: Array.isArray(it.sourceCodes) ? it.sourceCodes : [],
+                    aSourceCodes: Array.isArray(it.aSourceCodes) ? it.aSourceCodes : [],
                     concValue: parsed.value,
                     concUnit: parsed.unit,
                     concentrationRaw: it.concentration || '',
@@ -2523,6 +2687,7 @@
     function bbcdRecalcAll() {
         document.querySelectorAll('#bbcdConfigTable tbody tr').forEach(bbcdRecalcRow);
         bbcdUpdateValidity();
+        bbcdUpdateName();
         bbcdUpdateCode();
         bbcdCheckValidity();
     }
@@ -2608,7 +2773,8 @@
             }
         });
 
-        // 更新自编号
+        // 更新名称和自编号
+        bbcdUpdateName();
         bbcdUpdateCode();
     }
 
@@ -2662,8 +2828,16 @@
         }
 
         const solType = document.getElementById('bbcdSolType').value;
+        const isWorkingSolution = (solType === 'SOLUTION_TYPE_D');
         document.getElementById('bbcdSaveBtn').disabled = false;
         document.getElementById('bbcdExportBtn').disabled = false;
+
+        const duplicateSources = bbcdApplyDuplicateASourceState();
+        if (duplicateSources.length) {
+            document.getElementById('bbcdSaveBtn').disabled = true;
+            document.getElementById('bbcdExportBtn').disabled = true;
+            return;
+        }
 
         // 有效期提示
         const validity = document.getElementById('bbcdValidityDate').value;
@@ -2673,8 +2847,9 @@
             if (tooLate.length) {
                 hint.textContent = `提示：以下源储备液的有效期早于本次有效期：${tooLate.map(tr => tr._src.configureOrder).join(', ')}`;
                 hint.style.display = 'block';
-            } else { hint.style.display = 'none'; }
-        } else { hint.style.display = 'none'; }
+                hint.dataset.duplicateSource = '0';
+            } else if (hint.dataset.duplicateSource !== '1') { hint.style.display = 'none'; }
+        } else if (hint.dataset.duplicateSource !== '1') { hint.style.display = 'none'; }
     }
 
     function bbcdValidate() {
@@ -2700,6 +2875,27 @@
 
         const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
         if (!rows.length || (rows.length === 1 && rows[0].querySelector('td[colspan]'))) ok = false;
+
+        const uniqueSources = [];
+        const seenSourceKeys = new Set();
+        rows.forEach(tr => {
+            const src = tr._src;
+            if (!src) return;
+            const key = src.configureOrder || src.id;
+            if (seenSourceKeys.has(key)) return;
+            seenSourceKeys.add(key);
+            uniqueSources.push(src);
+        });
+        const duplicateDirectSources = bbcdGetDuplicateDirectSourceCodes(uniqueSources);
+        if (duplicateDirectSources.length) {
+            alert(`错误：来源链重复，禁止重复混合：${duplicateDirectSources.join(', ')}`);
+            ok = false;
+        }
+        const duplicateSources = bbcdGetDuplicateASourceCodes(uniqueSources);
+        if (duplicateSources.length) {
+            alert(`存在重复 A 源，禁止重复混合：${duplicateSources.join(', ')}`);
+            ok = false;
+        }
 
         if (isWorkingSolution) {
             const count = window.bbcdCurrentDilutionCount || 0;
@@ -3351,10 +3547,16 @@
             bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdTypePickerModal')).show();
         });
         document.getElementById('bbcdValidityDate').addEventListener('change', bbcdCheckValidity);
-        document.getElementById('bbcdSolutionName').addEventListener('input', bbcdUpdateValidity);
-        document.getElementById('bbcdSolutionCode').addEventListener('input', () => { bbcdCodeAuto = false; });
+        document.getElementById('bbcdSolutionName').addEventListener('input', e => {
+            if (document.activeElement === e.target) bbcdNameAuto = false;
+            bbcdUpdateValidity();
+        });
+        const bbcdSolutionCodeEl = document.getElementById('bbcdSolutionCode');
+        bbcdSolutionCodeEl.addEventListener('input', e => {
+            if (document.activeElement === e.target) bbcdCodeAuto = false;
+        });
         document.getElementById('bbcdCustomType').addEventListener('input', () => {
-            // 类型输入时自动更新自编号
+            bbcdUpdateName();
             bbcdUpdateCode();
         });
         document.querySelector('#bbcdConfigTable tbody').addEventListener('input', e => {
@@ -3444,17 +3646,18 @@
         }, true);
         document.getElementById('bbcdSaveBtn').addEventListener('click', bbcdSave);
         document.getElementById('bbcdExportBtn').addEventListener('click', bbcdExport);
-        document.getElementById('bbcdFillBtn').addEventListener('click', () => {
-            const val = document.getElementById('bbcdFillQty').value.trim();
+        document.getElementById('bbcdConfigModal').addEventListener('click', (e) => {
+            const btn = e.target.closest('#bbcdFillBtn');
+            if (!btn) return;
+            const fillQty = document.getElementById('bbcdFillQty');
+            if (!fillQty) return;
+            const val = fillQty.value.trim();
             if (!val) return;
             const rounded = bbcdFmtQty(bbcdRoundQty(parseFloat(val)));
-            document.querySelectorAll('#bbcdConfigTable tbody tr').forEach(tr => {
-                tr.querySelector('.bbcd-c-qty').value = rounded;
-                bbcdRecalcRow(tr);
+            document.querySelectorAll('#bbcdConfigTable .bbcd-c-qty').forEach(input => {
+                input.value = rounded;
             });
-            bbcdUpdateValidity();
-            bbcdUpdateCode();
-            bbcdCheckValidity();
+            bbcdRecalcAll();
         });
     });
     // ===== /B-BCD =====
