@@ -883,7 +883,7 @@ def _fetch_solution_detail(system, solution_id):
     return data.get('resultData') or {}
 
 
-def _resolve_bottom_a_codes(system, item, cache=None, visiting=None):
+def _resolve_bottom_a_codes(system, item, cache=None, items_by_order=None, visiting=None):
     if cache is None:
         cache = {}
     if visiting is None:
@@ -922,8 +922,13 @@ def _resolve_bottom_a_codes(system, item, cache=None, visiting=None):
         if nested_codes:
             seen = set()
             for nested_code in nested_codes:
-                nested_detail = _fetch_solution_detail(system, nested_code.split('-')[1])
-                nested_result = _resolve_bottom_a_codes(system, nested_detail, cache, visiting)
+                nested_detail = (items_by_order or {}).get(nested_code)
+                if not nested_detail:
+                    try:
+                        nested_detail = _fetch_solution_detail(system, nested_code.split('-')[1])
+                    except Exception:
+                        nested_detail = {}
+                nested_result = _resolve_bottom_a_codes(system, nested_detail, cache, items_by_order, visiting)
                 for code in nested_result:
                     if code not in seen:
                         seen.add(code)
@@ -933,7 +938,8 @@ def _resolve_bottom_a_codes(system, item, cache=None, visiting=None):
 
     if cache_key:
         visiting.discard(cache_key)
-        cache[cache_key] = result
+        if result:
+            cache[cache_key] = result
     return result
 
 
@@ -944,9 +950,14 @@ def _extract_a_source_count_from_original_code(original_code):
 
 def _enrich_solution_a_source_count(items, system):
     cache = {}
+    items_by_order = {}
+    for it in items:
+        co = str(it.get('configureOrder') or '').strip()
+        if co:
+            items_by_order[co] = it
     for item in items:
         item['sourceCodes'] = _extract_direct_source_codes(item.get('originalCode'))
-        source_codes = _resolve_bottom_a_codes(system, item, cache)
+        source_codes = _resolve_bottom_a_codes(system, item, cache, items_by_order)
         item['aSourceCodes'] = source_codes
         item['aSourceCount'] = len(source_codes) or 1
     return items
@@ -1297,6 +1308,11 @@ def lims_export_bbcd_docx():
         tc.append(_make_para(line1, center=True, sz=sz))
         tc.append(_make_para(line2, center=True, sz=sz))
 
+    def _set_tc_multi_lines(tc, lines, sz=18):
+        _clear_tc(tc)
+        for line in lines:
+            tc.append(_make_para(line, center=True, sz=sz))
+
     def _set_vmerge(tc, mode):
         tcPr = tc.find(qn('w:tcPr'))
         if tcPr is None:
@@ -1317,7 +1333,12 @@ def lims_export_bbcd_docx():
         return m.group(1) if m else str(raw)
 
     def _extract_conc_from_code(code):
-        parts = str(code).split('-')
+        code = str(code)
+        # Handle range-format codes like CK-CG-1HG-[10.00-5.00]-20260518-点1
+        m = re.search(r'\[([\d.]+)', code)
+        if m:
+            return m.group(1)
+        parts = code.split('-')
         if len(parts) >= 2:
             candidate = parts[-2]
             if re.match(r'^[\d.]+$', candidate):
@@ -1344,30 +1365,44 @@ def lims_export_bbcd_docx():
     def _fill_tc1(tc, text):
         for p in tc.findall(qn('w:p')):
             tc.remove(p)
-        p_el = OxmlElement('w:p')
-        pPr = OxmlElement('w:pPr')
-        jc = OxmlElement('w:jc')
-        jc.set(qn('w:val'), 'center')
-        pPr.append(jc)
-        p_el.append(pPr)
-        r_el = OxmlElement('w:r')
-        rPr = OxmlElement('w:rPr')
-        sz_el = OxmlElement('w:sz')
-        sz_el.set(qn('w:val'), '18')
-        szCs_el = OxmlElement('w:szCs')
-        szCs_el.set(qn('w:val'), '18')
-        rPr.append(sz_el)
-        rPr.append(szCs_el)
-        r_el.append(rPr)
-        t_el = OxmlElement('w:t')
-        t_el.text = text
-        if text and (text[0] == ' ' or text[-1] == ' '):
-            t_el.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
-        r_el.append(t_el)
-        p_el.append(r_el)
-        tc.append(p_el)
+        lines = text.split('\n')
+        for line in lines:
+            p_el = OxmlElement('w:p')
+            pPr = OxmlElement('w:pPr')
+            jc = OxmlElement('w:jc')
+            jc.set(qn('w:val'), 'center')
+            pPr.append(jc)
+            p_el.append(pPr)
+            r_el = OxmlElement('w:r')
+            rPr = OxmlElement('w:rPr')
+            sz_el = OxmlElement('w:sz')
+            sz_el.set(qn('w:val'), '18')
+            szCs_el = OxmlElement('w:szCs')
+            szCs_el.set(qn('w:val'), '18')
+            rPr.append(sz_el)
+            rPr.append(szCs_el)
+            r_el.append(rPr)
+            t_el = OxmlElement('w:t')
+            t_el.text = line
+            if line and (line[0] == ' ' or line[-1] == ' '):
+                t_el.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+            r_el.append(t_el)
+            p_el.append(r_el)
+            tc.append(p_el)
 
-    _fill_tc1(table.rows[1]._tr.findall(qn('w:tc'))[1], solution_name)
+    # For working solution export, use source names instead of working solution name
+    is_working_doc = bool(detail_list and detail_list[0].get('resultCode'))
+    if is_working_doc:
+        source_names = []
+        for item in detail_list:
+            nm = (item.get('originalName', '') or '').strip()
+            if nm and nm not in source_names:
+                source_names.append(nm)
+        header_name = '；\n'.join(source_names) + '；' if source_names else solution_name
+    else:
+        header_name = solution_name
+
+    _fill_tc1(table.rows[1]._tr.findall(qn('w:tc'))[1], header_name)
 
     source_codes = []
     for item in detail_list:
@@ -1375,29 +1410,8 @@ def lims_export_bbcd_docx():
         code = parts[1].strip() if len(parts) > 1 else parts[0].strip()
         if code and code not in source_codes:
             source_codes.append(code)
-    tc3 = table.rows[1]._tr.findall(qn('w:tc'))[3]
-    _fill_tc1(tc3, source_codes[0] if source_codes else '')
-    for code in source_codes[1:]:
-        p_el = OxmlElement('w:p')
-        pPr = OxmlElement('w:pPr')
-        jc = OxmlElement('w:jc')
-        jc.set(qn('w:val'), 'center')
-        pPr.append(jc)
-        p_el.append(pPr)
-        r_el = OxmlElement('w:r')
-        rPr = OxmlElement('w:rPr')
-        sz_el = OxmlElement('w:sz')
-        sz_el.set(qn('w:val'), '18')
-        szCs_el = OxmlElement('w:szCs')
-        szCs_el.set(qn('w:val'), '18')
-        rPr.append(sz_el)
-        rPr.append(szCs_el)
-        r_el.append(rPr)
-        t_el = OxmlElement('w:t')
-        t_el.text = code
-        r_el.append(t_el)
-        p_el.append(r_el)
-        tc3._tc.append(p_el) if hasattr(tc3, '_tc') else tc3.append(p_el)
+    header_code = '；\n'.join(source_codes) + '；' if source_codes else ''
+    _fill_tc1(table.rows[1]._tr.findall(qn('w:tc'))[3], header_code)
 
     conc_unit = detail_list[0].get('configurationUnit', '') if detail_list else ''
     qty_unit = detail_list[0].get('receivedUint', 'mL') if detail_list else 'mL'
@@ -1437,23 +1451,44 @@ def lims_export_bbcd_docx():
 
     row_values = []
     for item in detail_list:
+        item_result_conc = _parse_conc_val(item.get('configurationConcentration', ''))
+        item_result_code = item.get('resultCode', '')
+        if not item_result_conc:
+            item_result_conc = _extract_conc_from_code(solution_code)
+        if not item_result_code:
+            item_result_code = solution_code
         row_values.append({
-            'name':     item.get('originalName', ''),
-            'conc_val': _parse_conc_val(item.get('originalConcentration', '')),
-            'qty':      str(item.get('receivedQuantity', '')),
-            'medium':   item.get('medium', ''),
-            'volume':   str(item.get('volume', '')),
+            'name':          item.get('originalName', ''),
+            'conc_val':      _parse_conc_val(item.get('originalConcentration', '')),
+            'qty':           str(item.get('receivedQuantity', '')),
+            'medium':        item.get('medium', ''),
+            'volume':        str(item.get('volume', '')),
+            'result_conc':   item_result_conc,
+            'result_code':   item_result_code,
+            'dilutionIdx':   item.get('dilutionIdx', 0),
         })
 
-    result_conc = _extract_conc_from_code(solution_code)
-    merge_col_vals = [
-        [rv['medium']          for rv in row_values],
-        [rv['volume']          for rv in row_values],
-        [result_conc           for _ in row_values],
-        [solution_code         for _ in row_values],
-        [configure_date        for _ in row_values],
-        [validity_date         for _ in row_values],
-    ]
+    is_working = bool(detail_list and detail_list[0].get('resultCode'))
+
+    # Detect multi-source: count how many rows belong to dilution point 0
+    first_dil_rows = sum(1 for rv in row_values if rv['dilutionIdx'] == 0)
+    is_multi_source = is_working and first_dil_rows > 1
+
+    # Column values for data rows (index 2=溶剂, 3=稀释至, 4=浓度, 5=编号, 6=配制日期, 7=有效期)
+    col_vals_map = {
+        2: [rv['medium']      for rv in row_values],
+        3: [rv['volume']      for rv in row_values],
+        4: [rv['result_conc'] for rv in row_values],
+        5: [rv['result_code'] for rv in row_values],
+        6: [configure_date    for _ in row_values],
+        7: [validity_date     for _ in row_values],
+    }
+
+    # Working solution: only merge 编号 within same dilutionIdx; BC/BCD: merge all from 溶剂 onward
+    if is_working and is_multi_source:
+        merge_cols = {2, 3, 4, 5, 6, 7}  # all data cols merge within same dilutionIdx
+    else:
+        merge_cols = {4, 5} if is_working else {2, 3, 4, 5, 6, 7}
 
     for i, item in enumerate(detail_list):
         tr  = table.rows[4 + i]._tr
@@ -1461,19 +1496,30 @@ def lims_export_bbcd_docx():
         if len(tcs) < 8:
             continue
 
-        _set_tc_two_lines(tcs[0], row_values[i]['name'], row_values[i]['conc_val'])
+        # 母体标液
+        if is_working:
+            if is_multi_source and row_values[i]['dilutionIdx'] == 0:
+                _set_tc_two_lines(tcs[0], row_values[i]['name'], row_values[i]['conc_val'])
+            else:
+                _set_tc_text(tcs[0], row_values[i]['conc_val'])
+        else:
+            _set_tc_two_lines(tcs[0], row_values[i]['name'], row_values[i]['conc_val'])
+
+        # 取量
         _set_tc_text(tcs[1], row_values[i]['qty'])
 
-        for j, col_vals in enumerate(merge_col_vals):
-            tc_idx = j + 2
-            val = col_vals[i]
-            if i > 0 and val == col_vals[i - 1]:
+        # Columns 2-7
+        for tc_idx in range(2, 8):
+            val = col_vals_map[tc_idx][i]
+            same_dilution = i > 0 and row_values[i]['dilutionIdx'] == row_values[i - 1]['dilutionIdx']
+            if tc_idx in merge_cols and same_dilution and val == col_vals_map[tc_idx][i - 1]:
                 _clear_tc(tcs[tc_idx])
                 tcs[tc_idx].append(_make_para('', center=True))
                 _set_vmerge(tcs[tc_idx], 'continue')
             else:
                 _set_tc_text(tcs[tc_idx], val)
-                _set_vmerge(tcs[tc_idx], 'restart')
+                if tc_idx in merge_cols:
+                    _set_vmerge(tcs[tc_idx], 'restart')
 
     buf = io.BytesIO()
     doc.save(buf)

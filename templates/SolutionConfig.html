@@ -1774,14 +1774,15 @@
     }
 
     function bbcdComputeSingleConc() {
-        // 单行：用实际计算浓度（bbcdRecalcRow 已写入 cell）
-        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
-        if (rows.length !== 1) return '';
-        const tr = rows[0];
-        const qty = parseFloat(tr.querySelector('.bbcd-c-qty').value);
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')].filter(tr => tr._src);
+        if (!rows.length) return '';
+        const firstTr = rows[0];
+        const qtyInput = firstTr.querySelector('.bbcd-c-qty');
+        if (!qtyInput) return '';
+        const qty = parseFloat(qtyInput.value);
         const vol = parseFloat(document.getElementById('bbcdVolume')?.value);
-        if (!qty || !vol || qty <= 0 || vol <= 0 || isNaN(tr._src.concValue)) return '';
-        const c = bbcdRoundConc(tr._src.concValue * qty / vol);
+        if (!qty || !vol || qty <= 0 || vol <= 0 || isNaN(firstTr._src.concValue)) return '';
+        const c = bbcdRoundConc(firstTr._src.concValue * qty / vol);
         return bbcdFmtConc(c);
     }
 
@@ -1791,8 +1792,14 @@
         if (!vol || vol <= 0) return '';
         const vals = [];
         rows.forEach(tr => {
-            const qtyInput = tr.querySelector('.bbcd-c-qty');
-            const qty = parseFloat(qtyInput?.value);
+            let qtyInput = tr.querySelector('.bbcd-c-qty');
+            if (!qtyInput && tr._src.isComponent && tr._src.componentIdx > 0) {
+                let prev = tr.previousElementSibling;
+                while (prev && !prev.querySelector('.bbcd-c-qty')) prev = prev.previousElementSibling;
+                qtyInput = prev?.querySelector('.bbcd-c-qty');
+            }
+            if (!qtyInput) return;
+            const qty = parseFloat(qtyInput.value);
             if (!qty || qty <= 0 || isNaN(tr._src.concValue)) return;
             vals.push(tr._src.concValue * qty / vol);
         });
@@ -1803,8 +1810,11 @@
 
     function bbcdGetEffectiveSourceCount(srcList) {
         return Math.max(1, srcList.reduce((sum, src) => {
-            const count = Number(src?.aSourceCount);
-            return sum + ((Number.isInteger(count) && count > 0) ? count : 1);
+            let count = Number(src?.aSourceCount);
+            if (!(Number.isInteger(count) && count > 0)) count = 1;
+            const codes = Array.isArray(src?.sourceCodes) ? src.sourceCodes : [];
+            if (count === 1 && codes.length > 1) count = codes.length;
+            return sum + count;
         }, 0));
     }
 
@@ -2810,7 +2820,7 @@
 
         const expiry = new Date();
         expiry.setDate(expiry.getDate() + days);
-        const srcEarliest = rows.map(tr => tr._src.validityDate).filter(Boolean).sort()[0];
+        const srcEarliest = [...new Set(rows.map(tr => tr._src.validityDate).filter(Boolean))].sort()[0];
         if (srcEarliest) {
             const srcExp = new Date(srcEarliest);
             if (expiry > srcExp) expiry.setTime(srcExp.getTime());
@@ -2843,7 +2853,13 @@
         const validity = document.getElementById('bbcdValidityDate').value;
         const hint = document.getElementById('bbcdValidityHint');
         if (validity) {
-            const tooLate = dataRows.filter(tr => tr._src.validityDate && tr._src.validityDate < validity);
+            const seenOrders = new Set();
+            const tooLate = dataRows.filter(tr => {
+                const co = tr._src.configureOrder;
+                if (seenOrders.has(co)) return false;
+                seenOrders.add(co);
+                return tr._src.validityDate && tr._src.validityDate < validity;
+            });
             if (tooLate.length) {
                 hint.textContent = `提示：以下源储备液的有效期早于本次有效期：${tooLate.map(tr => tr._src.configureOrder).join(', ')}`;
                 hint.style.display = 'block';
@@ -3009,6 +3025,10 @@
                     configConcParts.push(`${src.componentName}:${concStr}`);
                     concParts.push(`${src.componentName}:${concStr}(${src.concUnit})`);
                 });
+                const codeParts = (firstSrc.solutionCode || '').split('-');
+                const overallConc = codeParts.length >= 2 && /^[\d.]+$/.test(codeParts[codeParts.length - 2])
+                    ? codeParts[codeParts.length - 2] : '';
+                const origConc = overallConc ? `${overallConc}(${firstSrc.concUnit})` : firstSrc.concentrationRaw;
 
                 return {
                     id: null, createDatetime: nowStr, serialVersionUID: null,
@@ -3016,7 +3036,7 @@
                     originalId: firstSrc.id,
                     originalCode: firstSrc.originalCode,
                     originalName: firstSrc.solutionName,
-                    originalConcentration: firstSrc.concentrationRaw,
+                    originalConcentration: origConc,
                     concentrationCount: firstSrc.concentrationRaw,
                     originalUnit: null,
                     receivedQuantity: qtyStr, receivedUint: 'mL',
@@ -3316,25 +3336,222 @@
         };
     }
 
+    function bbcdBuildWorkingSolutionExportPayload() {
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')].filter(tr => tr._src);
+        const count = window.bbcdCurrentDilutionCount || 1;
+        const isGradual = document.getElementById('bbcdGradualDilution')?.checked || false;
+        const mediumEl = document.getElementById('bbcdMediumD');
+        const medium = mediumEl ? mediumEl.value.trim() : '';
+        const baseCode = document.getElementById('bbcdSolutionCode').value.trim();
+
+        // Group source rows (handle multi-component)
+        const sourceGroups = [];
+        rows.forEach(tr => {
+            const src = tr._src;
+            if (src.isComponent) {
+                if (src.componentIdx === 0) sourceGroups.push({ rows: [tr], isMulti: true });
+                else sourceGroups[sourceGroups.length - 1].rows.push(tr);
+            } else {
+                sourceGroups.push({ rows: [tr], isMulti: false });
+            }
+        });
+
+        // Helper: get mean concentration of a sourceGroup (multi-component → average)
+        function grpMeanConc(grp) {
+            if (!grp.isMulti) return grp.rows[0]._src.concValue;
+            const sum = grp.rows.reduce((s, tr) => s + tr._src.concValue, 0);
+            return sum / grp.rows.length;
+        }
+
+        // Helper: extract concentration from solutionCode (e.g. CK-CG-4TSCA-100.00-20260508 → "100.00")
+        function extractConcFromCode(code) {
+            let m = code.match(/\[([\d.]+)/);
+            if (m) return m[1];
+            let parts = code.split('-');
+            if (parts.length >= 2) {
+                let candidate = parts[parts.length - 2];
+                if (/^[\d.]+$/.test(candidate)) return candidate;
+            }
+            return '';
+        }
+
+        // Calculate serial chain concentrations per dilution point
+        // chainConcs[i] = result concentration of dilution point i
+        const chainConcs = [];
+        let prevConc = null;
+        for (let i = 0; i < count; i++) {
+            const volEl = document.querySelector(`.bbcd-dilution-vol[data-idx="${i}"]`);
+            const vol = parseFloat(volEl?.value) || 0;
+            let hasQty = false;
+            let firstQty = 0;
+            for (const grp of sourceGroups) {
+                const qtyEl = grp.rows[0].querySelector(`.bbcd-d-qty[data-dilution="${i}"]`);
+                const q = parseFloat(qtyEl?.value) || 0;
+                if (q > 0) { hasQty = true; firstQty = q; break; }
+            }
+            if (!hasQty || vol <= 0) {
+                chainConcs.push(null);
+                if (isGradual) prevConc = 0;
+                continue;
+            }
+            const srcConc = grpMeanConc(sourceGroups[0]);
+            if (isGradual && prevConc !== null && prevConc > 0) {
+                chainConcs.push(bbcdRoundConc(prevConc * firstQty / vol));
+                prevConc = chainConcs[i];
+            } else {
+                const c = srcConc * firstQty / vol;
+                chainConcs.push(bbcdRoundConc(c));
+                prevConc = c;
+            }
+        }
+
+        // Build detail_list
+        const detailList = [];
+        const isMultiSource = sourceGroups.length > 1;
+        for (let i = 0; i < count; i++) {
+            if (chainConcs[i] === null) continue;
+            const volEl = document.querySelector(`.bbcd-dilution-vol[data-idx="${i}"]`);
+            const volume = bbcdRoundVol(parseFloat(volEl?.value));
+            const volStr = bbcdFmtVol(volume);
+            const resultConc = chainConcs[i];
+
+            // Serial chain: point N's source conc = point N-1's result
+            let srcConcForDisplay;
+            if (isGradual && i > 0 && chainConcs[i - 1] !== null) {
+                srcConcForDisplay = chainConcs[i - 1];
+            } else {
+                srcConcForDisplay = grpMeanConc(sourceGroups[0]);
+            }
+
+            // Per-row code: replace range [x-y] with specific concentration
+            const concStr = bbcdFmtConc(resultConc);
+            const rowCode = baseCode.replace(/\[[\d.\-]+\]/, concStr);
+
+            if (i > 0 && isMultiSource) {
+                // Serial chain point for multi-source: ONE row per dilution point
+                const firstSrc = sourceGroups[0].rows[0]._src;
+                const qtyEl = sourceGroups[0].rows[0].querySelector(`.bbcd-d-qty[data-dilution="${i}"]`);
+                const qty = bbcdRoundQty(parseFloat(qtyEl?.value));
+                const srcCodeConc = i > 0 ? '' : extractConcFromCode(firstSrc.solutionCode);
+                detailList.push({
+                    dilutionIdx: i,
+                    originalName: '',
+                    originalConcentration: srcConcForDisplay ? `${bbcdFmtConc(srcConcForDisplay)}(${firstSrc.concUnit})` : '',
+                    receivedQuantity: bbcdFmtQty(qty),
+                    medium, volume: volStr,
+                    configurationConcentration: concStr,
+                    configurationUnit: firstSrc.concUnit,
+                    originalNo: '',
+                    resultCode: rowCode,
+                });
+            } else {
+                // First dilution point OR single-source: one row per sourceGroup
+                sourceGroups.forEach(grp => {
+                    const firstTr = grp.rows[0];
+                    const firstSrc = firstTr._src;
+                    const qtyEl = firstTr.querySelector(`.bbcd-d-qty[data-dilution="${i}"]`);
+                    const qty = bbcdRoundQty(parseFloat(qtyEl?.value));
+
+                    if (grp.isMulti) {
+                        const meanResultConc = grp.rows.reduce((s, tr) => {
+                            return s + tr._src.concValue * qty / volume;
+                        }, 0) / grp.rows.length;
+                        const origConc = i === 0 ? extractConcFromCode(firstSrc.solutionCode) : bbcdFmtConc(srcConcForDisplay);
+                        detailList.push({
+                            dilutionIdx: i,
+                            originalName: firstSrc.solutionName,
+                            originalConcentration: origConc ? `${origConc}(${firstSrc.concUnit})` : '',
+                            receivedQuantity: bbcdFmtQty(qty),
+                            medium, volume: volStr,
+                            configurationConcentration: bbcdFmtConc(bbcdRoundConc(meanResultConc)),
+                            configurationUnit: firstSrc.concUnit,
+                            originalNo: `${firstSrc.configureOrder}\n${firstSrc.solutionCode}`,
+                            resultCode: rowCode,
+                        });
+                    } else {
+                        const origConc = i === 0 ? extractConcFromCode(firstSrc.solutionCode) : bbcdFmtConc(srcConcForDisplay);
+                        detailList.push({
+                            dilutionIdx: i,
+                            originalName: firstSrc.solutionName,
+                            originalConcentration: origConc ? `${origConc}(${firstSrc.concUnit})` : '',
+                            receivedQuantity: bbcdFmtQty(qty),
+                            medium, volume: volStr,
+                            configurationConcentration: concStr,
+                            configurationUnit: firstSrc.concUnit,
+                            originalNo: `${firstSrc.configureOrder}\n${firstSrc.solutionCode}`,
+                            resultCode: rowCode,
+                        });
+                    }
+                });
+            }
+        }
+
+        if (!detailList.length) return null;
+        return {
+            solution_name:     document.getElementById('bbcdSolutionName').value.trim(),
+            solution_code:     baseCode,
+            configure_date:    document.getElementById('bbcdConfigureDate').value,
+            validity_date:     document.getElementById('bbcdValidityDate').value,
+            temperature:       document.getElementById('bbcdTemp').value.trim(),
+            humidity:          document.getElementById('bbcdHumid').value.trim(),
+            storage_condition: document.getElementById('bbcdStorage').value || '',
+            custom_type:       document.getElementById('bbcdCustomType').value.trim(),
+            detail_list:       detailList,
+        };
+    }
+
     function bbcdBuildExportPayload() {
-        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')].filter(tr => tr._src);
         const volume = bbcdRoundVol(parseFloat(document.getElementById('bbcdVolume').value));
+        if (!volume || volume <= 0) return null;
         const volStr = bbcdFmtVol(volume);
         const medium = document.getElementById('bbcdMedium').value.trim();
-        const detailList = rows.map(tr => {
+
+        const sourceGroups = [];
+        rows.forEach(tr => {
             const src = tr._src;
-            const qty = bbcdRoundQty(parseFloat(tr.querySelector('.bbcd-c-qty').value));
-            const c = bbcdRoundConc(src.concValue * qty / volume);
-            return {
-                originalName: src.solutionName,
-                originalConcentration: src.concentrationRaw,
-                receivedQuantity: bbcdFmtQty(qty),
-                medium: medium,
-                volume: volStr,
-                configurationConcentration: bbcdFmtConc(c),
-                configurationUnit: src.concUnit,
-                originalNo: `${src.configureOrder}\n${src.solutionCode}`,
-            };
+            if (src.isComponent) {
+                if (src.componentIdx === 0) sourceGroups.push({ rows: [tr], isMulti: true });
+                else sourceGroups[sourceGroups.length - 1].rows.push(tr);
+            } else {
+                sourceGroups.push({ rows: [tr], isMulti: false });
+            }
+        });
+
+        const detailList = sourceGroups.map(group => {
+            const firstTr = group.rows[0];
+            const firstSrc = firstTr._src;
+            const qty = bbcdRoundQty(parseFloat(firstTr.querySelector('.bbcd-c-qty')?.value));
+
+            if (group.isMulti) {
+                const configConcParts = group.rows.map(tr => {
+                    const c = bbcdRoundConc(tr._src.concValue * qty / volume);
+                    return `${tr._src.componentName}:${bbcdFmtConc(c)}`;
+                });
+                const codeParts = (firstSrc.solutionCode || '').split('-');
+                const overallConc = codeParts.length >= 2 && /^[\d.]+$/.test(codeParts[codeParts.length - 2])
+                    ? codeParts[codeParts.length - 2] : '';
+                return {
+                    originalName: firstSrc.solutionName,
+                    originalConcentration: overallConc ? `${overallConc}(${firstSrc.concUnit})` : firstSrc.concentrationRaw,
+                    receivedQuantity: bbcdFmtQty(qty),
+                    medium, volume: volStr,
+                    configurationConcentration: configConcParts.join(';'),
+                    configurationUnit: firstSrc.concUnit,
+                    originalNo: `${firstSrc.configureOrder}\n${firstSrc.solutionCode}`,
+                };
+            } else {
+                const c = bbcdRoundConc(firstSrc.concValue * qty / volume);
+                return {
+                    originalName: firstSrc.solutionName,
+                    originalConcentration: firstSrc.concentrationRaw,
+                    receivedQuantity: bbcdFmtQty(qty),
+                    medium, volume: volStr,
+                    configurationConcentration: bbcdFmtConc(c),
+                    configurationUnit: firstSrc.concUnit,
+                    originalNo: `${firstSrc.configureOrder}\n${firstSrc.solutionCode}`,
+                };
+            }
         });
         return {
             solution_name:     document.getElementById('bbcdSolutionName').value.trim(),
@@ -3357,26 +3574,40 @@
         btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
         let ok = false;
         try {
-            const resp = await fetch('/api/lims/export_bbcd_docx', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(bbcdBuildExportPayload()),
-            });
-            if (!resp.ok) {
-                const err = await resp.json().catch(() => ({message: resp.statusText}));
-                alert('导出失败: ' + (err.message || resp.statusText));
-                return;
+            const solType = document.getElementById('bbcdSolType').value;
+
+            async function doExportOne(payload) {
+                const resp = await fetch('/api/lims/export_bbcd_docx', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload),
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({message: resp.statusText}));
+                    throw new Error(err.message || resp.statusText);
+                }
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const cd = resp.headers.get('Content-Disposition') || '';
+                const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)/i);
+                a.download = m ? decodeURIComponent(m[1]) : '配制记录.docx';
+                a.href = url;
+                a.click();
+                URL.revokeObjectURL(url);
             }
-            const blob = await resp.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            const cd = resp.headers.get('Content-Disposition') || '';
-            const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)/i);
-            a.download = m ? decodeURIComponent(m[1]) : '配制记录.docx';
-            a.href = url;
-            a.click();
-            URL.revokeObjectURL(url);
-            ok = true;
+
+            if (solType === 'SOLUTION_TYPE_D') {
+                const payload = bbcdBuildWorkingSolutionExportPayload();
+                if (!payload) { alert('导出失败：无有效的稀释点数据'); return; }
+                await doExportOne(payload);
+                ok = true;
+            } else {
+                const payload = bbcdBuildExportPayload();
+                if (!payload) { alert('导出失败：定容体积无效'); return; }
+                await doExportOne(payload);
+                ok = true;
+            }
         } catch (e) {
             alert('导出异常: ' + e.message);
         } finally {
