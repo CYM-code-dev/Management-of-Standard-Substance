@@ -1110,6 +1110,110 @@ def save_working_solution():
         return jsonify({"success": False, "message": f"配置异常: {str(e)}"}), 500
 
 
+def _fill_rf10_09_item(doc, item_payload):
+    """填充 RF10-09 模板的单条记录"""
+    from docx.enum.table import WD_ALIGN_VERTICAL
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    solution_name = item_payload.get('solution_name', '')
+    custom_num = item_payload.get('base_custom_num', '') or item_payload.get('custom_num', '')
+    purity_str = str(item_payload.get('purity_str', ''))
+    original_unit = item_payload.get('original_unit', '%')
+    purity_display = f"{purity_str}({original_unit})"
+    device_names = item_payload.get('device_names', '') or ''
+    solution_code = item_payload.get('solution_code', '')
+    validity_date = item_payload.get('validity_date', '')
+    configure_date = item_payload.get('configure_date', datetime.date.today().strftime('%Y-%m-%d'))
+    medium = item_payload.get('medium', '')
+    storage_cond = item_payload.get('storage_condition', '') or ''
+    temp_val = item_payload.get('temperature', '') or ''
+    humid_val = item_payload.get('humidity', '') or ''
+    received_unit = item_payload.get('received_unit', 'g')
+
+    try:
+        purity_value = float(purity_str.replace('%', '').strip())
+        vol_f = _round_vol(float(item_payload.get('volume_ml', '')))
+        qty_f = _round_qty(float(item_payload.get('use_quantity', '')), received_unit)
+        if original_unit == '%':
+            config_conc_raw = purity_value / 100.0 * qty_f * 1_000_000 / vol_f
+        else:
+            config_conc_raw = purity_value * qty_f / vol_f
+        config_conc = _round_conc(config_conc_raw, original_unit)
+        conc = _fmt_conc(config_conc, original_unit)
+        use_qty = _fmt_qty(qty_f, received_unit)
+        volume = _fmt_vol(vol_f)
+    except Exception:
+        conc = str(item_payload.get('config_conc', ''))
+        use_qty = str(item_payload.get('use_quantity', ''))
+        volume = str(item_payload.get('volume_ml', ''))
+
+    if len(doc.paragraphs) > 1:
+        p1 = doc.paragraphs[1]
+        p1.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        if temp_val and len(p1.runs) > 4:
+            p1.runs[2].text = f" {str(temp_val).center(10)} "
+            p1.runs[2].font.underline = True
+        if len(p1.runs) > 6:
+            p1.runs[5].text = "\t\t"
+            p1.runs[6].text = "\t\t"
+        if humid_val and len(p1.runs) > 10:
+            p1.runs[9].text = str(humid_val).center(10)
+            p1.runs[9].font.underline = True
+            p1.runs[10].text = "%" + " " * 13
+        elif len(p1.runs) > 10:
+            p1.runs[10].text = "                        "
+        if storage_cond and len(p1.runs) > 12:
+            p1.runs[12].text = f" {storage_cond} "
+            p1.runs[12].font.underline = True
+
+    table = doc.tables[0]
+    if received_unit == 'g':
+        table.cell(0, 1).text = solution_name
+        table.cell(0, 5).text = custom_num
+        table.cell(1, 1).text = purity_display
+        table.cell(1, 5).text = device_names
+        purity_num = purity_str.split('(')[0].strip() if '(' in purity_str else purity_str
+        cell_2_1 = table.cell(2, 1)
+        cell_2_1.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        cell_2_1.paragraphs[0].text = f"称取{use_qty}g标准品，用{medium}定容至{volume}mL容量瓶中，保存于{storage_cond}"
+        cell_3_1 = table.cell(3, 1)
+        cell_3_1.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        cell_3_1.paragraphs[0].text = f"X=（{use_qty}g*{purity_num}%/{volume}mL）*10^6={conc}μg/mL"
+        table.cell(4, 1).text = solution_code
+        table.cell(5, 1).text = validity_date
+        table.cell(7, 6).text = configure_date
+    else:
+        if '(' in purity_display:
+            purity_val = purity_display.split('(')[0].strip()
+            purity_unit = purity_display.split('(')[1].rstrip(')').strip()
+        else:
+            purity_val = purity_display
+            purity_unit = ''
+        table.cell(1, 1).text = solution_name
+        table.cell(1, 5).text = custom_num
+        table.cell(1, 7).text = purity_val
+        cell_1_6 = table.cell(1, 6)
+        if len(cell_1_6.paragraphs) > 1:
+            cell_1_6.paragraphs[1].text = f"({purity_unit})"
+        for ci in range(len(table.row_cells(3))):
+            cell = table.cell(3, ci)
+            p0 = cell.paragraphs[0]
+            if "(      )" in p0.text:
+                p0.text = p0.text.replace("(      )", f"({purity_unit})")
+            elif "(     )" in p0.text:
+                p0.text = p0.text.replace("(     )", "(mL)")
+            elif "(    )" in p0.text:
+                p0.text = p0.text.replace("(    )", "(μg/mL)")
+        table.cell(4, 0).text = purity_val
+        table.cell(4, 1).text = use_qty
+        table.cell(4, 2).text = medium
+        table.cell(4, 3).text = volume
+        table.cell(4, 4).text = conc
+        table.cell(4, 5).text = solution_code
+        table.cell(4, 6).text = configure_date
+        table.cell(4, 8).text = validity_date
+
+
 @app.route('/api/lims/export_docx', methods=['POST'])
 def lims_export_docx():
     if not session.get('logged_in'):
@@ -1117,9 +1221,61 @@ def lims_export_docx():
     from docx import Document as DocxDocument
     from docx.enum.table import WD_ALIGN_VERTICAL
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    import io
+    import io, copy
 
     p = request.get_json()
+
+    # 合并导出分支
+    items_list = p.get('items_list')
+    if items_list:
+        template_name = 'RF10-09 标准溶液配制记录(1).docx'
+        template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'word_templates', template_name)
+        if not os.path.exists(template_path):
+            return jsonify({"success": False, "message": f"模板文件不存在: {template_name}"}), 404
+
+        first_code = items_list[0].get('solution_code', '') if items_list else ''
+        doc = DocxDocument(template_path)
+        _fill_rf10_09_item(doc, items_list[0])
+
+        # 保存第一个文档的 sectPr（含页眉页脚定义），稍后移到末尾
+        body = doc.element.body
+        saved_sectPr = None
+        for child in list(body):
+            tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+            if tag == 'sectPr':
+                saved_sectPr = child
+                body.remove(child)
+                break
+
+        from docx.oxml.ns import qn as _qn
+        for item_payload in items_list[1:]:
+            doc.add_page_break()
+            tpl = DocxDocument(template_path)
+            _fill_rf10_09_item(tpl, item_payload)
+            for el in list(tpl.element.body):
+                tag = el.tag.split('}')[-1] if '}' in el.tag else el.tag
+                if tag == 'sectPr':
+                    continue
+                text = ''.join(el.itertext()).strip()
+                if not text and not el.findall('.//' + _qn('w:t')):
+                    continue
+                doc.element.body.append(copy.deepcopy(el))
+
+        # 将 sectPr 放回 body 末尾，恢复页眉页脚
+        if saved_sectPr is not None:
+            body.append(saved_sectPr)
+
+        buf = io.BytesIO()
+        doc.save(buf)
+        buf.seek(0)
+        download_name = f"{len(items_list)}条_配制记录_合并.docx"
+        from urllib.parse import quote as _urlquote
+        from flask import send_file
+        resp = send_file(buf, as_attachment=True, download_name=download_name, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        resp.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{_urlquote(download_name)}"
+        return resp
+
+    # 单条导出（原逻辑）
     received_unit = p.get('received_unit', 'g')
     template_name = "RF10-09 标准溶液配制记录(1).docx" if received_unit == 'g' else "RF10-10 标准溶液配制记录（稀释）(1).docx"
     template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'word_templates', template_name)
@@ -1422,7 +1578,7 @@ def lims_export_bbcd_docx():
 
     _fill_tc1(tc4, f'浓度({conc_unit})')
 
-    if len(detail_list) == 1:
+    if not p.get('is_multi_source'):
         src_conc = _parse_conc_val(detail_list[0].get('originalConcentration', ''))
         _fill_tc1(tc5, src_conc)
     else:
