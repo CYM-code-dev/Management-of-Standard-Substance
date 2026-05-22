@@ -530,7 +530,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
-                <h5 class="modal-title"><i class="fas fa-list me-2"></i>选择耗材记录</h5>
+                <h5 class="modal-title"><i class="fas fa-list me-2"></i>选择耗材记录 <span id="queryResultCount" class="badge bg-light text-dark ms-2"></span></h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -540,6 +540,14 @@
                         <tbody id="queryResultBody"></tbody>
                     </table>
                 </div>
+                <nav id="queryPagination" class="d-flex justify-content-between align-items-center mt-2" style="display:none;">
+                    <small id="queryPageInfo" class="text-muted"></small>
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item" id="queryPrevBtn"><a class="page-link" href="#">上一页</a></li>
+                        <li class="page-item active" id="queryPageNum"><a class="page-link" href="#">1</a></li>
+                        <li class="page-item" id="queryNextBtn"><a class="page-link" href="#">下一页</a></li>
+                    </ul>
+                </nav>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
@@ -570,6 +578,10 @@
     let queryResultModalInstance = null;
     let currentLimsItem = null;
     let originalConcUnit = '';
+    let queryPageNo = 1;
+    let queryTotalPages = 1;
+    let queryRecords = 0;
+    let queryPageSize = 30;
 
     // DOM 元素
     const showLoginBtn = document.getElementById('showLoginModalBtn');
@@ -943,18 +955,17 @@ function filterData() {
     }
 
     // ---------- 查询并填充表单 ----------
-    async function queryAndFill() {
+    async function queryAndFill(pageNo) {
         const keyword = document.getElementById('labNo').value.trim();
-        if (!keyword) {
-            alert('请输入实验室编号关键词');
-            return;
-        }
+        if (pageNo === undefined) pageNo = 1;
+        queryPageNo = pageNo;
         const btn = document.getElementById('queryLabNoBtn');
         const originalText = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 查询中';
         try {
-            const resp = await fetch(`/api/query?keyword=${encodeURIComponent(keyword)}`, { credentials: 'include' });
+            const url = `/api/query?keyword=${encodeURIComponent(keyword)}&pageNo=${pageNo}&pageSize=${queryPageSize}`;
+            const resp = await fetch(url, { credentials: 'include' });
             const data = await resp.json();
             if (!data.success) {
                 if (data.message.includes('会话已失效') || data.message.includes('未登录')) {
@@ -966,11 +977,15 @@ function filterData() {
                 return;
             }
             const list = data.data || [];
+            queryRecords = data.records || 0;
+            queryTotalPages = data.total || 1;
             if (list.length === 0) {
                 alert('未找到匹配的耗材记录');
                 return;
             }
-            if (list.length === 1) {
+            if (list.length === 1 && !keyword) {
+                showQueryResultModal(list);
+            } else if (list.length === 1) {
                 fillFormFromQueryItem(list[0]);
             } else {
                 showQueryResultModal(list);
@@ -1077,7 +1092,7 @@ function filterData() {
     function showQueryResultModal(list) {
         const tbody = document.getElementById('queryResultBody');
         let html = '';
-        list.forEach(item => {
+        list.forEach((item, idx) => {
             let spec = item.standard || '';
             let conc = item.concentration || '';
             if (conc && item.concentrationUnitName) conc += ' ' + item.concentrationUnitName;
@@ -1091,17 +1106,37 @@ function filterData() {
                 <td>${escapeHtml(item.validDate) || '—'}</td>
                 <td>${escapeHtml(item.factoryName) || '—'}</td>
                 <td>${escapeHtml(item.storageCondition) || '—'}</td>
-                <td><button class="btn btn-sm btn-outline-primary select-item-btn" data-index="${list.indexOf(item)}">选择</button></td>
+                <td><button class="btn btn-sm btn-outline-primary select-item-btn" data-index="${idx}">选择</button></td>
             </tr>`;
         });
         tbody.innerHTML = html;
         tbody.querySelectorAll('.select-item-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const index = btn.getAttribute('data-index');
+                const index = parseInt(btn.getAttribute('data-index'));
                 fillFormFromQueryItem(list[index]);
                 if (queryResultModalInstance) queryResultModalInstance.hide();
             });
         });
+
+        // 分页信息
+        const countSpan = document.getElementById('queryResultCount');
+        countSpan.textContent = `共 ${queryRecords} 条`;
+        const pagination = document.getElementById('queryPagination');
+        const pageInfo = document.getElementById('queryPageInfo');
+        const pageNum = document.getElementById('queryPageNum');
+        const prevBtn = document.getElementById('queryPrevBtn');
+        const nextBtn = document.getElementById('queryNextBtn');
+
+        if (queryTotalPages > 1) {
+            pagination.style.display = 'flex';
+            pageInfo.textContent = `第 ${queryPageNo} / ${queryTotalPages} 页`;
+            pageNum.innerHTML = `<a class="page-link" href="#">${queryPageNo}</a>`;
+            prevBtn.classList.toggle('disabled', queryPageNo <= 1);
+            nextBtn.classList.toggle('disabled', queryPageNo >= queryTotalPages);
+        } else {
+            pagination.style.display = 'none';
+        }
+
         if (!queryResultModalInstance) {
             queryResultModalInstance = new bootstrap.Modal(document.getElementById('queryResultModal'));
         }
@@ -1339,7 +1374,15 @@ function filterData() {
         document.getElementById('saveSettingsBtn').addEventListener('click', saveSettingsAndLoad);
         document.getElementById('searchNameCas').addEventListener('keypress', e => { if(e.key === 'Enter') filterData(); });
         document.getElementById('searchGroup').addEventListener('keypress', e => { if(e.key === 'Enter') filterData(); });
-        document.getElementById('queryLabNoBtn').addEventListener('click', queryAndFill);
+        document.getElementById('queryLabNoBtn').addEventListener('click', () => queryAndFill(1));
+        document.getElementById('queryPrevBtn').addEventListener('click', e => {
+            e.preventDefault();
+            if (queryPageNo > 1) queryAndFill(queryPageNo - 1);
+        });
+        document.getElementById('queryNextBtn').addEventListener('click', e => {
+            e.preventDefault();
+            if (queryPageNo < queryTotalPages) queryAndFill(queryPageNo + 1);
+        });
 
         // ---------- 自定义下拉交互 ----------
         function initCustomDropdown(inputId, dropdownId) {

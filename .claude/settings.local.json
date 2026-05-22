@@ -2,7 +2,22 @@
   "permissions": {
     "allow": [
       "Bash(chmod u+w \"C:\\\\Users\\\\Administrator\\\\.claude\\\\CLAUDE.md\")",
-      "Read(//c/Users/Administrator/.claude/**)"
+      "Read(//c/Users/Administrator/.claude/**)",
+      "Bash(python3)",
+      "Bash(python _fix_agent3.py)",
+      "Bash(python _fix_agent3b.py)",
+      "Bash(python _fix_agent4.py)",
+      "Bash(python _fix_agent5.py)",
+      "Bash(python3 -c ' *)",
+      "Bash(python _fix_revert1.py)",
+      "Bash(python _fix_export.py)",
+      "Bash(python3 -c \"import sys; sys.stdout.buffer.write\\(sys.stdin.buffer.read\\(\\)\\)\")",
+      "Bash(python _fix_viewdetail.py)",
+      "Bash(python _fix_editmode.py)",
+      "Bash(python _fix_colorder.py)",
+      "Bash(python *)",
+      "Bash(git stash *)",
+      "Bash(node -e ' *)"
     ]
   }
 }

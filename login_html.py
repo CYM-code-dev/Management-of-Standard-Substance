@@ -216,11 +216,11 @@ class RemoteSystem:
 
     def _save_session(self):
         sess_file = f"session_{self.current_user}.json"
-        cookies_dict = {c.name: c.value for c in self.session.cookies}
+        cookies_list = [{"name": c.name, "value": c.value, "domain": c.domain, "path": c.path} for c in self.session.cookies]
         info = {
             "username": self.current_user, "pid": self.current_pid, "real_name": self.current_real_name,
             "login_time": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "cookies": cookies_dict, "headers": dict(self.session.headers)
+            "cookies": cookies_list, "headers": dict(self.session.headers)
         }
         with open(sess_file, "w", encoding="utf-8") as f:
             json.dump(info, f, indent=2)
@@ -235,8 +235,12 @@ class RemoteSystem:
             if time.time() - time.mktime(time.strptime(info["login_time"], "%Y-%m-%d %H:%M:%S")) > 24*3600:
                 os.remove(sess_file)
                 return False
-            for name, value in info["cookies"].items():
-                self.session.cookies.set(name, value)
+            self.session.cookies.clear()
+            for c in info["cookies"]:
+                kw = {"name": c["name"], "value": c["value"]}
+                if c.get("domain"): kw["domain"] = c["domain"]
+                if c.get("path"): kw["path"] = c["path"]
+                self.session.cookies.set(**kw)
             self.session.headers.update(info["headers"])
             self.current_user = info["username"]
             self.current_pid = info.get("pid")
@@ -391,24 +395,37 @@ def query():
         system = get_system()
         if system.current_pid: pid = session['pid'] = system.current_pid
         else: return jsonify({"success": False, "message": "无法获取用户PID"})
-    keyword = request.args.get('keyword', '').strip()
-    if not keyword: return jsonify({"success": False, "message": "请输入查询关键词"})
     system = get_system()
     if system.current_user != username:
         system.current_user = username
         system.load_session()
+    pageNo = request.args.get('pageNo', 1)
+    pageSize = request.args.get('pageSize', 30)
+    keyword = request.args.get('keyword', '').strip()
+    casNo = request.args.get('casNo', '').strip()
     params = {
-        "_search": "false", "nd": str(int(time.time()*1000)), "pageSize": 30, "pageNo": 1, "sidx": "", "sord": "asc",
-        "type": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE", "orgName": request.args.get('org_name', ''), "groupId": "", "status": request.args.get('status', 'normal'),
-        "keyword": keyword, "state": request.args.get('status', 'normal'), "pid": pid, "pname": username, "loginId": pid
+        "_search": "false", "nd": str(int(time.time()*1000)), "pageSize": pageSize, "pageNo": pageNo, "sidx": "", "sord": "asc",
+        "type": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE", "name": "", "casNo": "",
+        "orgName": request.args.get('org_name', ''),
+        "receiveUserName": "", "receiveStartDate": "", "receiveEndDate": "",
+        "confirmUserName": "", "confirmStartDate": "", "confirmEndDate": "",
+        "invoiceNo": "", "groupId": "",
+        "status": request.args.get('status', 'normal'),
+        "pid": pid, "pname": username, "loginId": pid
     }
+    if keyword:
+        params["name"] = keyword
+    if casNo:
+        params["casNo"] = casNo
     try:
         resp = system.session.get(f"{system.base_url}/detectionManager/manager/consumableBill/pageObj", params=params)
         if resp.status_code != 200:
             if resp.status_code in (401,403): session.pop('logged_in', None); system.logout(); return jsonify({"success": False, "message": "远程会话已失效"})
             return jsonify({"success": False, "message": f"请求失败，状态码: {resp.status_code}"})
         result = resp.json()
-        if result.get("success"): return jsonify({"success": True, "data": result.get("resultData", {}).get("voList", [])})
+        if result.get("success"):
+            rd = result.get("resultData", {})
+            return jsonify({"success": True, "data": rd.get("voList", []), "records": rd.get("records", 0), "page": rd.get("page", 1), "total": rd.get("total", 0)})
         error_msg = result.get("errorCtx", {}).get("errorMsg", "查询失败")
         if "未登录" in error_msg or "login" in error_msg.lower(): session.pop('logged_in', None); system.logout(); return jsonify({"success": False, "message": "远程会话已失效"})
         return jsonify({"success": False, "message": error_msg})
@@ -831,12 +848,15 @@ def lims_save_solution():
             "Content-Type": "application/json;charset=UTF-8"
         }
         resp = system.session.post(url, json=payload, headers=headers)
+        if not resp.ok:
+            print(f"[saveSolutionConfigure] status={resp.status_code} body={resp.text[:500]}")
         resp.raise_for_status()
         result = resp.json()
         if not result.get("success"):
             return jsonify({"success": False, "message": result.get('errorDesc') or str(result.get('errorCtx', '配置失败'))})
         return jsonify({"success": True})
     except Exception as e:
+        print(f"[saveSolutionConfigure] exception: {e}")
         return jsonify({"success": False, "message": f"配置异常: {str(e)}"}), 500
 
 
@@ -874,13 +894,543 @@ def _extract_a_source_codes(original_code):
     return seen
 
 
+def _parse_conc_field(conc_str):
+    """Parse LIMS concentration field.
+    '0.01(mg/L)' → (0.01, 'mg/L')
+    'DIDP:447.10(mg/L);DINP:682.32(mg/L)' → [(DIDP,447.10,mg/L), ...]
+    """
+    if not conc_str:
+        return []
+    text = str(conc_str).strip()
+    if ':' in text and ';' in text:
+        parts = text.split(';')
+        result = []
+        for p in parts:
+            p = p.strip()
+            if not p:
+                continue
+            ci = p.rfind(':')
+            if ci < 0:
+                continue
+            name = p[:ci].strip()
+            cstr = p[ci+1:].strip()
+            m = re.match(r'^([\d.]+)\s*\(([^)]+)\)', cstr)
+            if m:
+                result.append((name, float(m.group(1)), m.group(2)))
+            else:
+                m2 = re.match(r'^([\d.]+)\s*(\S+)', cstr)
+                if m2:
+                    result.append((name, float(m2.group(1)), m2.group(2)))
+        return result
+    m = re.match(r'^([\d.]+)\s*\(([^)]+)\)', text)
+    if m:
+        return [(None, float(m.group(1)), m.group(2))]
+    m2 = re.match(r'^([\d.]+)\s*(\S+)', text)
+    if m2:
+        return [(None, float(m2.group(1)), m2.group(2))]
+    return []
+
+
+_order_to_id_cache = {}
+_type_list_cache = {}
+
+def _resolve_order_to_lims_id(system, configure_order):
+    """Resolve configureOrder (e.g. 'B-3408') to actual LIMS record ID.
+    Uses getSolutionAdata API with appropriate type parameter, pageSize=9999,
+    exact matching, and per-type list caching."""
+    global _order_to_id_cache, _type_list_cache
+    if configure_order in _order_to_id_cache:
+        return _order_to_id_cache[configure_order]
+    parts = configure_order.split('-')
+    if len(parts) < 2:
+        return None
+    prefix = parts[0].upper()
+    if prefix == 'A':
+        return None  # A-type records not queryable via this API
+    type_map = {'B': 'SOLUTION_TYPE_B', 'C': 'SOLUTION_TYPE_C', 'D': 'SOLUTION_TYPE_D', 'E': 'SOLUTION_TYPE_E'}
+    sol_type = type_map.get(prefix)
+    if not sol_type:
+        return None
+    try:
+        if sol_type in _type_list_cache:
+            items = _type_list_cache[sol_type]
+        else:
+            url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/getSolutionAdata"
+            headers = {"Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544"}
+            items = []
+            page_no = 1
+            while True:
+                resp = system.session.get(url, params={
+                    "type": sol_type, "pageSize": 9999, "pageNo": page_no,
+                    "status": "1",
+                    "pid": system.current_pid or '',
+                    "pname": system.current_real_name or '',
+                    "loginId": system.current_pid or '',
+                }, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                page_items = data.get('resultData', {}).get('voList', [])
+                items.extend(page_items)
+                if not data.get('resultData', {}).get('hasNext', False):
+                    break
+                page_no += 1
+            _type_list_cache[sol_type] = items
+            print(f"[ResolveOrder] {configure_order} type={sol_type} fetched {len(items)} records")
+        # Exact match
+        for item in items:
+            order = str(item.get('configureOrder', '')).strip()
+            if order == configure_order:
+                lid = item.get('id')
+                if lid:
+                    _order_to_id_cache[configure_order] = lid
+                    return lid
+        # Prefix + number exact match (not endswith)
+        order_num = parts[1].strip()
+        for item in items:
+            item_order = str(item.get('configureOrder', '')).strip()
+            item_parts = item_order.split('-')
+            if (len(item_parts) >= 2
+                    and item_parts[0].upper() == prefix
+                    and item_parts[1].strip() == order_num):
+                lid = item.get('id')
+                if lid:
+                    _order_to_id_cache[configure_order] = lid
+                    return lid
+        print(f"[ResolveOrder] NO match for {configure_order}")
+    except Exception as e:
+        print(f"[ResolveOrder] ERROR {configure_order}: {e}")
+    return None
+
+
+def _resolve_by_solution_code(system, solution_code):
+    """Resolve solutionCode (e.g. 'CK-CG-xxx') to (lims_id, configure_order) or (None, None).
+    Uses getSolutionAdata with solutionCode parameter for precise search."""
+    global _order_to_id_cache
+    url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/getSolutionAdata"
+    headers = {"Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544"}
+    for sol_type in ['SOLUTION_TYPE_B', 'SOLUTION_TYPE_C', 'SOLUTION_TYPE_D', 'SOLUTION_TYPE_E']:
+        params = {
+            "_search": "false",
+            "nd": str(int(time.time() * 1000)),
+            "pageSize": 30,
+            "pageNo": 1,
+            "sidx": "",
+            "sord": "asc",
+            "type": sol_type,
+            "solutionCode": solution_code,
+            "status": "1",
+            "pid": system.current_pid or '',
+            "pname": system.current_real_name or '',
+            "loginId": system.current_pid or '',
+        }
+        try:
+            resp = system.session.get(url, params=params, headers=headers)
+            if resp.status_code == 500:
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            items = data.get('resultData', {}).get('voList', [])
+            for item in items:
+                sc = str(item.get('solutionCode', '')).strip()
+                if sc == solution_code:
+                    lid = item.get('id')
+                    co = str(item.get('configureOrder', '')).strip()
+                    if lid:
+                        _order_to_id_cache[solution_code] = lid
+                        _order_to_id_cache[co] = lid
+                        print(f"[ResolveSC] {solution_code} → id={lid} ({co})")
+                        return lid, co
+        except Exception as e:
+            print(f"[ResolveSC] ERROR solutionCode={solution_code} type={sol_type}: {e}")
+    print(f"[ResolveSC] not found: solutionCode={solution_code}")
+    return None, None
+
+
+def _fetch_solution_view(system, solution_id, order_str=None):
+    """Fetch record via viewDtSolutionConfigure — returns complete detailList.
+    type parameter must match record type (B/C→SOLUTION_TYPE_E, D→SOLUTION_TYPE_D).
+    If order_str is None, tries SOLUTION_TYPE_E first, then SOLUTION_TYPE_D as fallback."""
+    url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/viewDtSolutionConfigure"
+    headers = {"Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544"}
+    view_type = "SOLUTION_TYPE_E"
+    if order_str:
+        pfx = order_str.split('-')[0].upper()
+        type_map = {'D': 'SOLUTION_TYPE_D', 'C': 'SOLUTION_TYPE_C', 'B': 'SOLUTION_TYPE_E', 'E': 'SOLUTION_TYPE_E'}
+        view_type = type_map.get(pfx, 'SOLUTION_TYPE_E')
+    resp = system.session.get(url, params={"id": solution_id, "type": view_type}, headers=headers)
+    resp.raise_for_status()
+    data = resp.json()
+    result = data.get('resultData') or {}
+    if not order_str and view_type != 'SOLUTION_TYPE_D' and not result.get('detailList'):
+        resp2 = system.session.get(url, params={"id": solution_id, "type": "SOLUTION_TYPE_D"}, headers=headers)
+        resp2.raise_for_status()
+        result2 = resp2.json().get('resultData') or {}
+        if result2.get('detailList'):
+            result = result2
+    return result
+
+
 def _fetch_solution_detail(system, solution_id):
+    """Fetch record via detail API (saveDetailList always null). Fallback only."""
     url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/detail"
     headers = {"Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544"}
     resp = system.session.get(url, params={"id": solution_id}, headers=headers)
     resp.raise_for_status()
     data = resp.json()
     return data.get('resultData') or {}
+
+
+def _trace_export_chain(system, trace_targets, target_date, target_person):
+    """Trace source chain upward (D→C→B→A), find records with same configurator + date.
+    trace_targets: list of (lims_id, configure_order) tuples. Use lims_id if available.
+    Returns (matched_records, top_ancestor) where matched_records is ordered top→bottom.
+    Stops when: parent is A-type, or source concentration unit is % (weighing type).
+    Uses viewDtSolutionConfigure API for complete detailList data.
+    """
+    matched = []
+    visiting = set()
+
+    def _fetch_record(lims_id=None, order_str=None):
+        resolved = lims_id
+        view_order_str = order_str
+        if not resolved and order_str:
+            if order_str.startswith('CK-'):
+                resolved, co = _resolve_by_solution_code(system, order_str)
+                if co and co != order_str:
+                    view_order_str = co
+            else:
+                resolved = _resolve_order_to_lims_id(system, order_str)
+        # Fallback: use configureOrder number as ID when resolve fails
+        if not resolved and order_str and '-' in order_str:
+            num_part = order_str.split('-')[1].strip()
+            if num_part.isdigit():
+                resolved = int(num_part)
+                print(f"[TraceFetch] fallback: configureOrder number as ID: {resolved}")
+        if not resolved:
+            return None
+
+        is_solution_code = order_str and order_str.startswith('CK-')
+
+        def _validate(rec):
+            if not order_str:
+                return True
+            if is_solution_code:
+                rec_sc = str(rec.get('solutionCode', '')).strip()
+                if rec_sc and rec_sc != order_str:
+                    print(f"[TraceFetch] ID {resolved} solutionCode={rec_sc}, expected {order_str}, skipping")
+                    return False
+            else:
+                rec_order = str(rec.get('configureOrder', '')).strip()
+                if rec_order and rec_order != order_str:
+                    print(f"[TraceFetch] ID {resolved} returned {rec_order}, expected {order_str}, skipping")
+                    return False
+            return True
+
+        try:
+            rec = _fetch_solution_view(system, resolved, order_str=view_order_str)
+            if rec and rec.get('id') and _validate(rec):
+                return rec
+        except Exception as e:
+            print(f"[TraceFetch] view error id={resolved}: {e}")
+        try:
+            rec = _fetch_solution_detail(system, resolved)
+            if rec and rec.get('id') and _validate(rec):
+                return rec
+        except Exception as e:
+            print(f"[TraceFetch] detail error id={resolved}: {e}")
+        return None
+
+    def _has_pct_source_conc(record, parent_order):
+        """Check if parent's source concentration in detailList contains %."""
+        for dl in (record.get('detailList') or []):
+            dl_code = str(dl.get('originalCode', '')).strip()
+            dl_no = str(dl.get('originalNo', '')).strip()
+            no_first = dl_no.split('\n')[0].strip().split('|')[0].strip() if dl_no else ''
+            if dl_code == parent_order or no_first == parent_order:
+                conc = str(dl.get('originalConcentration', '') or '').strip()
+                return '%' in conc
+        return False
+
+    def _trace(lims_id=None, order_str=None, depth=0):
+        if depth > 10:
+            return None
+        key = str(lims_id or order_str)
+        if key in visiting:
+            return None
+        visiting.add(key)
+
+        record = _fetch_record(lims_id, order_str)
+        if not record:
+            visiting.discard(key)
+            return None
+
+        rec_order = str(record.get('configureOrder') or '').strip() or order_str
+        rec_person = str(record.get('configuratorName') or record.get('creatorName') or '').strip()
+        rec_date = str(record.get('configureDate') or '').strip()[:10]
+
+        # Check same configurator + date
+        if rec_person != target_person or not rec_date.startswith(target_date):
+            visiting.discard(key)
+            return record  # stopping point (different person/date)
+
+        prefix = rec_order.split('-')[0].upper() if '-' in rec_order else ''
+        original_code = str(record.get('originalCode') or '').strip()
+        parent_orders = [oc.strip() for oc in re.split(r'[,，]', original_code) if oc.strip()]
+
+        # Use totalConstantVolume for actual dilution volume (constantVolume = remaining qty)
+        total_vol = record.get('totalConstantVolume')
+        constant_volume = float(total_vol if total_vol is not None else record.get('constantVolume') or 0)
+
+        rec_conc = str(record.get('concentration') or '').strip()
+        rec_parsed = _parse_conc_field(rec_conc)
+        rec_conc_val = rec_parsed[0][1] if rec_parsed else 0
+        rec_conc_unit = rec_parsed[0][2] if rec_parsed else ''
+
+        # Get detailList for this record
+        detail_list = record.get('detailList') or []
+        is_d_type = prefix == 'D'
+
+        # Extract parent info from detailList (if available) or from parent record
+        parent_name = ''
+        parent_conc_val = 0
+        parent_conc_unit = ''
+        received_qty = ''
+        received_unit = str(record.get('receivedUint') or 'mL').strip()
+
+        if detail_list and not is_d_type:
+            # B/C type: use first detailList row for parent info
+            dl0 = detail_list[0]
+            parent_name = str(dl0.get('originalName', '')).strip()
+            p_conc = str(dl0.get('originalConcentration', '') or '').strip()
+            pc = _parse_conc_field(p_conc)
+            if pc:
+                parent_conc_val = pc[0][1]
+                parent_conc_unit = pc[0][2]
+            received_qty = str(dl0.get('receivedQuantity', '')).strip()
+            received_unit = str(dl0.get('receivedUint', '')).strip()
+        else:
+            # D-type or no detailList: fetch parent record
+            if parent_orders:
+                po = parent_orders[0]
+                try:
+                    resolved_id = _resolve_order_to_lims_id(system, po)
+                    if resolved_id:
+                        parent_rec = _fetch_solution_view(system, resolved_id, order_str=po)
+                    else:
+                        parent_rec = None
+                    if parent_rec:
+                        parent_name = str(parent_rec.get('solutionName') or '').strip()
+                        p_conc = str(parent_rec.get('concentration') or '').strip()
+                        pc = _parse_conc_field(p_conc)
+                        if pc:
+                            parent_conc_val = pc[0][1]
+                            parent_conc_unit = pc[0][2]
+                except Exception:
+                    pass
+
+            # Calculate received quantity if not from detailList
+            if not received_qty and parent_conc_val > 0 and constant_volume > 0:
+                calc_qty = rec_conc_val * constant_volume / parent_conc_val
+                received_qty = f"{calc_qty:.4f}" if received_unit == 'g' else f"{calc_qty:.2f}"
+
+        # Stopping conditions
+        is_weighing_top = False
+        if prefix == 'B' and received_unit == 'g':
+            is_weighing_top = True
+
+        print(f"[TraceRecord] {rec_order} | level={prefix} | solutionCode={record.get('solutionCode','')} | "
+              f"conc='{rec_conc}' | parent='{parent_name}' | parent_conc={parent_conc_val}({parent_conc_unit}) | "
+              f"vol={constant_volume} | recv={received_qty}{received_unit} | weighing={is_weighing_top} | "
+              f"originalCode='{original_code}' | detailList={len(detail_list)}行")
+        if detail_list:
+            for di, dl in enumerate(detail_list):
+                print(f"  detailList[{di}]: originalCode={dl.get('originalCode','')} originalNo={repr(dl.get('originalNo',''))} originalName={dl.get('originalName','')} "
+                      f"originalConcentration={dl.get('originalConcentration','')} receivedQuantity={dl.get('receivedQuantity','')} "
+                      f"originalId={dl.get('originalId','')} volume={dl.get('volume','')} medium={dl.get('medium','')}")
+
+        matched.append({
+            'level': prefix,
+            'configure_order': rec_order,
+            'solution_name': str(record.get('solutionName') or '').strip(),
+            'solution_code': str(record.get('solutionCode') or '').strip(),
+            'concentration': rec_conc,
+            'constant_volume': str(constant_volume),
+            'medium': str(record.get('medium') or '').strip(),
+            'configure_date': rec_date,
+            'validity_date': str(record.get('validityDate') or '').strip(),
+            'controlled_no': str(record.get('controlledNo') or '').strip(),
+            'received_quantity': received_qty,
+            'received_unit': received_unit,
+            'parent_name': parent_name,
+            'parent_concentration': str(parent_conc_val),
+            'parent_conc_unit': parent_conc_unit,
+            'original_code': original_code,
+            'concentration_count': str(record.get('concentrationCount') or '').strip(),
+            '_is_weighing_top': is_weighing_top,
+            '_detail_list': detail_list,
+        })
+
+        if is_weighing_top:
+            visiting.discard(key)
+            return record
+
+        # Extract parent originalId from detailList (avoids resolve when getSolutionAdata returns 500)
+        # Only use originalId when detailList.originalCode directly matches parent_order.
+        # When match is through originalNo (e.g., originalCode=A-5728 but originalNo contains B-3387),
+        # the originalId refers to the A-type record, NOT the B-type — wrong mapping.
+        parent_id_map = {}
+        for dl in detail_list:
+            dl_code = str(dl.get('originalCode', '')).strip()
+            dl_id = dl.get('originalId')
+            if dl_id and dl_code:
+                parent_id_map.setdefault(dl_code, dl_id)
+
+        # Continue tracing: filter out A-type parents and %-concentration parents
+        if original_code:
+            print(f"[TraceParents] {rec_order} → parent_orders={parent_orders} | parent_id_map={parent_id_map}")
+            for po in parent_orders:
+                po_prefix = po.split('-')[0].upper() if '-' in po else ''
+                if po_prefix == 'A':
+                    print(f"[TraceStop] {rec_order} → 父级 {po} 为 A 类，停止")
+                    continue
+                if _has_pct_source_conc(record, po):
+                    print(f"[TraceStop] {rec_order} → 父级 {po} 源浓度为 %，停止")
+                    continue
+                pid = parent_id_map.get(po)
+                print(f"[TraceContinue] {rec_order} → 追溯父级 {po} (id={pid})")
+                _trace(lims_id=pid, order_str=po, depth=depth + 1)
+
+        visiting.discard(key)
+        return None
+
+    for lims_id, order in trace_targets:
+        _trace(lims_id=lims_id, order_str=order)
+
+    matched.reverse()
+
+    print(f"[TraceSummary] ===== 溯源完成 ===== 共 {len(matched)} 条记录，顺序(top→bottom):")
+    for mi, rec in enumerate(matched):
+        print(f"  [{mi}] {rec.get('level','')}-{rec.get('configure_order','')} | "
+              f"name={rec.get('solution_name','')} | conc={rec.get('concentration','')} | "
+              f"originalCode={rec.get('original_code','')} | parent={rec.get('parent_name','')} | "
+              f"source_details={len(rec.get('source_details',[]))}条 | "
+              f"weighing={rec.get('_is_weighing_top',False)}")
+
+    # Build lookup
+    matched_by_order = {}
+    for rec in matched:
+        order = rec.get('configure_order', '')
+        if order:
+            matched_by_order[order] = rec
+
+    # Post-process: expand multi-source records using detailList
+    for rec in matched:
+        if rec.get('_is_weighing_top'):
+            continue
+        src_code = rec.get('original_code', '')
+        sources = [s.strip() for s in re.split(r'[,，]', src_code) if s.strip()]
+        if len(sources) > 1:
+            rec['source_details'] = []
+            rec_conc = str(rec.get('concentration', '')).strip()
+            rec_parsed = _parse_conc_field(rec_conc)
+            rec_conc_val = rec_parsed[0][1] if rec_parsed else 0
+            vol = float(rec.get('constant_volume', 0))
+            for src_order in sources:
+                src_name = ''
+                src_conc_val = 0
+                src_conc_unit = ''
+                src_qty = ''
+
+                src_matched = matched_by_order.get(src_order)
+                if src_matched:
+                    src_name = src_matched.get('solution_name', '')
+                    sp = _parse_conc_field(src_matched.get('concentration', ''))
+                    if sp:
+                        src_conc_val = sp[0][1]
+                        src_conc_unit = sp[0][2]
+                else:
+                    sp2 = src_order.split('-')
+                    if len(sp2) >= 2:
+                        try:
+                            src_id = int(sp2[1].strip())
+                            src_rec = _fetch_solution_detail(system, src_id)
+                            if src_rec:
+                                src_name = str(src_rec.get('solutionName') or '').strip()
+                                sp3 = _parse_conc_field(str(src_rec.get('concentration') or ''))
+                                if sp3:
+                                    src_conc_val = sp3[0][1]
+                                    src_conc_unit = sp3[0][2]
+                        except Exception:
+                            pass
+                    if not src_name:
+                        cc_count = str(rec.get('concentration_count') or '').strip()
+                        cc_parts = cc_count.split(';')
+                        if len(cc_parts) >= len(sources):
+                            idx = sources.index(src_order)
+                            if idx < len(cc_parts):
+                                cpart = cc_parts[idx].strip()
+                                ci = cpart.rfind(':')
+                                if ci > 0:
+                                    src_name = cpart[:ci].strip()
+                                else:
+                                    src_name = cpart or src_order
+
+                if not src_name:
+                    src_name = src_order
+                if src_conc_val > 0 and vol > 0:
+                    calc = rec_conc_val * vol / src_conc_val
+                    src_qty = '' if calc > vol else f"{calc:.2f}"
+                rec['source_details'].append({
+                    'name': src_name,
+                    'conc': src_conc_val,
+                    'conc_unit': src_conc_unit,
+                    'qty': src_qty,
+                })
+
+    # Determine top ancestor
+    top_ancestor = {}
+    if matched:
+        top_names = []
+        top_codes = []
+        for rec in matched:
+            if rec.get('_is_weighing_top'):
+                name = rec.get('solution_name', '')
+            else:
+                name = rec.get('parent_name', '')
+            if name and name not in top_names:
+                top_names.append(name)
+            sc = rec.get('solution_code', '')
+            sc_parts = sc.split('-')
+            bc = '-'.join(sc_parts[:-2]) if len(sc_parts) >= 3 else sc
+            if bc and bc not in top_codes:
+                top_codes.append(bc)
+
+        if len(top_names) > 1 or len(top_codes) > 1:
+            top_ancestor = {
+                'solution_name': '；\n'.join(top_names) + '；',
+                'controlled_no': '；\n'.join(top_codes) + '；',
+                'concentration': '见下表',
+            }
+        else:
+            rec0 = matched[0]
+            if rec0.get('_is_weighing_top'):
+                top_ancestor = {
+                    'solution_name': top_names[0] if top_names else rec0.get('solution_name', ''),
+                    'controlled_no': top_codes[0] if top_codes else '',
+                    'concentration': rec0.get('concentration', ''),
+                }
+            else:
+                pn = rec0.get('parent_name', '')
+                pc = rec0.get('parent_concentration', '')
+                pu = rec0.get('parent_conc_unit', '')
+                top_ancestor = {
+                    'solution_name': pn or rec0.get('solution_name', ''),
+                    'controlled_no': top_codes[0] if top_codes else '',
+                    'concentration': f"{pc}({pu})" if pc and pu else str(pc) if pc else '',
+                }
+
+    print(f"[TraceSummary] top_ancestor={top_ancestor}")
+    return matched, top_ancestor
 
 
 def _resolve_bottom_a_codes(system, item, cache=None, items_by_order=None, visiting=None):
@@ -1007,7 +1557,6 @@ def lims_list_configured_solutions():
         result = resp.json()
         rd = result.get('resultData') or {}
         items = rd.get('voList', [])
-        _enrich_solution_a_source_count(items, system)
         return jsonify({
             "success": True,
             "data": items,
@@ -1015,6 +1564,170 @@ def lims_list_configured_solutions():
         })
     except Exception as e:
         return jsonify({"success": False, "message": f"查询异常: {str(e)}"}), 500
+
+
+@app.route('/api/lims/list_d_solutions', methods=['GET'])
+def lims_list_d_solutions():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+    pid = session.get('pid') or system.current_pid or ''
+    pname = session.get('display_name') or system.current_real_name or username
+
+    params = {
+        "_search": "false",
+        "nd": str(int(time.time() * 1000)),
+        "pageSize": int(request.args.get('page_size', 30)),
+        "pageNo": int(request.args.get('page_no', 1)),
+        "sidx": "",
+        "sord": "asc",
+        "solutionName": request.args.get('name', ''),
+        "solutionCode": request.args.get('code', ''),
+        "customType": request.args.get('custom_type', ''),
+        "configStatus": request.args.get('config_status', '0'),
+        "controlledNo": "",
+        "storageLocation": "",
+        "configureStartDate": request.args.get('date_from', ''),
+        "configureEndDate": request.args.get('date_to', ''),
+        "configureUserName": request.args.get('operator', ''),
+        "receiveUserName": "",
+        "auditStatus": request.args.get('audit_status', ''),
+        "status": "1",
+        "type": "SOLUTION_TYPE_D",
+        "pid": pid,
+        "pname": pname,
+        "loginId": pid,
+    }
+    try:
+        url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/getSolutionAdata"
+        headers = {"Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544"}
+        resp = system.session.get(url, params=params, headers=headers)
+        resp.raise_for_status()
+        result = resp.json()
+        rd = result.get('resultData') or {}
+        items = rd.get('voList', [])
+        return jsonify({
+            "success": True,
+            "data": items,
+            "total": rd.get('totalCount', 0),
+        })
+    except Exception as e:
+        return jsonify({"success": False, "message": f"查询异常: {str(e)}"}), 500
+
+
+@app.route('/api/lims/quick_query', methods=['GET'])
+def lims_quick_query():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+    pid = session.get('pid') or system.current_pid or ''
+    pname = session.get('display_name') or system.current_real_name or username
+    operator = request.args.get('operator', '').strip()
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+
+    base_params = {
+        "_search": "false", "nd": str(int(time.time() * 1000)),
+        "pageSize": 9999, "pageNo": 1, "sidx": "", "sord": "asc",
+        "solutionName": "", "solutionCode": "", "customType": "", "configStatus": "",
+        "controlledNo": "", "storageLocation": "",
+        "configureStartDate": date_from, "configureEndDate": date_to,
+        "configureUserName": operator, "receiveUserName": "", "auditStatus": "",
+        "status": "1", "pid": pid, "pname": pname, "loginId": pid,
+    }
+    headers = {"Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544"}
+    url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/getSolutionAdata"
+
+    def _fetch(sol_type):
+        p = {**base_params, "type": sol_type}
+        try:
+            resp = system.session.get(url, params=p, headers=headers, timeout=15)
+            resp.raise_for_status()
+            rd = resp.json().get('resultData') or {}
+            items = rd.get('voList', [])
+            for item in items:
+                order = str(item.get('configureOrder', '')).upper()
+                if order.startswith('D-'):
+                    item['_solType'] = 'SOLUTION_TYPE_D'
+                elif order.startswith('C-'):
+                    item['_solType'] = 'SOLUTION_TYPE_C'
+                else:
+                    item['_solType'] = 'SOLUTION_TYPE_B'
+            return items
+        except Exception:
+            return []
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        f_e = pool.submit(_fetch, "SOLUTION_TYPE_E")
+        f_d = pool.submit(_fetch, "SOLUTION_TYPE_D")
+        items = f_e.result() + f_d.result()
+
+    return jsonify({"success": True, "data": items, "total": len(items)})
+
+
+@app.route('/api/lims/get_source_info', methods=['GET'])
+def lims_get_source_info():
+    """Fetch source record info by configureOrder or LIMS id.
+    Returns solutionCode and solutionName."""
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+
+    configure_order = request.args.get('order', '').strip()
+    source_id = request.args.get('id', '').strip()
+    if not configure_order and not source_id:
+        return jsonify({"success": True, "data": {}})
+
+    try:
+        lims_id = None
+        if configure_order:
+            lims_id = _resolve_order_to_lims_id(system, configure_order)
+        if not lims_id and source_id:
+            lims_id = source_id
+        if not lims_id:
+            return jsonify({"success": True, "data": {}})
+        result = _fetch_solution_view(system, lims_id, order_str=configure_order or None)
+        if not result.get('id') and source_id:
+            for try_type in ['SOLUTION_TYPE_C', 'SOLUTION_TYPE_E', 'SOLUTION_TYPE_B']:
+                try:
+                    url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/viewDtSolutionConfigure"
+                    headers = {"Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544"}
+                    resp = system.session.get(url, params={"id": source_id, "type": try_type}, headers=headers)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    r = data.get('resultData') or {}
+                    if r.get('id'):
+                        result = r
+                        break
+                except Exception:
+                    continue
+        if not result.get('id'):
+            return jsonify({"success": True, "data": {}})
+        return jsonify({
+            "success": True,
+            "data": {
+                "solutionCode": result.get('solutionCode', ''),
+                "solutionName": result.get('solutionName', ''),
+                "concentration": result.get('concentration', ''),
+                "concentrationUnit": result.get('concentrationUnit', ''),
+            }
+        })
+    except Exception as e:
+        print(f"[GetSourceInfo] ERROR order={configure_order} id={source_id}: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 @app.route('/api/lims/save_solution_b', methods=['POST'])
@@ -1041,6 +1754,8 @@ def lims_save_solution_b():
             "Content-Type": "application/json;charset=UTF-8",
         }
         resp = system.session.post(url, json=payload, headers=headers)
+        if not resp.ok:
+            print(f"[save_solution_b] status={resp.status_code} body={resp.text[:500]}")
         resp.raise_for_status()
         result = resp.json()
         if not result.get('success'):
@@ -1050,6 +1765,7 @@ def lims_save_solution_b():
             })
         return jsonify({"success": True})
     except Exception as e:
+        print(f"[save_solution_b] exception: {e}")
         return jsonify({"success": False, "message": f"配置异常: {str(e)}"}), 500
 
 
@@ -1098,6 +1814,8 @@ def save_working_solution():
 
     try:
         resp = system.session.post(url, json=payload, headers=headers)
+        if not resp.ok:
+            print(f"[save_working_solution] status={resp.status_code} body={resp.text[:500]}")
         resp.raise_for_status()
         result = resp.json()
         if not result.get('success'):
@@ -1107,7 +1825,80 @@ def save_working_solution():
             })
         return jsonify({"success": True})
     except Exception as e:
+        print(f"[save_working_solution] exception: {e}")
         return jsonify({"success": False, "message": f"配置异常: {str(e)}"}), 500
+
+
+@app.route('/api/lims/get_solution_detail', methods=['POST'])
+def lims_get_solution_detail():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    p = request.get_json() or {}
+    solution_id = p.get('id')
+    configure_order = str(p.get('configure_order', '')).strip()
+    if not solution_id and not configure_order:
+        return jsonify({"success": False, "message": "缺少 id 或 configure_order"})
+    try:
+        system = get_system()
+        username = session.get('username', '')
+        if system.current_user != username:
+            system.current_user = username
+            system.load_session()
+        lims_id = solution_id
+        if not lims_id and configure_order:
+            lims_id = _resolve_order_to_lims_id(system, configure_order)
+        if not lims_id:
+            return jsonify({"success": False, "message": f"未找到记录: {configure_order}"})
+        record = _fetch_solution_view(system, lims_id, order_str=configure_order)
+        if not record or not record.get('id'):
+            return jsonify({"success": False, "message": "获取详情失败"})
+        return jsonify({"success": True, "data": record})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"获取详情异常: {str(e)}"}), 500
+
+
+@app.route('/api/lims/trace_export_chain', methods=['POST'])
+def lims_trace_export_chain():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+
+    p = request.get_json() or {}
+    source_ids = p.get('source_ids', [])
+    source_orders = p.get('source_orders', [])
+    configure_date = str(p.get('configure_date', '')).strip()[:10]
+    configurator_name = str(p.get('configurator_name', '')).strip()
+
+    if not configure_date or not configurator_name:
+        return jsonify({"success": True, "has_candidates": False, "matched_records": [], "top_ancestor": {}})
+
+    trace_targets = []
+    if source_ids:
+        trace_targets = [(sid, None) for sid in source_ids]
+    elif source_orders:
+        trace_targets = [(None, order) for order in source_orders]
+    if not trace_targets:
+        return jsonify({"success": True, "has_candidates": False, "matched_records": [], "top_ancestor": {}})
+
+    try:
+        system = get_system()
+        username = session.get('username', '')
+        if system.current_user != username:
+            system.current_user = username
+            system.load_session()
+
+        matched_records, top_ancestor = _trace_export_chain(system, trace_targets, configure_date, configurator_name)
+
+        non_weighing = [r for r in matched_records if not r.get('_is_weighing_top')]
+        return jsonify({
+            "success": True,
+            "has_candidates": len(non_weighing) > 0,
+            "matched_records": matched_records,
+            "top_ancestor": top_ancestor,
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": True, "has_candidates": False, "matched_records": [], "top_ancestor": {}})
 
 
 def _fill_rf10_09_item(doc, item_payload):
@@ -1410,6 +2201,8 @@ def lims_export_bbcd_docx():
     storage_cond    = str(p.get('storage_condition', '') or '')
     custom_type     = str(p.get('custom_type', '') or '')
     detail_list     = p.get('detail_list', [])
+    is_merged       = p.get('is_merged_export', False)
+    top_ancestor    = p.get('top_ancestor', {})
 
     template_name = 'RF10-10 标准溶液配制记录（稀释）(1).docx'
     template_path = os.path.join(
@@ -1546,24 +2339,47 @@ def lims_export_bbcd_docx():
             p_el.append(r_el)
             tc.append(p_el)
 
-    # For working solution export, use source names instead of working solution name
-    is_working_doc = bool(detail_list and detail_list[0].get('resultCode'))
-    if is_working_doc:
-        source_names = []
+    # Determine top-level source items for header
+    if is_merged:
+        # Group ancestor items (dilutionIdx < 0) by dilutionIdx level
+        dil_groups = {}
         for item in detail_list:
-            nm = (item.get('originalName', '') or '').strip()
-            if nm and nm not in source_names:
-                source_names.append(nm)
-        header_name = '；\n'.join(source_names) + '；' if source_names else solution_name
+            di = item.get('dilutionIdx', 0)
+            if di < 0:
+                dil_groups.setdefault(di, []).append(item)
+        if dil_groups:
+            # "Deepest expanded" algorithm: start from deepest level (most negative),
+            # find the first level with > 1 non-skip_body item (expanded source).
+            # Use ALL items (including skip_body) for header, but only non-skip for count check.
+            sorted_levels = sorted(dil_groups.keys())
+            top_items = None
+            for level in sorted_levels:
+                non_skip = [it for it in dil_groups[level] if not it.get('_skip_body')]
+                if len(non_skip) > 1:
+                    top_items = dil_groups[level]
+                    break
+            if top_items is None:
+                top_items = dil_groups[max(dil_groups.keys())]
+        else:
+            top_items = []
     else:
-        header_name = solution_name
+        top_items = [item for item in detail_list if item.get('dilutionIdx', 0) == 0]
+
+    # Header name
+    source_names = []
+    for item in top_items:
+        nm = (item.get('originalName', '') or '').strip()
+        if nm and nm not in source_names:
+            source_names.append(nm)
+    header_name = '；\n'.join(source_names) + '；' if len(source_names) > 1 else (source_names[0] if source_names else solution_name)
 
     _fill_tc1(table.rows[1]._tr.findall(qn('w:tc'))[1], header_name)
 
+    # Header code (extract from originalNo: "order\ncode" → last part)
     source_codes = []
-    for item in detail_list:
+    for item in top_items:
         parts = (item.get('originalNo', '') or '').split('\n')
-        code = parts[1].strip() if len(parts) > 1 else parts[0].strip()
+        code = parts[-1].strip() if parts else ''
         if code and code not in source_codes:
             source_codes.append(code)
     header_code = '；\n'.join(source_codes) + '；' if source_codes else ''
@@ -1578,11 +2394,14 @@ def lims_export_bbcd_docx():
 
     _fill_tc1(tc4, f'浓度({conc_unit})')
 
-    if not p.get('is_multi_source'):
-        src_conc = _parse_conc_val(detail_list[0].get('originalConcentration', ''))
-        _fill_tc1(tc5, src_conc)
+    # Header concentration: single source → specific value, multi source → 见下表
+    if len(top_items) <= 1:
+        cv = _parse_conc_val(top_items[0].get('originalConcentration', '')) if top_items else ''
+        _fill_tc1(tc5, cv)
+        show_source_names = False
     else:
         _fill_tc1(tc5, '见下表')
+        show_source_names = True
 
     r3_tcs = table.rows[3]._tr.findall(qn('w:tc'))
     _set_tc_text(r3_tcs[0], f'母体标液({conc_unit})', center=True)
@@ -1594,9 +2413,23 @@ def lims_export_bbcd_docx():
     _set_tc_text(r3_tcs[6], '配制日期', center=True)
     _set_tc_text(r3_tcs[7], '有效期', center=True)
 
-    n_items  = len(detail_list)
+    # For merged export: separate header items (all) from body items (exclude weighing steps)
+    if is_merged:
+        body_list = [item for item in detail_list if not item.get('_skip_body')]
+    else:
+        body_list = detail_list
+
+    # Determine top-level source items for header
+    n_items = len(body_list)
     n_tpl    = 12
     remark_row_idx = 16
+
+    # For merged export: override qty_unit from body ancestor rows (exclude weighing steps)
+    if is_merged:
+        for item in body_list:
+            if item.get('dilutionIdx', 0) < 0:
+                qty_unit = item.get('receivedUint', 'mL')
+                break
 
     if n_items > n_tpl:
         for _ in range(n_items - n_tpl):
@@ -1606,7 +2439,7 @@ def lims_export_bbcd_docx():
             table._tbl.insert(list(table._tbl).index(remark_tr), new_tr)
 
     row_values = []
-    for item in detail_list:
+    for item in body_list:
         item_result_conc = _parse_conc_val(item.get('configurationConcentration', ''))
         item_result_code = item.get('resultCode', '')
         if not item_result_conc:
@@ -1622,9 +2455,11 @@ def lims_export_bbcd_docx():
             'result_conc':   item_result_conc,
             'result_code':   item_result_code,
             'dilutionIdx':   item.get('dilutionIdx', 0),
+            'configure_date': item.get('configureDate', configure_date),
+            'validity_date':  item.get('validityDate', validity_date),
         })
 
-    is_working = bool(detail_list and detail_list[0].get('resultCode'))
+    is_working = bool(body_list and body_list[0].get('resultCode'))
 
     # Detect multi-source: count how many rows belong to dilution point 0
     first_dil_rows = sum(1 for rv in row_values if rv['dilutionIdx'] == 0)
@@ -1636,46 +2471,69 @@ def lims_export_bbcd_docx():
         3: [rv['volume']      for rv in row_values],
         4: [rv['result_conc'] for rv in row_values],
         5: [rv['result_code'] for rv in row_values],
-        6: [configure_date    for _ in row_values],
-        7: [validity_date     for _ in row_values],
+        6: [rv['configure_date'] for rv in row_values],
+        7: [rv['validity_date'] for rv in row_values],
     }
 
-    # Working solution: only merge 编号 within same dilutionIdx; BC/BCD: merge all from 溶剂 onward
-    if is_working and is_multi_source:
-        merge_cols = {2, 3, 4, 5, 6, 7}  # all data cols merge within same dilutionIdx
-    else:
-        merge_cols = {4, 5} if is_working else {2, 3, 4, 5, 6, 7}
+    # Columns that should follow 编号(col5) merge pattern: merge whenever 编号 merges
+    follow_code_merge_cols = {2, 3, 6, 7}
+    # Columns that merge based on their own value equality
+    value_merge_cols = {2, 3, 4, 5, 6, 7} if not (is_working and not is_multi_source) else {4, 5}
 
-    for i, item in enumerate(detail_list):
+    for i, item in enumerate(body_list):
         tr  = table.rows[4 + i]._tr
         tcs = tr.findall(qn('w:tc'))
         if len(tcs) < 8:
             continue
 
         # 母体标液
-        if is_working:
+        if is_merged and row_values[i]['dilutionIdx'] < 0:
+            if show_source_names:
+                _set_tc_two_lines(tcs[0], row_values[i]['name'], row_values[i]['conc_val'])
+            else:
+                _set_tc_text(tcs[0], row_values[i]['conc_val'])
+        elif is_working:
             if is_multi_source and row_values[i]['dilutionIdx'] == 0:
                 _set_tc_two_lines(tcs[0], row_values[i]['name'], row_values[i]['conc_val'])
             else:
                 _set_tc_text(tcs[0], row_values[i]['conc_val'])
         else:
-            _set_tc_two_lines(tcs[0], row_values[i]['name'], row_values[i]['conc_val'])
+            if show_source_names:
+                _set_tc_two_lines(tcs[0], row_values[i]['name'], row_values[i]['conc_val'])
+            else:
+                _set_tc_text(tcs[0], row_values[i]['conc_val'])
 
         # 取量
         _set_tc_text(tcs[1], row_values[i]['qty'])
 
+        # Determine if 编号(col5) would merge with previous row
+        same_dilution = i > 0 and row_values[i]['dilutionIdx'] == row_values[i - 1]['dilutionIdx']
+        code_same_as_prev = i > 0 and row_values[i]['result_code'] == row_values[i - 1]['result_code']
+        code_should_merge = same_dilution and code_same_as_prev
+
         # Columns 2-7
         for tc_idx in range(2, 8):
             val = col_vals_map[tc_idx][i]
-            same_dilution = i > 0 and row_values[i]['dilutionIdx'] == row_values[i - 1]['dilutionIdx']
-            if tc_idx in merge_cols and same_dilution and val == col_vals_map[tc_idx][i - 1]:
-                _clear_tc(tcs[tc_idx])
-                tcs[tc_idx].append(_make_para('', center=True))
-                _set_vmerge(tcs[tc_idx], 'continue')
+            if tc_idx in follow_code_merge_cols:
+                # 溶剂/稀释至/配置日期/有效期 follow 编号 merge pattern
+                if code_should_merge:
+                    _clear_tc(tcs[tc_idx])
+                    tcs[tc_idx].append(_make_para('', center=True))
+                    _set_vmerge(tcs[tc_idx], 'continue')
+                else:
+                    _set_tc_text(tcs[tc_idx], val)
+                    _set_vmerge(tcs[tc_idx], 'restart')
+            elif tc_idx in value_merge_cols:
+                # 浓度/编号 merge based on their own value equality
+                if same_dilution and val == col_vals_map[tc_idx][i - 1]:
+                    _clear_tc(tcs[tc_idx])
+                    tcs[tc_idx].append(_make_para('', center=True))
+                    _set_vmerge(tcs[tc_idx], 'continue')
+                else:
+                    _set_tc_text(tcs[tc_idx], val)
+                    _set_vmerge(tcs[tc_idx], 'restart')
             else:
                 _set_tc_text(tcs[tc_idx], val)
-                if tc_idx in merge_cols:
-                    _set_vmerge(tcs[tc_idx], 'restart')
 
     buf = io.BytesIO()
     doc.save(buf)

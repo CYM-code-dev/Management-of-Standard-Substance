@@ -388,6 +388,7 @@
             <i class="fas fa-user-circle"></i> <span id="displayUserName"></span>
             <button class="ms-2" id="logoutBtn" title="退出登录"><i class="fas fa-sign-out-alt"></i></button>
         </div>
+        <button class="btn btn-outline-primary" id="quickQueryBtn"><i class="fas fa-bolt me-1"></i>快速查询</button>
         <a href="/organic-std" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>有机标准品</a>
     </div>
 </div>
@@ -406,6 +407,12 @@
               data-bs-toggle="tab" data-bs-target="#bbcdPane"
               type="button" role="tab" aria-controls="bbcdPane" aria-selected="false">
               BC-BCD
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="sol-d-tab" data-bs-toggle="tab" data-bs-target="#dPane"
+              type="button" role="tab" aria-controls="dPane" aria-selected="false">
+              D
             </button>
           </li>
         </ul>
@@ -450,7 +457,11 @@
                     <button class="btn btn-sm btn-primary" id="solSearchBtn" title="查询"><i class="fas fa-search"></i></button>
                   </div>
                 </div>
-                <div id="solSearchResults" class="mt-2" style="display:none;">
+              </div>
+            </div>
+            <!-- 结果列表区 -->
+            <div id="solResultArea" class="mb-3">
+                <div id="solSearchResults" style="display:none;">
                   <div class="table-responsive" style="max-height:400px;overflow-y:auto;">
                     <table class="table table-sm table-bordered table-hover mb-0" id="solResultTable">
                       <thead class="table-light" style="position:sticky;top:0;z-index:1;">
@@ -465,17 +476,32 @@
                           <th>购买日期</th>
                           <th>有效期</th>
                           <th>使用部门</th>
-                        </thead> 
+                        </thead>
                       </thead>
                       <tbody id="solResultTbody"></tbody>
                     </table>
                   </div>
-                  <div class="d-flex justify-content-between align-items-center mt-2">
-                    <div class="small text-muted">已选中 <span id="solResultSelectedCount">0</span> 条</div>
+                  <!-- 分页控件 -->
+                  <div id="solPaginationBar" class="d-flex flex-wrap justify-content-between align-items-center mt-2" style="display:none;">
+                    <div class="d-flex align-items-center gap-2">
+                      <span class="small text-muted">已选 <span id="solResultSelectedCount" class="fw-bold text-primary">0</span> 条</span>
+                      <span class="small text-muted">/ 共 <span id="solResultTotalCount">0</span> 条</span>
+                      <select id="solPageSizeSelect" class="form-select form-select-sm" style="width:auto;font-size:0.72rem;padding:0.15rem 0.4rem;">
+                        <option value="20">20条/页</option>
+                        <option value="30" selected>30条/页</option>
+                        <option value="50">50条/页</option>
+                      </select>
+                    </div>
+                    <div class="d-flex align-items-center gap-1">
+                      <button class="btn btn-sm btn-outline-secondary sol-page-btn" data-page="first" title="首页"><i class="fas fa-angle-double-left"></i></button>
+                      <button class="btn btn-sm btn-outline-secondary sol-page-btn" data-page="prev" title="上一页"><i class="fas fa-angle-left"></i></button>
+                      <span id="solResultPageInfo" class="small px-2">第 1 / 1 页</span>
+                      <button class="btn btn-sm btn-outline-secondary sol-page-btn" data-page="next" title="下一页"><i class="fas fa-angle-right"></i></button>
+                      <button class="btn btn-sm btn-outline-secondary sol-page-btn" data-page="last" title="末页"><i class="fas fa-angle-double-right"></i></button>
+                    </div>
                     <button class="btn btn-sm btn-success" id="solResultAddBtn" disabled><i class="fas fa-flask me-1"></i>配置选中项</button>
                   </div>
                 </div>
-              </div>
             </div>
             <!-- 选中标准品信息 -->
           </div>
@@ -553,7 +579,7 @@
                       <th>自编号</th>
                       <th>名称</th>
                       <th>浓度</th>
-                      <th>剩余(mL)</th>
+                      <th>规格/剩余量</th>
                       <th>配置人</th>
                       <th>配置日期</th>
                       <th>有效期</th>
@@ -564,12 +590,121 @@
                   </tbody>
                 </table>
               </div>
-              <div class="d-flex justify-content-between align-items-center mt-2">
-                <div class="small text-muted">已选 <span id="bbcdSelectedCount">0</span> 条</div>
+              <!-- 分页控件 -->
+              <div id="bbcdPaginationBar" class="d-flex flex-wrap justify-content-between align-items-center mt-2" style="display:none;">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="small text-muted">已选 <span id="bbcdSelectedCount" class="fw-bold text-primary">0</span> 条</span>
+                  <span class="small text-muted">/ 共 <span id="bbcdTotalCount">0</span> 条</span>
+                  <select id="bbcdPageSizeSelect" class="form-select form-select-sm" style="width:auto;font-size:0.72rem;padding:0.15rem 0.4rem;">
+                    <option value="20">20条/页</option>
+                    <option value="50">50条/页</option>
+                    <option value="100">100条/页</option>
+                  </select>
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                  <button class="btn btn-sm btn-outline-secondary bbcd-page-btn" data-page="first" title="首页"><i class="fas fa-angle-double-left"></i></button>
+                  <button class="btn btn-sm btn-outline-secondary bbcd-page-btn" data-page="prev" title="上一页"><i class="fas fa-angle-left"></i></button>
+                  <span id="bbcdPageInfo" class="small px-2">第 1 / 1 页</span>
+                  <button class="btn btn-sm btn-outline-secondary bbcd-page-btn" data-page="next" title="下一页"><i class="fas fa-angle-right"></i></button>
+                  <button class="btn btn-sm btn-outline-secondary bbcd-page-btn" data-page="last" title="末页"><i class="fas fa-angle-double-right"></i></button>
+                </div>
                 <button class="btn btn-sm btn-success" id="bbcdConfigBtn" disabled><i class="fas fa-flask me-1"></i>配置选中项</button>
               </div>
             </div>
             <!-- 1.3 配置区：移至独立模态框 #bbcdConfigModal，详见下方 -->
+          </div>
+          <div class="tab-pane fade p-3" id="dPane" role="tabpanel" aria-labelledby="sol-d-tab">
+            <!-- 1.1 筛选区 -->
+            <div class="card border-0 shadow-sm mb-3">
+              <div class="card-body py-2">
+                <div class="row g-2 align-items-end">
+                  <div class="col">
+                    <label class="form-label mb-1 small fw-bold">名称</label>
+                    <input type="text" id="dTabFilterName" class="form-control form-control-sm" placeholder="名称关键词" style="height:31px;">
+                  </div>
+                  <div class="col">
+                    <label class="form-label mb-1 small fw-bold">自编号</label>
+                    <input type="text" id="dTabFilterCode" class="form-control form-control-sm" placeholder="自编号关键词" style="height:31px;">
+                  </div>
+                  <div class="col">
+                    <label class="form-label mb-1 small fw-bold">配置人</label>
+                    <input type="text" id="dTabFilterOperator" class="form-control form-control-sm" placeholder="可输入" style="height:31px;">
+                  </div>
+                  <div class="col">
+                    <label class="form-label mb-1 small fw-bold">审核</label>
+                    <select id="dTabFilterAuditStatus" class="form-select form-select-sm" style="height:31px;">
+                      <option value="">全部</option>
+                      <option value="1">已审核</option>
+                      <option value="0">未审核</option>
+                    </select>
+                  </div>
+                  <div class="col">
+                    <label class="form-label mb-1 small fw-bold">状态</label>
+                    <select id="dTabFilterStatus" class="form-select form-select-sm" style="height:31px;">
+                      <option value="0">正常</option>
+                      <option value="1">过期</option>
+                      <option value="">全部</option>
+                    </select>
+                  </div>
+                  <div class="col">
+                    <label class="form-label mb-1 small fw-bold">日期从</label>
+                    <input type="date" id="dTabFilterDateFrom" class="form-control form-control-sm" style="height:31px;">
+                  </div>
+                  <div class="col">
+                    <label class="form-label mb-1 small fw-bold">日期至</label>
+                    <input type="date" id="dTabFilterDateTo" class="form-control form-control-sm" style="height:31px;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-1 small fw-bold">&nbsp;</label>
+                    <div class="d-flex gap-1">
+                      <button class="btn btn-sm btn-primary" id="dTabQueryBtn" title="查询"><i class="fas fa-search me-1"></i>查询</button>
+                      <button class="btn btn-sm btn-outline-secondary" id="dTabResetFilterBtn" title="重置"><i class="fas fa-redo me-1"></i>重置</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- 1.2 结果列表区 -->
+            <div id="dTabResultArea" class="mb-3">
+              <div class="table-responsive" style="max-height:400px;overflow-y:auto;">
+                <table class="table table-sm table-bordered table-hover mb-0" id="dTabResultTable">
+                  <thead class="table-light" style="position:sticky;top:0;z-index:1;">
+                    <tr>
+                      <th style="width:36px;"><input type="checkbox" id="dTabCheckAll"></th>
+                      <th>编号</th>
+                      <th>自编号</th>
+                      <th>名称</th>
+                      <th>浓度</th>
+                      <th>配置人</th>
+                      <th>配置日期</th>
+                      <th>有效期</th>
+                      <th>审核</th>
+                    </tr>
+                  </thead>
+                  <tbody><tr><td colspan="9" class="text-center text-muted small py-3">请先查询</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <!-- 分页控件 -->
+              <div id="dTabPaginationBar" class="d-flex flex-wrap justify-content-between align-items-center mt-2" style="display:none;">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="small text-muted">已选 <span id="dTabSelectedCount" class="fw-bold text-primary">0</span> 条</span>
+                  <span class="small text-muted">/ 共 <span id="dTabTotalCount">0</span> 条</span>
+                  <select id="dTabPageSizeSelect" class="form-select form-select-sm" style="width:auto;font-size:0.72rem;padding:0.15rem 0.4rem;">
+                    <option value="20">20条/页</option>
+                    <option value="50">50条/页</option>
+                    <option value="100">100条/页</option>
+                  </select>
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                  <button class="btn btn-sm btn-outline-secondary dtab-page-btn" data-page="first" title="首页"><i class="fas fa-angle-double-left"></i></button>
+                  <button class="btn btn-sm btn-outline-secondary dtab-page-btn" data-page="prev" title="上一页"><i class="fas fa-angle-left"></i></button>
+                  <span id="dTabPageInfo" class="small px-2">第 1 / 1 页</span>
+                  <button class="btn btn-sm btn-outline-secondary dtab-page-btn" data-page="next" title="下一页"><i class="fas fa-angle-right"></i></button>
+                  <button class="btn btn-sm btn-outline-secondary dtab-page-btn" data-page="last" title="末页"><i class="fas fa-angle-double-right"></i></button>
+                </div>
+              </div>
+            </div>
           </div>
   </div>
 
@@ -761,6 +896,25 @@
   </div>
 </div>
 
+<!-- 合并导出确认模态框 -->
+<div class="modal fade" id="bbcdMergeExportModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white py-2">
+                <h6 class="modal-title mb-0"><i class="fas fa-object-group me-2"></i>发现同日同操作人配制记录</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="bbcdMergeCandidatesList" class="mb-3"></div>
+            </div>
+            <div class="modal-footer gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="bbcdMergeSingleBtn" data-bs-dismiss="modal"><i class="fas fa-file-export me-1"></i>单独导出</button>
+                <button type="button" class="btn btn-sm btn-primary" id="bbcdMergeConfirmBtn"><i class="fas fa-object-group me-1"></i>合并导出</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 删除确认模态框 -->
 <div class="modal fade" id="deleteModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header bg-danger"><h5 class="modal-title">确认删除</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">确定要删除 <strong id="deleteItemName"></strong> 吗？</div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-danger" id="confirmDeleteBtn">确认删除</button></div></div></div></div>
 
@@ -793,6 +947,77 @@
     </div>
 </div>
 
+
+<!-- 快速查询模态框 -->
+<div class="modal fade" id="quickQueryModal" tabindex="-1" data-bs-backdrop="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white py-2">
+        <h6 class="modal-title mb-0"><i class="fas fa-bolt me-1"></i>快速查询</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <!-- 搜索区 -->
+        <div class="card border-0 shadow-sm mb-3">
+          <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+              <div class="col-auto">
+                <span class="small fw-bold me-1">配置人</span>
+                <input type="text" id="qqOperator" class="form-control form-control-sm d-inline-block" style="width:110px;" placeholder="配置人姓名">
+              </div>
+              <div class="col-auto">
+                <span class="small fw-bold me-1">日期 起</span>
+                <input type="date" id="qqDateFrom" class="form-control form-control-sm d-inline-block" style="width:130px;">
+              </div>
+              <div class="col-auto">
+                <span class="small fw-bold me-1">日期 止</span>
+                <input type="date" id="qqDateTo" class="form-control form-control-sm d-inline-block" style="width:130px;">
+              </div>
+              <div class="col-auto ms-auto">
+                <button class="btn btn-sm btn-primary" id="qqQueryBtn" title="查询"><i class="fas fa-search me-1"></i>查询</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- 结果区 -->
+        <div id="qqResultArea" class="mb-3">
+          <div class="table-responsive" style="max-height:450px;overflow-y:auto;">
+            <table class="table table-sm table-bordered table-hover mb-0" id="qqResultTable">
+              <thead class="table-light" style="position:sticky;top:0;z-index:1;">
+                <tr>
+                  <th>类型</th>
+                  <th>编号</th>
+                  <th>自编号</th>
+                  <th>名称</th>
+                  <th>审核状态</th>
+                  <th style="width:90px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="qqResultTbody"><tr><td colspan="6" class="text-center text-muted small py-3">请先查询</td></tr></tbody>
+            </table>
+          </div>
+          <div id="qqPaginationBar" class="d-flex flex-wrap justify-content-between align-items-center mt-2" style="display:none;">
+            <div class="d-flex align-items-center gap-2">
+              <span class="small text-muted">/ 共 <span id="qqTotalCount">0</span> 条</span>
+              <select id="qqPageSizeSelect" class="form-select form-select-sm" style="width:auto;font-size:0.72rem;padding:0.15rem 0.4rem;">
+                <option value="20">20条/页</option>
+                <option value="30" selected>30条/页</option>
+                <option value="50">50条/页</option>
+              </select>
+            </div>
+            <div class="d-flex align-items-center gap-1">
+              <button class="btn btn-sm btn-outline-secondary qq-page-btn" data-page="first" title="首页"><i class="fas fa-angle-double-left"></i></button>
+              <button class="btn btn-sm btn-outline-secondary qq-page-btn" data-page="prev" title="上一页"><i class="fas fa-angle-left"></i></button>
+              <span id="qqPageInfo" class="small px-2">第 1 / 1 页</span>
+              <button class="btn btn-sm btn-outline-secondary qq-page-btn" data-page="next" title="下一页"><i class="fas fa-angle-right"></i></button>
+              <button class="btn btn-sm btn-outline-secondary qq-page-btn" data-page="last" title="末页"><i class="fas fa-angle-double-right"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- 登录模态框 -->
 <div class="modal fade" id="loginModal" tabindex="-1" data-bs-backdrop="static">
@@ -1046,6 +1271,10 @@
     let solCurrentItem = null;
     let solItems = [];
     let solLastResults = [];
+    let solPageNo = 1;
+    let solTotalPages = 1;
+    let solTotalRecords = 0;
+    let solPageSize = 30;
 
     function solSetBtnSaved(done) {
         const btn = document.getElementById('solSaveBtn');
@@ -1188,6 +1417,10 @@
         document.getElementById('solResultCheckAll').indeterminate = false;
         document.getElementById('solResultSelectedCount').textContent = '0';
         document.getElementById('solResultAddBtn').disabled = true;
+        document.getElementById('solPaginationBar').style.display = 'none';
+        solPageNo = 1;
+        solTotalPages = 1;
+        solTotalRecords = 0;
         solLastResults = [];
         document.getElementById('solSaveBtn').disabled = true;
         document.getElementById('solExportBtn').disabled = true;
@@ -1199,22 +1432,23 @@
     }
     window.openSolutionConfigModal = openSolutionConfigModal;
 
-    async function solSearchLims() {
+    async function solSearchLims(pageNo) {
         const kwName  = document.getElementById('solSearchName').value.trim();
         const kwCas   = document.getElementById('solSearchCas').value.trim();
         const kwLabNo = document.getElementById('solSearchLabNo').value.trim();
         const kwOrg   = document.getElementById('solSearchOrg').value.trim();
-        const kw = kwName || kwCas || kwLabNo || kwOrg;
-        if (!kw) return;
-        // LIMS keyword 不支持 CK-XX-数字 格式，提取末尾数字作为搜索词
-        const kwMatch = kw.match(/^CK-[A-Z]+-(\d+)$/i);
-        const searchKw = kwMatch ? kwMatch[1] : kw;
+        const kw = kwName || kwLabNo || kwOrg;
+        if (pageNo === undefined) pageNo = 1;
+        solPageNo = pageNo;
+        const searchKw = kw ? (kw.match(/^CK-[A-Z]+-(\d+)$/i) ? kw.match(/^CK-[A-Z]+-(\d+)$/i)[1] : kw) : '';
         const btn = document.getElementById('solSearchBtn');
         const resultsBox = document.getElementById('solSearchResults');
         const tbody = document.getElementById('solResultTbody');
+        const paginationBar = document.getElementById('solPaginationBar');
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         resultsBox.style.display = 'block';
+        paginationBar.style.display = 'none';
         tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted small py-3"><i class="fas fa-spinner fa-spin me-1"></i>查询中...</td></tr>';
         document.getElementById('solResultCheckAll').checked = false;
         document.getElementById('solResultCheckAll').indeterminate = false;
@@ -1222,26 +1456,28 @@
         document.getElementById('solResultAddBtn').disabled = true;
         try {
             const kwStatus = document.getElementById('solSearchStatus').value;
-            const resp = await fetch(`/api/query?keyword=${encodeURIComponent(searchKw)}&org_name=${encodeURIComponent(kwOrg)}&status=${encodeURIComponent(kwStatus)}`);
+            const resp = await fetch(`/api/query?keyword=${encodeURIComponent(searchKw)}&casNo=${encodeURIComponent(kwCas)}&org_name=${encodeURIComponent(kwOrg)}&status=${encodeURIComponent(kwStatus)}&pageNo=${pageNo}&pageSize=${solPageSize}`);
             const data = await resp.json();
             if (!data.success) {
                 tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger small py-3">${escapeHtml(data.message)}</td></tr>`;
                 return;
             }
             const list = data.data || [];
+            solTotalRecords = data.records || 0;
+            solTotalPages = data.total || 1;
+            document.getElementById('solResultTotalCount').textContent = solTotalRecords;
             if (!list.length) {
                 tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted small py-3">未找到匹配标准品</td></tr>';
                 return;
             }
             solLastResults = list;
-            // 前端联合过滤（各框非空时必须匹配）
-            const filterName  = document.getElementById('solSearchName').value.trim().toLowerCase();
-            const filterCas   = document.getElementById('solSearchCas').value.trim().toLowerCase();
-            const filterLabNo = document.getElementById('solSearchLabNo').value.trim().toLowerCase();
-            const filterOrg   = document.getElementById('solSearchOrg').value.trim().toLowerCase();
+            const filterName  = kwName.toLowerCase();
+            const filterCas   = kwCas.toLowerCase();
+            const filterLabNo = kwLabNo.toLowerCase();
+            const filterOrg   = kwOrg.toLowerCase();
             const filtered = list.filter(item => {
                 if (filterName  && !(item.name||'').toLowerCase().includes(filterName))   return false;
-                if (filterCas   && !(item.casNo||item.cas||'').toLowerCase().includes(filterCas)) return false;
+                if (filterCas   && !(item.casNo||'').toLowerCase().includes(filterCas))   return false;
                 if (filterLabNo && !(item.customNum||item.no||'').toLowerCase().includes(filterLabNo)) return false;
                 if (filterOrg   && !(item.orgName||'').toLowerCase().includes(filterOrg)) return false;
                 return true;
@@ -1250,7 +1486,7 @@
                 tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted small py-3">无匹配结果</td></tr>';
                 return;
             }
-            tbody.innerHTML = filtered.map((item, i) => {
+            tbody.innerHTML = filtered.map(item => {
                 const spec  = item.standard || (item.totalNum ? `${item.totalNum}${item.numUnitName||''}` : '');
                 const stock = (item.validNum != null && item.validNum !== '')
                     ? `${item.validNum}${item.numUnitName||''}` : '—';
@@ -1260,23 +1496,23 @@
                 const pdfIcon = (labNo && labNo !== '/' && labNo !== '—')
                     ? `<i class="fas fa-file-pdf cert-icon ms-1" data-labno="${escapeAttr(labNo)}" title="打开证书"></i>` : '';
                 const realIdx = list.indexOf(item);
-                return `<tr data-idx="${realIdx}">
+                return `
+                <tr>
                     <td><input type="checkbox" class="sol-result-check" data-idx="${realIdx}"></td>
                     <td><div class="d-flex justify-content-between align-items-center">${escapeHtml(labNo)}${pdfIcon}</div></td>
-                    <td class="text-start"><strong>${escapeHtml(item.name||'')}</strong></td>
+                    <td class="text-truncate" style="max-width:200px;" title="${escapeHtml(item.name||'')}">${escapeHtml(item.name||'')}</td>
                     <td>${escapeHtml(solFindLocalStock(item))}</td>
-                    <td>${escapeHtml(item.casNo||item.cas||'—')}</td>
-                    <td>${escapeHtml(conc)}</td>
+                    <td>${escapeHtml(item.casNo||'—')}</td>
+                    <td class="text-truncate" style="max-width:240px;" title="${escapeHtml(conc)}">${escapeHtml(conc)}</td>
                     <td>${escapeHtml(stockDisplay)}</td>
                     <td>${escapeHtml(item.storageDate||item.purchaseDate||item.buyDate||'—')}</td>
                     <td>${escapeHtml(item.validDate||'—')}</td>
-                    <td>${escapeHtml(item.orgName||'—')}</td>
+                    <td class="text-truncate" style="max-width:120px;" title="${escapeHtml(item.orgName||'—')}">${escapeHtml(item.orgName||'—')}</td>
                 </tr>`;
             }).join('');
             tbody.querySelectorAll('.sol-result-check').forEach(cb => {
                 cb.addEventListener('change', solResultUpdateSelection);
             });
-            // 单条结果自动选中
             if (filtered.length === 1) {
                 const cb = tbody.querySelector('.sol-result-check');
                 if (cb) { cb.checked = true; solResultUpdateSelection(); }
@@ -1285,6 +1521,8 @@
                 icon.removeEventListener('click', certIconClickHandler);
                 icon.addEventListener('click', certIconClickHandler);
             });
+            paginationBar.style.display = 'flex';
+            document.getElementById('solResultPageInfo').textContent = `第 ${solPageNo} / ${solTotalPages} 页`;
         } catch(e) {
             tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger small py-3">查询异常: ${escapeHtml(e.message)}</td></tr>`;
         } finally {
@@ -1741,8 +1979,8 @@
     function bbcdEsc(s) { return escapeHtml(s == null ? '' : String(s)); }
 
     // 修约规则（与 A-B μg/mL 时一致）
-    function bbcdRoundQty(v) { return Math.round(v * 100) / 100; }
-    function bbcdFmtQty(v) { return v.toFixed(2); }
+    function bbcdRoundQty(v, decimals) { decimals = decimals || 2; const f = Math.pow(10, decimals); return Math.round(v * f) / f; }
+    function bbcdFmtQty(v, decimals) { decimals = decimals || 2; return v.toFixed(decimals); }
     function bbcdRoundVol(v) {
         if (!isFinite(v) || v <= 0) return v;
         const n = v >= 10 ? 4 : 3;
@@ -1833,7 +2071,22 @@
         if (!qtyInput) return '';
         const qty = parseFloat(qtyInput.value);
         const vol = parseFloat(document.getElementById('bbcdVolume')?.value);
-        if (!qty || !vol || qty <= 0 || vol <= 0 || isNaN(firstTr._src.concValue)) return '';
+        if (!qty || !vol || qty <= 0 || vol <= 0) return '';
+
+        // 多组分源：取所有组分计算浓度的均值
+        if (firstTr._src.isComponent && firstTr._src.componentCount > 1) {
+            const compVals = [];
+            for (const tr of rows) {
+                if (!isFinite(tr._src.concValue)) continue;
+                compVals.push(tr._src.concValue * qty / vol);
+            }
+            if (compVals.length) {
+                const mean = compVals.reduce((a, b) => a + b, 0) / compVals.length;
+                return bbcdFmtConc(bbcdRoundConc(mean));
+            }
+        }
+
+        if (isNaN(firstTr._src.concValue)) return '';
         const c = bbcdRoundConc(firstTr._src.concValue * qty / vol);
         return bbcdFmtConc(c);
     }
@@ -1852,8 +2105,18 @@
             }
             if (!qtyInput) return;
             const qty = parseFloat(qtyInput.value);
-            if (!qty || qty <= 0 || isNaN(tr._src.concValue)) return;
-            vals.push(tr._src.concValue * qty / vol);
+            if (!qty || qty <= 0) return;
+            let concValue = tr._src.concValue;
+            if (isNaN(concValue)) {
+                const raw = tr._src.concentrationRaw || '';
+                const multi = bbcdParseMultiConc(raw);
+                if (multi) {
+                    const cvs = multi.map(c => c.value).filter(v => isFinite(v));
+                    if (cvs.length) concValue = cvs.reduce((a, b) => a + b, 0) / cvs.length;
+                }
+            }
+            if (isNaN(concValue)) return;
+            vals.push(concValue * qty / vol);
         });
         if (!vals.length) return '';
         const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
@@ -2035,26 +2298,27 @@
         }
 
         if (uniqueSources.length === 1) {
-            // 单源（含多组分）：收集所有计算浓度
-            const allConcs = [];
-            rows.forEach(tr => {
-                tr.querySelectorAll('.bbcd-d-conc').forEach(input => {
-                    const text = input.value.trim();
-                    if (text) {
-                        const v = parseFloat(text);
-                        if (isFinite(v) && v > 0) allConcs.push(v);
-                    }
+            // 单源（含多组分）：对每个稀释点取均值，再找 min/max
+            const count2 = window.bbcdCurrentDilutionCount || 5;
+            const pointAvgs = [];
+            for (let i = 0; i < count2; i++) {
+                const concsAtPoint = [];
+                rows.forEach(tr => {
+                    const cell = tr.querySelector(`.bbcd-d-conc[data-dilution="${i}"]`);
+                    const v = parseFloat(cell?.value);
+                    if (isFinite(v) && v > 0) concsAtPoint.push(v);
                 });
-            });
+                if (concsAtPoint.length) pointAvgs.push(concsAtPoint.reduce((a, b) => a + b, 0) / concsAtPoint.length);
+            }
 
-            if (allConcs.length === 0) {
+            if (pointAvgs.length === 0) {
                 codeEl.value = '';
                 codeEl.classList.remove('bbcd-code-confirm');
                 return;
             }
 
-            const minConc = Math.min(...allConcs);
-            const maxConc = Math.max(...allConcs);
+            const minConc = Math.min(...pointAvgs);
+            const maxConc = Math.max(...pointAvgs);
             const concRange = `${bbcdFmtConc(minConc)}-${bbcdFmtConc(maxConc)}`;
             const sourceCount = bbcdGetEffectiveSourceCount(uniqueSources);
             const customTypeEl = document.getElementById('bbcdCustomType');
@@ -2137,6 +2401,8 @@
             config_status: document.getElementById('bbcdFilterConfigStatus').value,
             date_from: document.getElementById('bbcdFilterDateFrom').value,
             date_to: document.getElementById('bbcdFilterDateTo').value,
+            page_size: 9999,
+            page_no: 1,
         });
         const tbody = document.querySelector('#bbcdResultTable tbody');
         tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted small py-3"><i class="fas fa-spinner fa-spin me-1"></i>查询中...</td></tr>';
@@ -2149,6 +2415,8 @@
                 return;
             }
             bbcdLastResults = data.data || [];
+            bbcdCurrentPage = 1;
+            bbcdSelectedIds.clear();
             bbcdRenderResults(bbcdLastResults);
         } catch (e) {
             tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger small py-3">查询异常: ${bbcdEsc(e.message)}</td></tr>`;
@@ -2168,34 +2436,67 @@
             };
             list = list.filter(item => detectType(item) === typeFilter);
         }
-        const tbody = document.querySelector('#bbcdResultTable tbody');
-        if (!list.length) {
-            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted small py-3">无匹配记录</td></tr>';
-        } else {
-            tbody.innerHTML = list.map((item, idx) => {
-                const realIdx = bbcdLastResults.indexOf(item);
-                return `
-                <tr>
-                    <td><input type="checkbox" class="bbcd-row-check" data-idx="${realIdx}"></td>
-                    <td>${bbcdEsc(item.configureOrder)}</td>
-                    <td class="text-truncate" style="max-width:180px;" title="${bbcdEsc(item.solutionCode)}">${bbcdEsc(item.solutionCode)}</td>
-                    <td class="text-truncate" style="max-width:200px;" title="${bbcdEsc(item.solutionName)}">${bbcdEsc(item.solutionName)}</td>
-                    <td class="text-truncate" style="max-width:240px;" title="${bbcdEsc(item.concentrationCount || item.concentration)}">${bbcdEsc(item.concentration)}</td>
-                    <td>${item.constantVolume != null ? Number(item.constantVolume).toFixed(2) : '—'}</td>
-                    <td>${bbcdEsc(item.configuratorName || item.creatorName || '—')}</td>
-                    <td>${bbcdEsc(item.configureDate || '—')}</td>
-                    <td>${bbcdEsc(item.validityDate || '—')}</td>
-                    <td>${item.auditUserName ? '<span class="badge bg-success">已审核</span>' : '<span class="badge bg-secondary">未审核</span>'}</td>
-                </tr>`;
-            }).join('');
-        }
+        bbcdFilteredResults = list;
+        bbcdCurrentPage = 1;
+        bbcdRenderCurrentPage();
         bbcdRefreshFilterOptions(list);
-        bbcdUpdateSelection();
         // 单条结果自动选中
         if (list.length === 1) {
-            const cb = tbody.querySelector('.bbcd-row-check');
-            if (cb) { cb.checked = true; bbcdUpdateSelection(); }
+            const realIdx = bbcdLastResults.indexOf(list[0]);
+            bbcdSelectedIds.add(realIdx);
+            bbcdUpdateSelection();
         }
+    }
+
+    function bbcdRenderCurrentPage() {
+        const list = bbcdFilteredResults;
+        const tbody = document.querySelector('#bbcdResultTable tbody');
+        const paginationBar = document.getElementById('bbcdPaginationBar');
+        const total = list.length;
+        const totalPages = Math.max(1, Math.ceil(total / bbcdPageSize));
+        if (bbcdCurrentPage > totalPages) bbcdCurrentPage = totalPages;
+
+        if (!total) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted small py-3">无匹配记录</td></tr>';
+            paginationBar.style.display = 'none';
+            bbcdUpdateSelection();
+            return;
+        }
+        paginationBar.style.display = 'flex';
+
+        const start = (bbcdCurrentPage - 1) * bbcdPageSize;
+        const end = Math.min(start + bbcdPageSize, total);
+        const pageItems = list.slice(start, end);
+
+        tbody.innerHTML = pageItems.map(item => {
+            const realIdx = bbcdLastResults.indexOf(item);
+            const checked = bbcdSelectedIds.has(realIdx) ? 'checked' : '';
+            return `
+            <tr>
+                <td><input type="checkbox" class="bbcd-row-check" data-idx="${realIdx}" ${checked}></td>
+                <td><div class="d-flex justify-content-between align-items-center">${bbcdEsc(item.configureOrder)}<i class="fas fa-eye solution-config-icon" data-idx="${realIdx}" title="查看详情" style="cursor:pointer;color:#14b8a6;"></i></div></td>
+                <td class="text-truncate" style="max-width:180px;" title="${bbcdEsc(item.solutionCode)}">${bbcdEsc(item.solutionCode)}</td>
+                <td class="text-truncate" style="max-width:200px;" title="${bbcdEsc(item.solutionName)}">${bbcdEsc(item.solutionName)}</td>
+                <td class="text-truncate" style="max-width:240px;" title="${bbcdEsc(item.concentrationCount || item.concentration)}">${bbcdEsc(item.concentration)}</td>
+                <td>${bbcdRenderSpecRemain(item)}</td>
+                <td>${bbcdEsc(item.configuratorName || item.creatorName || '—')}</td>
+                <td>${bbcdEsc(item.configureDate || '—')}</td>
+                <td>${bbcdEsc(item.validityDate || '—')}</td>
+                <td>${item.auditUserName ? '<span class="badge bg-success">已审核</span>' : '<span class="badge bg-secondary">未审核</span>'}</td>
+            </tr>`;
+        }).join('');
+
+        document.getElementById('bbcdTotalCount').textContent = total;
+        document.getElementById('bbcdPageInfo').textContent = `第 ${bbcdCurrentPage} / ${totalPages} 页`;
+        bbcdUpdateSelection();
+    }
+
+    function bbcdRenderSpecRemain(item) {
+        const total = item.totalConstantVolume != null ? Number(item.totalConstantVolume).toFixed(2) : null;
+        const remain = item.constantVolume != null ? Number(item.constantVolume).toFixed(2) : null;
+        if (total && remain) return `${total}/${remain}`;
+        if (remain) return remain;
+        return '—';
     }
 
     function bbcdRefreshFilterOptions(list) {
@@ -2210,13 +2511,21 @@
     }
 
     function bbcdUpdateSelection() {
+        // Sync current page checkboxes into bbcdSelectedIds
         const checks = document.querySelectorAll('.bbcd-row-check');
-        const checked = [...checks].filter(c => c.checked);
-        document.getElementById('bbcdSelectedCount').textContent = checked.length;
-        document.getElementById('bbcdConfigBtn').disabled = checked.length === 0;
+        checks.forEach(c => {
+            const idx = parseInt(c.dataset.idx, 10);
+            if (c.checked) bbcdSelectedIds.add(idx);
+            else bbcdSelectedIds.delete(idx);
+        });
+        const count = bbcdSelectedIds.size;
+        document.getElementById('bbcdSelectedCount').textContent = count;
+        document.getElementById('bbcdConfigBtn').disabled = count === 0;
         const all = document.getElementById('bbcdCheckAll');
-        all.checked = checks.length > 0 && checked.length === checks.length;
-        all.indeterminate = checked.length > 0 && checked.length < checks.length;
+        const pageAllChecked = checks.length > 0 && [...checks].every(c => c.checked);
+        const pageSomeChecked = [...checks].some(c => c.checked);
+        all.checked = pageAllChecked;
+        all.indeterminate = pageSomeChecked && !pageAllChecked;
     }
 
     function bbcdResetFilters() {
@@ -2228,21 +2537,37 @@
 
     // 用于保存配置弹窗打开前的选中状态
     let bbcdSelectedIndices = [];
+
+    // 分页与跨页选择状态
+    let bbcdCurrentPage = 1;
+    let bbcdPageSize = 20;
+    let bbcdFilteredResults = [];
+    let bbcdSelectedIds = new Set();
     // 全局标志：防止 Modal 转换期间重复触发
     let bbcdModalTransitioning = false;
     // 标志：用户已选择类型，等待类型选择弹窗关闭后打开配置弹窗
     let bbcdPendingTypeSelection = false;
 
     function bbcdOpenConfig() {
-        const selectedIdx = [...document.querySelectorAll('.bbcd-row-check')]
-            .filter(c => c.checked).map(c => parseInt(c.dataset.idx, 10));
-        if (!selectedIdx.length) return;
+        let selectedIdx, items;
+        // If bbcdSelectedItems was pre-populated (e.g., from dTab), use it directly
+        if (window.bbcdSelectedItems && window.bbcdSelectedItems.length > 0) {
+            items = window.bbcdSelectedItems;
+            // Temporarily point bbcdLastResults to the items so indexOf works
+            const savedBbcdLastResults = bbcdLastResults;
+            bbcdLastResults = items;
+            selectedIdx = items.map((it, i) => i);
+            // Restore after short delay to allow async operations
+            setTimeout(() => { bbcdLastResults = savedBbcdLastResults; }, 500);
+        } else {
+            selectedIdx = [...document.querySelectorAll('.bbcd-row-check')]
+                .filter(c => c.checked).map(c => parseInt(c.dataset.idx, 10));
+            if (!selectedIdx.length) return;
+            items = selectedIdx.map(i => bbcdLastResults[i]);
+            window.bbcdSelectedItems = items;
+        }
         // 保存选中状态
         bbcdSelectedIndices = selectedIdx;
-        const items = selectedIdx.map(i => bbcdLastResults[i]);
-
-        // 保存选中的 items 到全局变量，供后续使用
-        window.bbcdSelectedItems = items;
 
         bbcdCodeAuto = true;
         bbcdNameAuto = true;
@@ -2275,6 +2600,9 @@
         document.getElementById('bbcdHumid').value = '';
         document.getElementById('bbcdStorage').value = '';
         document.getElementById('bbcdValidityHint').style.display = 'none';
+        document.getElementById('bbcdSaveBtn').disabled = true;
+        document.getElementById('bbcdSaveBtn').className = 'btn btn-sm btn-primary';
+        document.getElementById('bbcdSaveBtn').innerHTML = '<i class="fas fa-save me-1"></i>保存配置';
         document.getElementById('bbcdExportBtn').disabled = true;
         document.getElementById('bbcdExportBtn').className = 'btn btn-sm btn-outline-secondary';
         document.getElementById('bbcdExportBtn').innerHTML = '<i class="fas fa-file-word me-1"></i>导出配制记录';
@@ -2428,6 +2756,326 @@
         bbcdCheckValidity();
     }
 
+    // ========== 查看详情功能 ==========
+
+    async function bbcdViewDetail(idx) {
+        const item = bbcdLastResults[idx];
+        if (!item) return;
+        const icon = document.querySelector(`.solution-config-icon[data-idx="${idx}"]`);
+        if (icon) { icon.className = 'fas fa-spinner fa-spin solution-config-icon'; icon.style.color = '#14b8a6'; }
+        try {
+            const resp = await fetch('/api/lims/get_solution_detail', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: item.id, configure_order: item.configureOrder })
+            });
+            const data = await resp.json();
+            if (!data.success) { alert('获取详情失败: ' + (data.message || '未知错误')); return; }
+            const rec = data.data;
+            let solType = rec.solutionType;
+            if (typeof solType === 'object') solType = solType.key || solType.value || '';
+            if (!solType) {
+                const order = String(rec.configureOrder || '').toUpperCase();
+                if (order.startsWith('D-')) solType = 'SOLUTION_TYPE_D';
+                else if (order.startsWith('C-')) solType = 'SOLUTION_TYPE_C';
+                else solType = 'SOLUTION_TYPE_B';
+            }
+            // For D-type: pre-fetch source info so fallback path has correct solutionCode
+            if (solType === 'SOLUTION_TYPE_D' && rec.detailList) {
+                const sources = new Map(); // order/id → {order, id}
+                rec.detailList.forEach(dl => {
+                    const order = (dl.originalCode || '').trim();
+                    const id = (dl.originalId || '').trim();
+                    if (order && !sources.has(order)) sources.set(order, {order, id: id || ''});
+                    else if (!order && id && !sources.has(id)) sources.set(id, {order: '', id});
+                });
+                if (sources.size > 0) {
+                    const results = {};
+                    await Promise.all([...sources.values()].map(async (src) => {
+                        try {
+                            const params = new URLSearchParams();
+                            if (src.order) params.set('order', src.order);
+                            if (src.id) params.set('id', src.id);
+                            const r = await fetch('/api/lims/get_source_info?' + params.toString());
+                            const d = await r.json();
+                            if (d.success && d.data) {
+                                const info = d.data;
+                                if (src.order && info.solutionCode) results[src.order] = info;
+                                if (src.id && info.solutionCode) results[src.id] = info;
+                            }
+                        } catch (e) {}
+                    }));
+                    window._dViewSourceInfo = results;
+                }
+            }
+            bbcdPopulateConfigModal(rec, solType);
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdConfigModal')).show();
+        } catch (e) {
+            alert('获取详情异常: ' + e.message);
+        } finally {
+            if (icon) { icon.className = 'fas fa-eye solution-config-icon'; icon.style.color = '#14b8a6'; }
+        }
+    }
+
+    function bbcdPopulateConfigModal(rec, solType) {
+        // 1. Set solution type
+        document.getElementById('bbcdSolType').value = solType;
+        window.bbcdViewDetailRecord = rec;
+        window.bbcdViewDetailMode = true;
+
+        // 2. Modal title
+        const titleMap = { 'SOLUTION_TYPE_B': '储备液配置详情', 'SOLUTION_TYPE_C': '应用液配置详情', 'SOLUTION_TYPE_D': '工作液配置详情' };
+        const labelMap = { 'SOLUTION_TYPE_B': '储备液', 'SOLUTION_TYPE_C': '应用液', 'SOLUTION_TYPE_D': '工作液' };
+        document.getElementById('bbcdModalTitleText').textContent = titleMap[solType] || '配置详情';
+        document.getElementById('bbcdSolTypeLabel').textContent = labelMap[solType] || '';
+
+        // 3. Fill form fields
+        document.getElementById('bbcdSolutionName').value = rec.solutionName || '';
+        document.getElementById('bbcdSolutionCode').value = rec.solutionCode || '';
+        document.getElementById('bbcdConfigureDate').value = (rec.configureDate || '').slice(0, 10);
+        document.getElementById('bbcdValidityDate').value = (rec.validityDate || '').slice(0, 10);
+        document.getElementById('bbcdTemp').value = rec.temperature || '';
+        document.getElementById('bbcdHumid').value = rec.humidity || '';
+        document.getElementById('bbcdStorage').value = rec.storageCondition || '';
+        document.getElementById('bbcdCustomType').value = rec.customType || '';
+        bbcdNameAuto = false;
+        bbcdCodeAuto = false;
+
+        const isD = (solType === 'SOLUTION_TYPE_D');
+
+        // 4. Show/hide sections
+        document.getElementById('bbcdDilutionSection').style.display = isD ? 'block' : 'none';
+        const mediumLabel = document.getElementById('bbcdMediumLabel');
+        const mediumD = document.getElementById('bbcdMediumD');
+        if (mediumLabel) mediumLabel.style.display = isD ? '' : 'none';
+        if (mediumD) { mediumD.style.display = isD ? '' : 'none'; if (isD) mediumD.value = rec.medium || ''; }
+        const volumeCol = document.getElementById('bbcdVolume')?.closest('td');
+        if (volumeCol) volumeCol.style.display = isD ? 'none' : '';
+
+        // 5. Buttons
+        document.getElementById('bbcdSaveBtn').disabled = false;
+        document.getElementById('bbcdSaveBtn').className = 'btn btn-sm btn-primary';
+        document.getElementById('bbcdSaveBtn').innerHTML = '<i class="fas fa-save me-1"></i>保存修改';
+        document.getElementById('bbcdExportBtn').disabled = false;
+        document.getElementById('bbcdExportBtn').className = 'btn btn-sm btn-outline-secondary';
+        document.getElementById('bbcdExportBtn').innerHTML = '<i class="fas fa-file-word me-1"></i>导出配制记录';
+        document.getElementById('bbcdValidityHint').style.display = 'none';
+
+        // 6. Store detailList ids for save
+        window.bbcdDetailIds = {};
+        (rec.detailList || []).forEach((dl, i) => { if (dl.id) window.bbcdDetailIds[i] = dl.id; });
+
+        // 7. Populate config table
+        const tbody = document.querySelector('#bbcdConfigTable tbody');
+        tbody.innerHTML = '';
+        const fillBar = document.getElementById('bbcdFillBar');
+        if (fillBar) fillBar.style.display = 'none';
+
+        if (isD) {
+            bbcdPopulateWorkingSolutionTable(rec);
+        } else {
+            bbcdPopulateBCConfigTable(rec);
+        }
+    }
+
+    function bbcdPopulateBCConfigTable(rec) {
+        const detailList = rec.detailList || [];
+        const tbody = document.querySelector('#bbcdConfigTable tbody');
+        // Reset thead to B/C format
+        document.querySelector('#bbcdConfigTable thead').innerHTML = '<tr><th>编号</th><th>源名称</th><th>源浓度</th><th>领用量(mL)</th><th style="min-width:90px;">溶剂/介质</th><th style="min-width:110px;width:110px;">定容体积(mL)</th><th style="min-width:160px;">计算浓度</th></tr>';
+
+        if (!detailList.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">无详细配置数据</td></tr>';
+            return;
+        }
+
+        const totalRows = detailList.length;
+        detailList.forEach((dl, idx) => {
+            const origNoLines = (dl.originalNo || '').split('\n');
+            const configureOrder = (origNoLines[0] || '').trim();
+            const controlledNo = (origNoLines[1] || '').trim();
+            const solutionCode = (origNoLines[2] || '').trim();
+            // Parse concentration: "1000(ug/mL)" or "50.00"
+            const concMatch = String(dl.originalConcentration || '').match(/^([\d.]+)\s*\(([^)]+)\)/);
+            const concVal = concMatch ? parseFloat(concMatch[1]) : parseFloat(dl.originalConcentration) || 0;
+            const concUnit = concMatch ? concMatch[2] : (dl.originalUnit || '');
+
+            const tr = document.createElement('tr');
+            tr._src = {
+                id: dl.originalId || dl.dataid,
+                configureOrder: configureOrder || dl.originalCode || '',
+                solutionName: dl.originalName || '',
+                solutionCode: solutionCode || '',
+                originalCode: dl.originalCode || '',
+                controlledNo: controlledNo || rec.controlledNo || '',
+                aSourceCount: 1,
+                sourceCodes: [],
+                aSourceCodes: [],
+                concValue: concVal,
+                concUnit: concUnit,
+                concentrationRaw: dl.originalConcentration || dl.concentrationCount || '',
+                constantVolume: Number(rec.totalConstantVolume || rec.constantVolume || 0),
+                validityDate: rec.validityDate || '',
+                casNo: '',
+                _detailRecord: dl,
+            };
+
+            let rowHTML = '';
+            rowHTML += '<td><span class="bbcd-c-order">' + bbcdEsc(tr._src.configureOrder) + '</span></td>';
+            rowHTML += '<td class="text-start small"><span class="bbcd-c-srcName">' + bbcdEsc(tr._src.solutionName) + '</span></td>';
+            rowHTML += '<td><span class="bbcd-c-srcConc">' + bbcdEsc(dl.originalConcentration || '\u2014') + '</span></td>';
+            rowHTML += '<td><input type="number" class="form-control form-control-sm bbcd-c-qty" step="0.01" min="0.01" value="' + bbcdEsc(dl.receivedQuantity || '') + '" style="-moz-appearance:textfield;"></td>';
+            if (idx === 0) {
+                rowHTML += '<td rowspan="' + totalRows + '"><input id="bbcdMedium" class="form-control form-control-sm" list="solMediumOptions" placeholder="选择或输入" autocomplete="off" value="' + bbcdEsc(dl.medium || '') + '"></td>';
+                rowHTML += '<td rowspan="' + totalRows + '"><input type="number" id="bbcdVolume" class="form-control form-control-sm" step="0.01" min="0.01" value="' + bbcdEsc(dl.volume || '') + '" style="-moz-appearance:textfield;"></td>';
+            }
+            rowHTML += '<td><span class="bbcd-c-conc">' + bbcdEsc(dl.configurationConcentration || '\u2014') + '</span><span class="bbcd-c-unit ms-1 text-muted small">' + bbcdEsc(dl.configurationUnit || '') + '</span></td>';
+
+            tr.innerHTML = rowHTML;
+            tbody.appendChild(tr);
+        });
+
+        bbcdRecalcAll();
+    }
+
+    function bbcdPopulateWorkingSolutionTable(rec) {
+        const detailList = rec.detailList || [];
+        if (!detailList.length) {
+            document.querySelector('#bbcdConfigTable tbody').innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">无详细配置数据</td></tr>';
+            return;
+        }
+
+        // Detect dilution point count
+        const dilNames = ['dilutionOne','dilutionTwo','dilutionThree','dilutionFour','dilutionFive','dilutionSix','dilutionSeven','dilutionEight','dilutionNine','dilutionTen','dilutionEleven','dilutionTwelve'];
+        let maxPts = 0;
+        for (const dl of detailList) {
+            for (let n = 0; n < 12; n++) {
+                if (dl[dilNames[n]] != null) maxPts = Math.max(maxPts, n + 1);
+            }
+        }
+
+        // Classify detailList rows
+        let takeRow = null, volRow = null, concRows = [];
+        for (const dl of detailList) {
+            const gName = String(dl.groupName || '').trim();
+            if (gName === '\u79fb\u53d6\u4f53\u79ef') takeRow = dl;  // 移取体积
+            else if (gName === '\u5b9a\u5bb9\u4f53\u79ef') volRow = dl;  // 定容体积
+            else concRows.push(dl);  // concentration rows
+        }
+
+        // Build sourceItems: group concRows by originalCode (multi-component shares same code)
+        const codeGroups = {};
+        concRows.forEach(dl => {
+            const code = (dl.originalCode || '').trim() || '_unknown';
+            if (!codeGroups[code]) codeGroups[code] = [];
+            codeGroups[code].push(dl);
+        });
+        const sourceItems = Object.entries(codeGroups).flatMap(([, rows]) => {
+            const order = (rows[0].originalCode || '').trim();
+            const origId = (rows[0].originalId || '').trim();
+            const matchItem = bbcdLastResults.find(it => it.configureOrder === order);
+            if (matchItem) return [matchItem];
+            // Look up source info by order first, then by originalId
+            const srcInfo = window._dViewSourceInfo?.[order] || window._dViewSourceInfo?.[origId] || {};
+            if (rows.length === 1) {
+                const concVal = (rows[0].originalConcentration || '').trim();
+                const concUnit = (rows[0].originalUnit || '').trim();
+                const concStr = concVal && concUnit ? concVal + '(' + concUnit + ')' : concVal;
+                return [{
+                    id: rows[0].originalId,
+                    configureOrder: order,
+                    solutionName: srcInfo.solutionName || rows[0].originalName || rec.solutionName || '',
+                    solutionCode: srcInfo.solutionCode || '',
+                    concentration: concStr,
+                    constantVolume: 0,
+                    originalCode: rows[0].originalCode || '',
+                    controlledNo: rec.controlledNo || '',
+                    aSourceCount: 1, sourceCodes: [], aSourceCodes: [],
+                    validityDate: rec.validityDate || '',
+                }];
+            }
+            // Multi-component: build concentration string for bbcdParseMultiConc
+            const multiParts = rows.map(dl => {
+                const name = (dl.groupName || '').trim();
+                const unit = (dl.originalUnit || '').trim();
+                const val = (dl.originalConcentration || '').trim();
+                if (unit) return name + ':' + val + '(' + unit + ')';
+                return name + ':' + val;
+            });
+            return [{
+                id: rows[0].originalId,
+                configureOrder: order,
+                solutionName: srcInfo.solutionName || rows[0].originalName || rec.solutionName || '',
+                solutionCode: srcInfo.solutionCode || '',
+                concentration: multiParts.join(';'),
+                constantVolume: 0,
+                originalCode: rows[0].originalCode || '',
+                controlledNo: rec.controlledNo || '',
+                aSourceCount: 1, sourceCodes: [], aSourceCodes: [],
+                validityDate: rec.validityDate || '',
+            }];
+        });
+
+        // Set dilution count and render table
+        document.getElementById('bbcdDilutionCount').value = maxPts;
+        window.bbcdCurrentDilutionCount = maxPts;
+        bbcdRenderWorkingSolutionTable(sourceItems);
+
+        // Store detail record refs on table rows for save
+        let srcIdx = 0;
+        document.querySelectorAll('#bbcdConfigTable tbody tr').forEach(tr => {
+            const src = tr._src;
+            if (!src) return;
+            if (concRows[srcIdx]) {
+                tr._src._detailRecord = concRows[srcIdx];
+                if (takeRow) tr._src._takeDetailRecord = takeRow;
+                if (volRow) tr._src._volDetailRecord = volRow;
+            }
+            srcIdx++;
+        });
+
+        // Fill take (移取体积) values
+        if (takeRow) {
+            for (let i = 0; i < maxPts; i++) {
+                const val = takeRow[dilNames[i]];
+                if (val != null) {
+                    const qtyInputs = document.querySelectorAll(`.bbcd-d-qty[data-dilution="${i}"]`);
+                    qtyInputs.forEach(el => { el.value = val; });
+                }
+            }
+        }
+
+        // Fill volume (定容体积) values
+        if (volRow) {
+            for (let i = 0; i < maxPts; i++) {
+                const val = volRow[dilNames[i]];
+                if (val != null) {
+                    const volInputs = document.querySelectorAll(`.bbcd-dilution-vol[data-idx="${i}"]`);
+                    volInputs.forEach(el => { el.value = val; });
+                }
+            }
+        }
+
+        // Fill concentration values and mark as user-edited so recalc won't overwrite
+        concRows.forEach((dl, compIdx) => {
+            for (let i = 0; i < maxPts; i++) {
+                const val = dl[dilNames[i]];
+                if (val != null) {
+                    const compInputs = document.querySelectorAll(`.bbcd-d-conc[data-dilution="${i}"][data-comp="${compIdx}"]`);
+                    if (compInputs.length) {
+                        compInputs.forEach(el => { el.value = val; el._userEdited = true; });
+                    } else {
+                        const allInputs = document.querySelectorAll(`.bbcd-d-conc[data-dilution="${i}"]`);
+                        if (allInputs[compIdx]) { allInputs[compIdx].value = val; allInputs[compIdx]._userEdited = true; }
+                    }
+                }
+            }
+        });
+
+        bbcdRecalcWorkingSolution();
+        bbcdCheckValidity();
+    }
+
     // 生成稀释点
     function bbcdGenerateDilutionPoints() {
         const count = parseInt(document.getElementById('bbcdDilutionCount').value);
@@ -2578,7 +3226,7 @@
                 <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
                     <span>点${i}</span>
                     <span>
-                        <input type="number" class="bbcd-batch-qty" data-idx="${i-1}" step="0.01" min="0.01"
+                        <input type="number" class="bbcd-batch-qty" data-idx="${i-1}" step="0.001" min="0.001"
                                style="-moz-appearance:textfield;width:56px;font-size:0.72rem;padding:1px 4px;border:1px solid #ced4da;border-radius:4px;height:22px;">
                         <button type="button" onclick="bbcdBatchFillQty(${i-1})" class="btn btn-sm"
                                 style="padding:1px 5px;font-size:0.72rem;height:22px;line-height:1;background:transparent;border:none;color:#fff;">↓</button>
@@ -2661,7 +3309,7 @@
                     if (compIdx === 0) {
                         // 移取体积输入框：rowspan 跨所有组分行
                         for (let i = 0; i < count; i++) {
-                            rowHTML += `<td rowspan="${compCount}"><input type="number" class="form-control form-control-sm bbcd-d-qty" data-dilution="${i}" data-row="${idx}" step="0.01" min="0.01" placeholder="移取" style="min-width:70px;-moz-appearance:textfield;"></td>`;
+                            rowHTML += `<td rowspan="${compCount}"><input type="number" class="form-control form-control-sm bbcd-d-qty" data-dilution="${i}" data-row="${idx}" step="0.001" min="0.001" placeholder="移取" style="min-width:70px;-moz-appearance:textfield;"></td>`;
                         }
                     }
 
@@ -2701,7 +3349,7 @@
                     <td>${isNaN(tr._src.concValue) ? '—' : tr._src.concValue + ' ' + bbcdEsc(tr._src.concUnit)}</td>`;
 
                 for (let i = 0; i < count; i++) {
-                    rowHTML += `<td><input type="number" class="form-control form-control-sm bbcd-d-qty" data-dilution="${i}" data-row="${idx}" step="0.01" min="0.01" placeholder="移取" style="min-width:70px;-moz-appearance:textfield;"></td>`;
+                    rowHTML += `<td><input type="number" class="form-control form-control-sm bbcd-d-qty" data-dilution="${i}" data-row="${idx}" step="0.001" min="0.001" placeholder="移取" style="min-width:70px;-moz-appearance:textfield;"></td>`;
                 }
 
                 for (let i = 0; i < count; i++) {
@@ -3159,10 +3807,17 @@
             }
         });
 
+        const _viewRec = window.bbcdViewDetailMode && window.bbcdViewDetailRecord;
         const earliestValidity = rows.map(tr => tr._src.validityDate).filter(Boolean).sort()[0] || '';
 
         return {
-            id: null, createDatetime: nowStr, serialVersionUID: null,
+            id: _viewRec ? _viewRec.id : null,
+            createDatetime: _viewRec ? _viewRec.createDatetime : nowStr,
+            creatorName: _viewRec ? _viewRec.creatorName : null,
+            creatorId: _viewRec ? _viewRec.creatorId : null,
+            modifierName: null,
+            modifyDatetime: nowStr,
+            serialVersionUID: null,
             solutionName: document.getElementById('bbcdSolutionName').value.trim(),
             solutionCode: document.getElementById('bbcdSolutionCode').value.trim(),
             deviceIds: null, deviceNames: null,
@@ -3194,8 +3849,6 @@
             configurationProcess: null, nextAuditUserName: null,
             disposeUserName: null, disposeTime: null, disposeWay: null,
             configurationSolutionTemplateId: null, configurationRecordId: null,
-            creatorName: null, creatorId: null, modifierName: null,
-            modifyDatetime: nowStr,
             receivedUint: 'mL',
         };
     }
@@ -3368,8 +4021,15 @@
             ? validityDates.sort()[0]
             : null;
 
+        const _viewRec2 = window.bbcdViewDetailMode && window.bbcdViewDetailRecord;
         return {
-            id: null, createDatetime: nowStr, serialVersionUID: null,
+            id: _viewRec2 ? _viewRec2.id : null,
+            createDatetime: _viewRec2 ? _viewRec2.createDatetime : nowStr,
+            creatorName: _viewRec2 ? _viewRec2.creatorName : null,
+            creatorId: _viewRec2 ? _viewRec2.creatorId : null,
+            modifierName: null,
+            modifyDatetime: nowStr,
+            serialVersionUID: null,
             solutionName: document.getElementById('bbcdSolutionName').value.trim(),
             solutionCode: document.getElementById('bbcdSolutionCode').value.trim(),
             deviceIds: null, deviceNames: null,
@@ -3402,7 +4062,7 @@
             configurationProcess: null, nextAuditUserName: null,
             disposeUserName: null, disposeTime: null, disposeWay: null,
             configurationSolutionTemplateId: null, configurationRecordId: null,
-            creatorName: null, creatorId: null, modifierName: null,
+            modifierName: null,
             modifyDatetime: nowStr,
             receivedUint: 'mL',
             receivedQuantity: receivedQuantityParts.join(';'),
@@ -3450,6 +4110,11 @@
 
         // Calculate serial chain concentrations per dilution point
         // chainConcs[i] = result concentration of dilution point i
+        const isMultiSource = sourceGroups.length > 1;
+        // For multi-source: use overall mean across ALL individual source rows
+        const allConcVals = rows.map(tr => tr._src.concValue).filter(v => isFinite(v));
+        const overallMeanSrcConc = allConcVals.length ? allConcVals.reduce((a, b) => a + b, 0) / allConcVals.length : 0;
+
         const chainConcs = [];
         let prevConc = null;
         for (let i = 0; i < count; i++) {
@@ -3467,7 +4132,7 @@
                 if (isGradual) prevConc = 0;
                 continue;
             }
-            const srcConc = grpMeanConc(sourceGroups[0]);
+            const srcConc = isMultiSource ? overallMeanSrcConc : grpMeanConc(sourceGroups[0]);
             if (isGradual && prevConc !== null && prevConc > 0) {
                 chainConcs.push(bbcdRoundConc(prevConc * firstQty / vol));
                 prevConc = chainConcs[i];
@@ -3480,7 +4145,6 @@
 
         // Build detail_list
         const detailList = [];
-        const isMultiSource = sourceGroups.length > 1;
         for (let i = 0; i < count; i++) {
             if (chainConcs[i] === null) continue;
             const volEl = document.querySelector(`.bbcd-dilution-vol[data-idx="${i}"]`);
@@ -3501,7 +4165,7 @@
             if (isGradual && i > 0 && chainConcs[i - 1] !== null) {
                 srcConcForDisplay = chainConcs[i - 1];
             } else {
-                srcConcForDisplay = grpMeanConc(sourceGroups[0]);
+                srcConcForDisplay = isMultiSource ? overallMeanSrcConc : grpMeanConc(sourceGroups[0]);
             }
 
             // Per-row code: replace range [x-y] with specific concentration
@@ -3512,13 +4176,17 @@
                 // Serial chain point for multi-source: ONE row per dilution point
                 const firstSrc = sourceGroups[0].rows[0]._src;
                 const qtyEl = sourceGroups[0].rows[0].querySelector(`.bbcd-d-qty[data-dilution="${i}"]`);
-                const qty = bbcdRoundQty(parseFloat(qtyEl?.value));
+                const _rawQty = qtyEl?.value || '';
+                const _qtyDec = _rawQty.includes('.') ? _rawQty.split('.')[1].length : 0;
+                const _useDec = _qtyDec >= 3 ? 3 : 2;
+                const qty = bbcdRoundQty(parseFloat(_rawQty), _useDec);
+                if (qty === volume) continue; // skip: 取量=定容, no actual dilution
                 const srcCodeConc = i > 0 ? '' : extractConcFromCode(firstSrc.solutionCode);
                 detailList.push({
                     dilutionIdx: i,
                     originalName: '',
                     originalConcentration: srcConcForDisplay ? `${bbcdFmtConc(srcConcForDisplay)}(${firstSrc.concUnit})` : '',
-                    receivedQuantity: bbcdFmtQty(qty),
+                    receivedQuantity: bbcdFmtQty(qty, _useDec),
                     medium, volume: volStr,
                     configurationConcentration: concStr,
                     configurationUnit: firstSrc.concUnit,
@@ -3531,25 +4199,23 @@
                     const firstTr = grp.rows[0];
                     const firstSrc = firstTr._src;
                     const qtyEl = firstTr.querySelector(`.bbcd-d-qty[data-dilution="${i}"]`);
-                    const qty = bbcdRoundQty(parseFloat(qtyEl?.value));
+                    const _rawQty2 = qtyEl?.value || '';
+                    const _qtyDec2 = _rawQty2.includes('.') ? _rawQty2.split('.')[1].length : 0;
+                    const _useDec2 = _qtyDec2 >= 3 ? 3 : 2;
+                    const qty = bbcdRoundQty(parseFloat(_rawQty2), _useDec2);
+                    if (qty === volume) return; // skip: 取量=定容, no actual dilution
 
                     if (grp.isMulti) {
-                        let dispConc;
-                        if (isGradual && i > 0) {
-                            dispConc = resultConc;
-                        } else {
-                            dispConc = bbcdRoundConc(grp.rows.reduce((s, tr) => {
-                                return s + tr._src.concValue * qty / volume;
-                            }, 0) / grp.rows.length);
-                        }
-                        const origConc = i === 0 ? extractConcFromCode(firstSrc.solutionCode) : bbcdFmtConc(srcConcForDisplay);
+                        const origConc = i === 0
+                            ? bbcdFmtConc(grpMeanConc(grp))
+                            : bbcdFmtConc(srcConcForDisplay);
                         detailList.push({
                             dilutionIdx: i,
                             originalName: firstSrc.solutionName,
                             originalConcentration: origConc ? `${origConc}(${firstSrc.concUnit})` : '',
-                            receivedQuantity: bbcdFmtQty(qty),
+                            receivedQuantity: bbcdFmtQty(qty, _useDec2),
                             medium, volume: volStr,
-                            configurationConcentration: bbcdFmtConc(dispConc),
+                            configurationConcentration: concStr,
                             configurationUnit: firstSrc.concUnit,
                             originalNo: `${firstSrc.configureOrder}\n${firstSrc.solutionCode}`,
                             resultCode: rowCode,
@@ -3560,7 +4226,7 @@
                             dilutionIdx: i,
                             originalName: firstSrc.solutionName,
                             originalConcentration: origConc ? `${origConc}(${firstSrc.concUnit})` : '',
-                            receivedQuantity: bbcdFmtQty(qty),
+                            receivedQuantity: bbcdFmtQty(qty, _useDec2),
                             medium, volume: volStr,
                             configurationConcentration: concStr,
                             configurationUnit: firstSrc.concUnit,
@@ -3611,19 +4277,14 @@
             const qty = bbcdRoundQty(parseFloat(firstTr.querySelector('.bbcd-c-qty')?.value));
 
             if (group.isMulti) {
-                const configConcParts = group.rows.map(tr => {
-                    const c = bbcdRoundConc(tr._src.concValue * qty / volume);
-                    return `${tr._src.componentName}:${bbcdFmtConc(c)}`;
-                });
-                const codeParts = (firstSrc.solutionCode || '').split('-');
-                const overallConc = codeParts.length >= 2 && /^[\d.]+$/.test(codeParts[codeParts.length - 2])
-                    ? codeParts[codeParts.length - 2] : '';
+                const meanConc = bbcdRoundConc(group.rows.reduce((s, tr) => s + tr._src.concValue, 0) / group.rows.length);
+                const c = bbcdRoundConc(meanConc * qty / volume);
                 return {
                     originalName: firstSrc.solutionName,
-                    originalConcentration: overallConc ? `${overallConc}(${firstSrc.concUnit})` : firstSrc.concentrationRaw,
+                    originalConcentration: `${bbcdFmtConc(meanConc)}(${firstSrc.concUnit})`,
                     receivedQuantity: bbcdFmtQty(qty),
                     medium, volume: volStr,
-                    configurationConcentration: configConcParts.join(';'),
+                    configurationConcentration: bbcdFmtConc(c),
                     configurationUnit: firstSrc.concUnit,
                     originalNo: `${firstSrc.configureOrder}\n${firstSrc.solutionCode}`,
                 };
@@ -3687,7 +4348,29 @@
             if (solType === 'SOLUTION_TYPE_D') {
                 const payload = bbcdBuildWorkingSolutionExportPayload();
                 if (!payload) { alert('导出失败：无有效的稀释点数据'); return; }
-                await doExportOne(payload);
+
+                // Check for merge candidates
+                const chainData = await bbcdCheckMergeCandidates();
+                if (chainData && chainData.has_candidates && chainData.matched_records.length > 0) {
+                    const dialogResult = await bbcdShowMergeConfirmDialog(chainData);
+                    if (dialogResult === null) {
+                        // User closed dialog without choosing - cancel export
+                        return;
+                    } else if (Array.isArray(dialogResult)) {
+                        // Merge export with checked items only
+                        const filteredChainData = {
+                            ...chainData,
+                            matched_records: dialogResult.map(i => (chainData.matched_records || []).filter(r => !r._is_weighing_top)[i]),
+                        };
+                        const mergedPayload = bbcdBuildMergedPayload(payload, filteredChainData);
+                        await doExportOne(mergedPayload);
+                    } else {
+                        // Single export
+                        await doExportOne(payload);
+                    }
+                } else {
+                    await doExportOne(payload);
+                }
                 ok = true;
             } else {
                 const payload = bbcdBuildExportPayload();
@@ -3706,6 +4389,245 @@
                 btn.innerHTML = orig;
             }
         }
+    }
+
+    async function bbcdCheckMergeCandidates() {
+        const configureDate = (document.getElementById('bbcdConfigureDate')?.value || '').trim().slice(0, 10);
+        if (!configureDate) { console.log('[MergeCheck] no configureDate'); return null; }
+        try {
+            const statusResp = await fetch('/api/status', { credentials: 'include' });
+            const statusData = await statusResp.json();
+            const configuratorName = (statusData.display_name || statusData.username || '').trim();
+            if (!configuratorName) { console.log('[MergeCheck] no configuratorName'); return null; }
+
+            const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')].filter(tr => tr._src);
+            const seen = new Set();
+            const sourceIds = [];
+            const sourceOrders = [];
+            rows.forEach(tr => {
+                const order = (tr._src.configureOrder || '').trim();
+                const id = tr._src.id;
+                if (id && !seen.has(String(id))) { seen.add(String(id)); sourceIds.push(Number(id)); sourceOrders.push(order); }
+            });
+            if (!sourceIds.length) { console.log('[MergeCheck] no source ids'); return null; }
+
+            console.log('[MergeCheck] sending:', { sourceIds, sourceOrders, configureDate, configuratorName });
+            const resp = await fetch('/api/lims/trace_export_chain', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ source_ids: sourceIds, source_orders: sourceOrders, configure_date: configureDate, configurator_name: configuratorName }),
+            });
+            if (!resp.ok) { console.log('[MergeCheck] resp not ok:', resp.status); return null; }
+            const data = await resp.json();
+            console.log('[MergeCheck] result:', data.has_candidates, data.matched_records?.length);
+            return data;
+        } catch (e) {
+            console.warn('[MergeCheck] failed:', e);
+            return null;
+        }
+    }
+
+    function bbcdShowMergeConfirmDialog(chainData) {
+        return new Promise((resolve) => {
+            const listEl = document.getElementById('bbcdMergeCandidatesList');
+            const records = (chainData.matched_records || []).filter(r => !r._is_weighing_top);
+            listEl.innerHTML = '<div class="d-flex align-items-center gap-2 mb-2"><input type="checkbox" class="form-check-input" id="bbcdMergeCheckAll" checked><label for="bbcdMergeCheckAll" class="form-check-label small fw-bold">全选</label></div>' + records.map((r, i) => {
+                const levelTag = r.level === 'A' ? '<span class="badge bg-secondary me-1">标准品</span>'
+                    : r.level === 'B' ? '<span class="badge bg-info me-1">储备液</span>'
+                    : r.level === 'C' ? '<span class="badge bg-success me-1">应用液</span>' : '';
+                return `<div class="d-flex align-items-start gap-2 py-2 border-bottom">
+                    <input type="checkbox" class="form-check-input mt-1 bbcd-merge-candidate-check" data-idx="${i}" checked>
+                    <div class="flex-grow-1">${levelTag}<strong>${bbcdEsc(r.configure_order)}</strong> — ${bbcdEsc(r.solution_name)}
+                        <br><small class="text-muted">${bbcdEsc(r.solution_code)}</small>
+                    </div>
+                    <small class="text-muted">${bbcdEsc(r.configure_date)}</small>
+                </div>`;
+            }).join('');
+
+            // Bind check-all / individual checkbox behavior
+            const checkAllEl = listEl.querySelector('#bbcdMergeCheckAll');
+            const itemChecks = listEl.querySelectorAll('.bbcd-merge-candidate-check');
+            checkAllEl.addEventListener('change', () => {
+                itemChecks.forEach(cb => { cb.checked = checkAllEl.checked; });
+            });
+            itemChecks.forEach(cb => {
+                cb.addEventListener('change', () => {
+                    checkAllEl.checked = [...itemChecks].every(c => c.checked);
+                    checkAllEl.indeterminate = !checkAllEl.checked && [...itemChecks].some(c => c.checked);
+                });
+            });
+
+            const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdMergeExportModal'));
+            const confirmBtn = document.getElementById('bbcdMergeConfirmBtn');
+            const singleBtn = document.getElementById('bbcdMergeSingleBtn');
+
+            let dismissed = true;
+
+            const onConfirm = () => {
+                dismissed = false;
+                confirmBtn.removeEventListener('click', onConfirm);
+                singleBtn.removeEventListener('click', onSingle);
+                const checkedIndices = [];
+                itemChecks.forEach(cb => { if (cb.checked) checkedIndices.push(parseInt(cb.dataset.idx)); });
+                modal.hide();
+                resolve(checkedIndices);
+            };
+            const onSingle = () => {
+                dismissed = false;
+                confirmBtn.removeEventListener('click', onConfirm);
+                singleBtn.removeEventListener('click', onSingle);
+                resolve('single');
+            };
+            const onDismiss = () => {
+                confirmBtn.removeEventListener('click', onConfirm);
+                singleBtn.removeEventListener('click', onSingle);
+                document.getElementById('bbcdMergeExportModal').removeEventListener('hidden.bs.modal', onDismiss);
+                if (dismissed) {
+                    resolve(null);
+                }
+            };
+
+            confirmBtn.addEventListener('click', onConfirm);
+            singleBtn.addEventListener('click', onSingle);
+            document.getElementById('bbcdMergeExportModal').addEventListener('hidden.bs.modal', onDismiss, { once: true });
+
+            modal.show();
+        });
+    }
+
+    function bbcdBuildMergedPayload(dPayload, chainData) {
+        const records = chainData.matched_records || [];
+        const topAncestor = chainData.top_ancestor || {};
+
+        // Build lookup: configure_order → matched_record (for parent code resolution fallback)
+        const recLookup = {};
+        records.forEach(r => { recLookup[r.configure_order] = r; });
+
+        // Build ancestor detail_list items
+        // Always expand detailList entries (same as standalone B export):
+        //   detailList.length > 1 → one row per detailList entry
+        //   detailList.length <= 1 → one row total
+        // For originalNo: prefer dl.originalNo (LIMS stores "order\ncode"), fallback to recLookup
+        const ancestorItems = [];
+        const levelOrder = { 'B': 1, 'C': 2, 'E': 3 };
+        records.forEach(r => {
+            const isWT = !!r._is_weighing_top;
+            const lo = levelOrder[r.level] || 1;
+            const dilutionIdx = -lo;
+            const detailList = r._detail_list || [];
+            const concStr = r.concentration || '';
+            const concParts = concStr.split(';').map(s => s.trim()).filter(Boolean);
+
+            if (detailList.length > 1) {
+                // Multi-source: one row per detailList entry
+                detailList.forEach((dl, idx) => {
+                    let resultConc = '';
+                    if (idx < concParts.length && concParts[idx].includes(':')) {
+                        const ci = concParts[idx].lastIndexOf(':');
+                        const cm = concParts[idx].substring(ci + 1).match(/^([\d.]+)/);
+                        resultConc = cm ? cm[1] : '';
+                    } else {
+                        resultConc = _extractConcVal(concStr);
+                    }
+                    // Resolve originalNo: prefer recLookup full solution_code over LIMS raw data
+                    let noStr = dl.originalNo || '';
+                    const orderPart = noStr.split('\n')[0].trim() || dl.originalCode || r.configure_order;
+                    const lookupKey = dl.originalCode || orderPart;
+                    const pRec = recLookup[lookupKey] || recLookup[orderPart];
+                    const pCode = pRec ? (pRec.solution_code || pRec.controlled_no) : '';
+                    if (pCode) {
+                        noStr = `${orderPart}\n${pCode}`;
+                    } else if (!noStr.includes('\n')) {
+                        noStr = `${orderPart}\n${r.solution_code || ''}`;
+                    }
+                    ancestorItems.push({
+                        dilutionIdx,
+                        originalName: dl.originalName || '',
+                        originalConcentration: dl.originalConcentration || '',
+                        receivedQuantity: dl.receivedQuantity || '',
+                        receivedUint: dl.receivedUint || 'mL',
+                        medium: dl.medium || r.medium || '',
+                        volume: dl.volume || r.constant_volume || '',
+                        configurationConcentration: resultConc,
+                        configurationUnit: _extractConcUnit(concStr),
+                        originalNo: noStr,
+                        resultCode: r.solution_code || '',
+                        configureDate: r.configure_date || '',
+                        validityDate: (r.validity_date || '').slice(0, 10),
+                        _skip_body: isWT,
+                    });
+                });
+            } else {
+                // Single-source record: one row
+                const rQty = parseFloat(r.received_quantity) || 0;
+                const rVol = parseFloat(r.constant_volume) || 0;
+                if (rQty > 0 && rVol > 0 && Math.abs(rQty - rVol) < 0.001) return;
+                // Use dl.originalNo if available, otherwise resolve from recLookup
+                const dl = (r._detail_list || [{}])[0] || {};
+                let noStr = dl.originalNo || '';
+                const orderPart = noStr.split('\n')[0].trim() || dl.originalCode || r.configure_order;
+                const lookupKey = dl.originalCode || orderPart;
+                const pRec = recLookup[lookupKey] || recLookup[orderPart];
+                const pCode = pRec ? (pRec.solution_code || pRec.controlled_no) : '';
+                if (pCode) {
+                    noStr = `${orderPart}\n${pCode}`;
+                } else if (!noStr.includes('\n')) {
+                    noStr = `${orderPart}\n${r.solution_code || ''}`;
+                }
+                ancestorItems.push({
+                    dilutionIdx,
+                    originalName: r.parent_name || '',
+                    originalConcentration: r.parent_concentration
+                        ? `${r.parent_concentration}(${r.parent_conc_unit})` : '',
+                    receivedQuantity: r.received_quantity || '',
+                    receivedUint: r.received_unit || 'mL',
+                    medium: r.medium || '',
+                    volume: r.constant_volume || '',
+                    configurationConcentration: _extractConcVal(concStr),
+                    configurationUnit: _extractConcUnit(concStr),
+                    originalNo: noStr,
+                    resultCode: r.solution_code || '',
+                    configureDate: r.configure_date || '',
+                    validityDate: (r.validity_date || '').slice(0, 10),
+                    _skip_body: isWT,
+                });
+            }
+        });
+
+        const dDetails = dPayload.detail_list || [];
+        return {
+            ...dPayload,
+            is_merged_export: true,
+            is_multi_source: true,
+            top_ancestor: topAncestor,
+            detail_list: [...ancestorItems, ...dDetails],
+        };
+    }
+
+    function _extractConcVal(concStr) {
+        if (!concStr) return '';
+        // Multi-component format: "name:value(unit);..." → extract mean of all values
+        const parts = concStr.split(';');
+        const vals = [];
+        for (const p of parts) {
+            const ci = p.lastIndexOf(':');
+            const sub = ci >= 0 ? p.substring(ci + 1) : p;
+            const m = sub.match(/([\d.]+)/);
+            if (m) vals.push(parseFloat(m[1]));
+        }
+        if (vals.length > 0) {
+            return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2);
+        }
+        // Simple format: starts with number (e.g. "1068.93(mg/L)")
+        const cm = concStr.match(/^([\d.]+)/);
+        return cm ? cm[1] : '';
+    }
+
+    function _extractConcUnit(concStr) {
+        if (!concStr) return '';
+        // Match the unit in "number(unit)" format (at end of each component)
+        const um = concStr.match(/[\d.]+\(([^)]+)\)/);
+        return um ? um[1] : '';
     }
 
     async function bbcdSave() {
@@ -3798,6 +4720,130 @@
     }
 
 
+    // ===== 液D Tab: 从已配工作液 D 列表查询 =====
+    let dTabLastResults = [];
+    let dTabFilteredResults = [];
+    let dTabCurrentPage = 1;
+    let dTabPageSize = 20;
+    let dTabSelectedIds = new Set();
+
+    async function dTabQuery() {
+        const params = new URLSearchParams({
+            name: document.getElementById('dTabFilterName').value.trim(),
+            code: document.getElementById('dTabFilterCode').value.trim(),
+            custom_type: '',
+            operator: document.getElementById('dTabFilterOperator').value.trim(),
+            audit_status: document.getElementById('dTabFilterAuditStatus').value,
+            config_status: document.getElementById('dTabFilterStatus').value,
+            date_from: document.getElementById('dTabFilterDateFrom').value,
+            date_to: document.getElementById('dTabFilterDateTo').value,
+            page_size: 9999,
+            page_no: 1,
+        });
+        const tbody = document.querySelector('#dTabResultTable tbody');
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted small py-3"><i class="fas fa-spinner fa-spin me-1"></i>查询中...</td></tr>';
+        try {
+            const resp = await fetch('/api/lims/list_d_solutions?' + params.toString());
+            const data = await resp.json();
+            if (!data.success) {
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger small py-3">查询失败: ${bbcdEsc(data.message)}</td></tr>`;
+                dTabLastResults = [];
+                return;
+            }
+            dTabLastResults = data.data || [];
+            dTabCurrentPage = 1;
+            dTabSelectedIds.clear();
+            dTabRenderResults(dTabLastResults);
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger small py-3">查询异常: ${bbcdEsc(e.message)}</td></tr>`;
+            dTabLastResults = [];
+        }
+    }
+
+    function dTabRenderResults(list) {
+        dTabFilteredResults = list;
+        dTabCurrentPage = 1;
+        dTabRenderCurrentPage();
+        // 单条结果自动选中
+        if (list.length === 1) {
+            const realIdx = dTabLastResults.indexOf(list[0]);
+            dTabSelectedIds.add(realIdx);
+            dTabUpdateSelection();
+        }
+    }
+
+    function dTabRenderCurrentPage() {
+        const list = dTabFilteredResults;
+        const tbody = document.querySelector('#dTabResultTable tbody');
+        const paginationBar = document.getElementById('dTabPaginationBar');
+        const total = list.length;
+        const totalPages = Math.max(1, Math.ceil(total / dTabPageSize));
+        if (dTabCurrentPage > totalPages) dTabCurrentPage = totalPages;
+
+        if (!total) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted small py-3">无匹配记录</td></tr>';
+            paginationBar.style.display = 'none';
+            dTabUpdateSelection();
+            return;
+        }
+        paginationBar.style.display = 'flex';
+
+        const start = (dTabCurrentPage - 1) * dTabPageSize;
+        const end = Math.min(start + dTabPageSize, total);
+        const pageItems = list.slice(start, end);
+
+        tbody.innerHTML = pageItems.map(item => {
+            const realIdx = dTabLastResults.indexOf(item);
+            const checked = dTabSelectedIds.has(realIdx) ? 'checked' : '';
+            return `
+            <tr>
+                <td><input type="checkbox" class="dtab-row-check" data-idx="${realIdx}" ${checked}></td>
+                <td><div class="d-flex justify-content-between align-items-center">${bbcdEsc(item.configureOrder)}<i class="fas fa-eye solution-config-icon" data-idx="${realIdx}" data-tab="d" title="查看详情" style="cursor:pointer;color:#14b8a6;"></i></div></td>
+                <td class="text-truncate" style="max-width:180px;" title="${bbcdEsc(item.solutionCode)}">${bbcdEsc(item.solutionCode)}</td>
+                <td class="text-truncate" style="max-width:200px;" title="${bbcdEsc(item.solutionName)}">${bbcdEsc(item.solutionName)}</td>
+                <td class="text-truncate" style="max-width:240px;" title="${bbcdEsc(item.concentrationCount || item.concentration)}">${bbcdEsc(item.concentration)}</td>
+                <td>${bbcdEsc(item.configuratorName || item.creatorName || '—')}</td>
+                <td>${bbcdEsc(item.configureDate || '—')}</td>
+                <td>${bbcdEsc(item.validityDate || '—')}</td>
+                <td>${item.auditUserName ? '<span class="badge bg-success">已审核</span>' : '<span class="badge bg-secondary">未审核</span>'}</td>
+            </tr>`;
+        }).join('');
+
+        document.getElementById('dTabTotalCount').textContent = total;
+        document.getElementById('dTabPageInfo').textContent = `第 ${dTabCurrentPage} / ${totalPages} 页`;
+        dTabUpdateSelection();
+    }
+
+    function dTabUpdateSelection() {
+        const checks = document.querySelectorAll('.dtab-row-check');
+        checks.forEach(c => {
+            const idx = parseInt(c.dataset.idx, 10);
+            if (c.checked) dTabSelectedIds.add(idx);
+            else dTabSelectedIds.delete(idx);
+        });
+        const count = dTabSelectedIds.size;
+        document.getElementById('dTabSelectedCount').textContent = count;
+        const all = document.getElementById('dTabCheckAll');
+        const pageAllChecked = checks.length > 0 && [...checks].every(c => c.checked);
+        const pageSomeChecked = [...checks].some(c => c.checked);
+        all.checked = pageAllChecked;
+        all.indeterminate = pageSomeChecked && !pageAllChecked;
+    }
+
+    function dTabResetFilters() {
+        ['dTabFilterName','dTabFilterCode','dTabFilterDateFrom','dTabFilterDateTo','dTabFilterOperator'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('dTabFilterAuditStatus').value = '';
+        document.getElementById('dTabFilterStatus').value = '0';
+    }
+
+    async function dTabViewDetail(idx) {
+        const saved = bbcdLastResults;
+        bbcdLastResults = dTabLastResults;
+        try { await bbcdViewDetail(idx); }
+        finally { bbcdLastResults = saved; }
+    }
+
+
         document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('bbcdQueryBtn').addEventListener('click', bbcdQuery);
         document.getElementById('bbcdFilterSolType').addEventListener('change', () => bbcdRenderResults(bbcdLastResults));
@@ -3806,16 +4852,54 @@
             document.getElementById(id).addEventListener('keypress', e => { if (e.key === 'Enter') bbcdQuery(); });
         });
         document.getElementById('bbcdCheckAll').addEventListener('change', e => {
+            // For cross-page: select/deselect all items in bbcdFilteredResults
+            if (e.target.checked) {
+                bbcdFilteredResults.forEach(item => {
+                    const idx = bbcdLastResults.indexOf(item);
+                    if (idx >= 0) bbcdSelectedIds.add(idx);
+                });
+            } else {
+                bbcdFilteredResults.forEach(item => {
+                    const idx = bbcdLastResults.indexOf(item);
+                    if (idx >= 0) bbcdSelectedIds.delete(idx);
+                });
+            }
             document.querySelectorAll('.bbcd-row-check').forEach(c => c.checked = e.target.checked);
             bbcdUpdateSelection();
+        });
+        // Pagination controls
+        document.querySelectorAll('.bbcd-page-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const total = bbcdFilteredResults.length;
+                const totalPages = Math.max(1, Math.ceil(total / bbcdPageSize));
+                const action = btn.dataset.page;
+                if (action === 'first') bbcdCurrentPage = 1;
+                else if (action === 'prev') bbcdCurrentPage = Math.max(1, bbcdCurrentPage - 1);
+                else if (action === 'next') bbcdCurrentPage = Math.min(totalPages, bbcdCurrentPage + 1);
+                else if (action === 'last') bbcdCurrentPage = totalPages;
+                bbcdRenderCurrentPage();
+            });
+        });
+        document.getElementById('bbcdPageSizeSelect').addEventListener('change', e => {
+            bbcdPageSize = parseInt(e.target.value, 10) || 20;
+            bbcdCurrentPage = 1;
+            bbcdRenderCurrentPage();
         });
         document.querySelector('#bbcdResultTable tbody').addEventListener('change', e => {
             if (e.target.classList.contains('bbcd-row-check')) bbcdUpdateSelection();
         });
+        document.querySelector('#bbcdResultTable tbody').addEventListener('click', e => {
+            const icon = e.target.closest('.solution-config-icon');
+            if (icon) {
+                const idx = parseInt(icon.dataset.idx, 10);
+                if (!isNaN(idx)) bbcdViewDetail(idx);
+            }
+        });
         document.getElementById('bbcdConfigBtn').addEventListener('click', () => {
-            const checkedIdxs = [...document.querySelectorAll('.bbcd-row-check:checked')]
-                .map(c => parseInt(c.dataset.idx, 10));
+            const checkedIdxs = [...bbcdSelectedIds];
             if (!checkedIdxs.length) return;
+            // Clear pre-populated items so bbcdOpenConfig reads from checkboxes
+            window.bbcdSelectedItems = null;
             const detectType = item => {
                 if (!item) return '';
                 const order = String(item.configureOrder || '').toUpperCase();
@@ -3954,8 +5038,12 @@
                     bbcdCheckValidity();
                 }
             } else if (t.classList.contains('bbcd-d-qty')) {
-                // 工作液的移取体积：保留2位小数
-                t.value = bbcdFmtQty(bbcdRoundQty(v));
+                // 工作液的移取体积：默认2位小数，用户输入3位时保留3位
+                const rawStr = t.value || '';
+                const decCount = rawStr.includes('.') ? rawStr.split('.')[1].length : 0;
+                const useDec = decCount >= 3 ? 3 : 2;
+                const rounded = bbcdRoundQty(v, useDec);
+                t.value = bbcdFmtQty(rounded, useDec);
                 if (document.getElementById('bbcdSolType').value === 'SOLUTION_TYPE_D') {
                     bbcdRecalcWorkingSolution();
                     bbcdCheckValidity();
@@ -3980,10 +5068,68 @@
     });
     // ===== /B-BCD =====
 
+    // ===== 液D Tab Event Listeners =====
     document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('solSearchBtn').addEventListener('click', solSearchLims);
+        document.getElementById('dTabQueryBtn').addEventListener('click', dTabQuery);
+        document.getElementById('dTabResetFilterBtn').addEventListener('click', dTabResetFilters);
+        ['dTabFilterName','dTabFilterCode','dTabFilterOperator','dTabFilterDateFrom','dTabFilterDateTo'].forEach(id => {
+            document.getElementById(id).addEventListener('keypress', e => { if (e.key === 'Enter') dTabQuery(); });
+        });
+        document.getElementById('dTabCheckAll').addEventListener('change', e => {
+            if (e.target.checked) {
+                dTabFilteredResults.forEach(item => {
+                    const idx = dTabLastResults.indexOf(item);
+                    if (idx >= 0) dTabSelectedIds.add(idx);
+                });
+            } else {
+                dTabFilteredResults.forEach(item => {
+                    const idx = dTabLastResults.indexOf(item);
+                    if (idx >= 0) dTabSelectedIds.delete(idx);
+                });
+            }
+            document.querySelectorAll('.dtab-row-check').forEach(c => c.checked = e.target.checked);
+            dTabUpdateSelection();
+        });
+        // Pagination controls
+        document.querySelectorAll('.dtab-page-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const total = dTabFilteredResults.length;
+                const totalPages = Math.max(1, Math.ceil(total / dTabPageSize));
+                const action = btn.dataset.page;
+                if (action === 'first') dTabCurrentPage = 1;
+                else if (action === 'prev') dTabCurrentPage = Math.max(1, dTabCurrentPage - 1);
+                else if (action === 'next') dTabCurrentPage = Math.min(totalPages, dTabCurrentPage + 1);
+                else if (action === 'last') dTabCurrentPage = totalPages;
+                dTabRenderCurrentPage();
+            });
+        });
+        document.getElementById('dTabPageSizeSelect').addEventListener('change', e => {
+            dTabPageSize = parseInt(e.target.value, 10) || 20;
+            dTabCurrentPage = 1;
+            dTabRenderCurrentPage();
+        });
+        document.querySelector('#dTabResultTable tbody').addEventListener('change', e => {
+            if (e.target.classList.contains('dtab-row-check')) dTabUpdateSelection();
+        });
+        document.querySelector('#dTabResultTable tbody').addEventListener('click', e => {
+            const icon = e.target.closest('.solution-config-icon');
+            if (icon && icon.dataset.tab === 'd') {
+                const idx = parseInt(icon.dataset.idx, 10);
+                if (!isNaN(idx)) dTabViewDetail(idx);
+            }
+        });
+        // Tab shown event: ensure pagination bar display is correct
+        document.getElementById('sol-d-tab').addEventListener('shown.bs.tab', () => {
+            if (dTabLastResults.length > 0) {
+                dTabUpdateSelection();
+            }
+        });
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('solSearchBtn').addEventListener('click', () => solSearchLims(1));
         ['solSearchName','solSearchCas','solSearchLabNo','solSearchOrg'].forEach(id => {
-            document.getElementById(id).addEventListener('keypress', e => { if(e.key==='Enter') solSearchLims(); });
+            document.getElementById(id).addEventListener('keypress', e => { if(e.key==='Enter') solSearchLims(1); });
         });
         document.getElementById('solResetBtn').addEventListener('click', () => {
             document.getElementById('solSearchName').value = '';
@@ -3997,6 +5143,7 @@
             document.getElementById('solResultCheckAll').indeterminate = false;
             document.getElementById('solResultSelectedCount').textContent = '0';
             document.getElementById('solResultAddBtn').disabled = true;
+            document.getElementById('solPaginationBar').style.display = 'none';
             solLastResults = [];
         });
         document.getElementById('solResultCheckAll').addEventListener('change', e => {
@@ -4017,6 +5164,18 @@
             document.getElementById('solExportBtn').disabled = true;
             solSetBtnSaved(false);
             solSetBtnExported(false);
+        });
+        document.querySelectorAll('.sol-page-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.dataset.page === 'first') solSearchLims(1);
+                else if (btn.dataset.page === 'prev') { if (solPageNo > 1) solSearchLims(solPageNo - 1); }
+                else if (btn.dataset.page === 'next') { if (solPageNo < solTotalPages) solSearchLims(solPageNo + 1); }
+                else if (btn.dataset.page === 'last') solSearchLims(solTotalPages);
+            });
+        });
+        document.getElementById('solPageSizeSelect').addEventListener('change', e => {
+            solPageSize = parseInt(e.target.value, 10) || 30;
+            solSearchLims(1);
         });
         document.getElementById('solSaveBtn').addEventListener('click', solSave);
         document.getElementById('solExportBtn').addEventListener('click', solExport);
@@ -4107,6 +5266,9 @@
 
         // 配置弹窗关闭时恢复选中状态（如果未保存）
         document.getElementById('bbcdConfigModal').addEventListener('hidden.bs.modal', () => {
+            window.bbcdViewDetailMode = false;
+            window.bbcdViewDetailRecord = null;
+            window.bbcdDetailIds = null;
             if (bbcdSelectedIndices.length > 0) {
                 // 恢复之前保存的选中状态
                 document.querySelectorAll('.bbcd-row-check').forEach(checkbox => {
@@ -4158,6 +5320,232 @@
     document.addEventListener('DOMContentLoaded', () => {
         fetch('/api/config').then(r => r.json()).then(cfg => { certUncPath = cfg.certPath || ''; }).catch(() => {});
         solLoadLocalStandardsData();
+    });
+
+    // ===== 快速查询 =====
+    let qqLastResults = [];
+    let qqFilteredResults = [];
+    let qqPageNo = 1;
+    let qqTotalPages = 1;
+    let qqTotalRecords = 0;
+    let qqPageSize = 30;
+
+    function qqDetectType(item) {
+        const order = String(item.configureOrder || '').toUpperCase();
+        if (order.startsWith('D-')) return 'SOLUTION_TYPE_D';
+        if (order.startsWith('C-')) return 'SOLUTION_TYPE_C';
+        return item._solType || item.type || item.solutionType || 'SOLUTION_TYPE_B';
+    }
+
+    function qqTypeBadge(solType) {
+        const m = { 'SOLUTION_TYPE_B': ['储备液', 'bg-primary'], 'SOLUTION_TYPE_C': ['应用液', 'bg-success'], 'SOLUTION_TYPE_D': ['工作液', 'bg-warning text-dark'] };
+        const [label, cls] = m[solType] || ['未知', 'bg-secondary'];
+        return `<span class="badge ${cls}">${label}</span>`;
+    }
+
+    function qqEsc(v) { return v == null ? '' : String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    async function openQuickQueryModal() {
+        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('quickQueryModal'));
+        document.getElementById('qqOperator').value = displayUserNameSpan?.textContent || '';
+        const today = new Date().toISOString().slice(0, 10);
+        document.getElementById('qqDateFrom').value = today;
+        document.getElementById('qqDateTo').value = today;
+        modal.show();
+        qqDoQuery(1);
+    }
+
+    async function qqDoQuery(pageNo) {
+        if (pageNo === undefined) pageNo = 1;
+        qqPageNo = pageNo;
+        const operator = document.getElementById('qqOperator').value.trim();
+        const dateFrom = document.getElementById('qqDateFrom').value;
+        const dateTo = document.getElementById('qqDateTo').value;
+        const tbody = document.getElementById('qqResultTbody');
+        const btn = document.getElementById('qqQueryBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>查询中';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted small py-3"><i class="fas fa-spinner fa-spin me-1"></i>查询中...</td></tr>';
+        document.getElementById('qqPaginationBar').style.display = 'none';
+        try {
+            const params = new URLSearchParams({ operator, date_from: dateFrom, date_to: dateTo, page_no: pageNo, page_size: qqPageSize });
+            const resp = await fetch('/api/lims/quick_query?' + params.toString());
+            const data = await resp.json();
+            if (!data.success) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger small py-3">查询失败: ${qqEsc(data.message)}</td></tr>`;
+                return;
+            }
+            qqLastResults = data.data || [];
+            qqTotalRecords = data.total || 0;
+            qqFilteredResults = qqLastResults;
+            qqTotalPages = Math.max(1, Math.ceil(qqFilteredResults.length / qqPageSize));
+            document.getElementById('qqTotalCount').textContent = qqTotalRecords;
+            qqRenderCurrentPage();
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger small py-3">查询异常: ${qqEsc(e.message)}</td></tr>`;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-search me-1"></i>查询';
+        }
+    }
+
+    function qqRenderCurrentPage() {
+        const list = qqFilteredResults;
+        const tbody = document.getElementById('qqResultTbody');
+        const paginationBar = document.getElementById('qqPaginationBar');
+        const total = list.length;
+        const totalPages = Math.max(1, Math.ceil(total / qqPageSize));
+        if (qqPageNo > totalPages) qqPageNo = totalPages;
+        if (!total) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted small py-3">无匹配记录</td></tr>';
+            paginationBar.style.display = 'none';
+            return;
+        }
+        paginationBar.style.display = 'flex';
+        const start = (qqPageNo - 1) * qqPageSize;
+        const end = Math.min(start + qqPageSize, total);
+        const pageItems = list.slice(start, end);
+        tbody.innerHTML = pageItems.map(item => {
+            const solType = qqDetectType(item);
+            const auditHtml = item.auditUserName
+                ? '<span class="badge bg-success">已审核</span>'
+                : '<span class="badge bg-secondary">未审核</span>';
+            const realIdx = qqLastResults.indexOf(item);
+            return `<tr>
+                <td>${qqTypeBadge(solType)}</td>
+                <td>${qqEsc(item.configureOrder)}</td>
+                <td class="text-truncate" style="max-width:180px;" title="${qqEsc(item.solutionCode)}">${qqEsc(item.solutionCode)}</td>
+                <td class="text-truncate" style="max-width:200px;" title="${qqEsc(item.solutionName)}">${qqEsc(item.solutionName)}</td>
+                <td>${auditHtml}</td>
+                <td>
+                    <div class="d-flex gap-2 justify-content-center">
+                        <i class="fas fa-tag solution-config-icon qq-print-btn" data-idx="${realIdx}" title="标签打印" style="color:#6366f1;"></i>
+                        <i class="fas fa-file-export solution-config-icon qq-export-btn" data-idx="${realIdx}" title="导出配置记录" style="color:#f59e0b;"></i>
+                        <i class="fas fa-eye solution-config-icon qq-detail-btn" data-idx="${realIdx}" title="查看详情" style="color:#14b8a6;"></i>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+        document.getElementById('qqPageInfo').textContent = `第 ${qqPageNo} / ${totalPages} 页`;
+        // 绑定操作按钮事件
+        tbody.querySelectorAll('.qq-detail-btn').forEach(icon => {
+            icon.addEventListener('click', () => qqViewDetail(parseInt(icon.dataset.idx)));
+        });
+        tbody.querySelectorAll('.qq-export-btn').forEach(icon => {
+            icon.addEventListener('click', () => qqExportRecord(parseInt(icon.dataset.idx)));
+        });
+        tbody.querySelectorAll('.qq-print-btn').forEach(icon => {
+            icon.addEventListener('click', () => qqPrintLabel(parseInt(icon.dataset.idx)));
+        });
+    }
+
+    async function qqViewDetail(idx) {
+        const item = qqLastResults[idx];
+        if (!item) return;
+        const solType = qqDetectType(item);
+        try {
+            const resp = await fetch('/api/lims/get_solution_detail', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: item.id, configure_order: item.configureOrder })
+            });
+            const data = await resp.json();
+            if (!data.success) { alert('获取详情失败: ' + (data.message || '')); return; }
+            if (typeof bbcdPopulateConfigModal === 'function') {
+                bbcdPopulateConfigModal(data.data, solType);
+                const detailModal = document.getElementById('bbcdConfigModal');
+                detailModal.style.zIndex = '1060';
+                const detailBackdrop = detailModal.nextElementSibling || document.createElement('div');
+                if (detailBackdrop.classList.contains('modal-backdrop')) detailBackdrop.style.zIndex = '1059';
+                const inst = bootstrap.Modal.getOrCreateInstance(detailModal);
+                inst.show();
+                setTimeout(() => {
+                    document.querySelectorAll('.modal-backdrop').forEach(b => {
+                        if (parseInt(getComputedStyle(b).zIndex) >= 1059) {
+                            b.style.zIndex = '1059';
+                        }
+                    });
+                    detailModal.style.zIndex = '1060';
+                }, 50);
+                detailModal.addEventListener('hidden.bs.modal', () => {
+                    detailModal.style.zIndex = '';
+                    document.querySelectorAll('.modal-backdrop').forEach(b => b.style.zIndex = '');
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('quickQueryModal')).show();
+                }, { once: true });
+            }
+        } catch (e) {
+            alert('详情请求异常: ' + e.message);
+        }
+    }
+
+    async function qqExportRecord(idx) {
+        const item = qqLastResults[idx];
+        if (!item) return;
+        const solType = qqDetectType(item);
+        try {
+            const resp = await fetch('/api/lims/get_solution_detail', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: item.id, configure_order: item.configureOrder })
+            });
+            const data = await resp.json();
+            if (!data.success) { alert('获取详情失败: ' + (data.message || '')); return; }
+            if (typeof bbcdPopulateConfigModal !== 'function') { alert('导出功能不可用'); return; }
+            bbcdPopulateConfigModal(data.data, solType);
+            // 构建导出 payload 并下载
+            let payload;
+            if (solType === 'SOLUTION_TYPE_D') {
+                payload = typeof bbcdBuildWorkingSolutionExportPayload === 'function' ? bbcdBuildWorkingSolutionExportPayload() : null;
+            } else {
+                payload = typeof bbcdBuildExportPayload === 'function' ? bbcdBuildExportPayload() : null;
+            }
+            if (!payload) { alert('导出失败：无法构建导出数据'); return; }
+            const exportResp = await fetch('/api/lims/export_bbcd_docx', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload),
+            });
+            if (!exportResp.ok) {
+                const err = await exportResp.json().catch(() => ({message: exportResp.statusText}));
+                throw new Error(err.message || exportResp.statusText);
+            }
+            const blob = await exportResp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const cd = exportResp.headers.get('Content-Disposition') || '';
+            const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)/i);
+            a.download = m ? decodeURIComponent(m[1]) : '配制记录.docx';
+            a.href = url;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            alert('导出异常: ' + e.message);
+        }
+    }
+
+    function qqPrintLabel(idx) {
+        const item = qqLastResults[idx];
+        if (!item) return;
+        alert('标签打印功能开发中：' + (item.configureOrder || ''));
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('quickQueryBtn').addEventListener('click', openQuickQueryModal);
+        document.getElementById('qqQueryBtn').addEventListener('click', () => qqDoQuery(1));
+        document.querySelectorAll('.qq-page-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const totalPages = Math.max(1, Math.ceil(qqFilteredResults.length / qqPageSize));
+                const action = btn.dataset.page;
+                if (action === 'first') qqDoQuery(1);
+                else if (action === 'prev') { if (qqPageNo > 1) qqDoQuery(qqPageNo - 1); }
+                else if (action === 'next') { if (qqPageNo < totalPages) qqDoQuery(qqPageNo + 1); }
+                else if (action === 'last') qqDoQuery(totalPages);
+            });
+        });
+        document.getElementById('qqPageSizeSelect').addEventListener('change', e => {
+            qqPageSize = parseInt(e.target.value, 10) || 30;
+            qqDoQuery(1);
+        });
     });
 </script>
 </body>
