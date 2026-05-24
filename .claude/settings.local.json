@@ -48,7 +48,13 @@
       "Bash(node --check /tmp/solution_script.js)",
       "Bash(sed -n '1182,6029p')",
       "Bash(node *)",
-      "Bash(xxd)"
+      "Bash(xxd)",
+      "Bash(git clean *)",
+      "Bash(ls -la *.log)",
+      "Bash(ls -la *.doc)",
+      "Bash(ls -d node_modules .codegraph .claude/worktrees)",
+      "Bash(git ls-files *)",
+      "Bash(ls -la debug_consumable_bill.json package-lock.json package.json)"
     ]
   }
 }
