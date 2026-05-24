@@ -616,12 +616,14 @@
         showLoginBtn.style.display = 'none';
         userInfoBox.style.display = 'block';
         displayUserNameSpan.textContent = displayName;
+        localStorage.setItem('auth_logged_in', 'true');
     }
 
     function showLoggedOutUI() {
         showLoginBtn.style.display = 'inline-block';
         userInfoBox.style.display = 'none';
         currentLoggedUser = null;
+        localStorage.removeItem('auth_logged_in');
     }
 
     async function doLogin(e) {
@@ -1356,6 +1358,12 @@ function filterData() {
     document.addEventListener('DOMContentLoaded', async () => {
         bindLoginEvents();
         await checkLoginStatus();
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') checkLoginStatus();
+        });
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'auth_logged_in') checkLoginStatus();
+        });
         await loadConfigFromBackend();
         updateGroupDatalist();
 

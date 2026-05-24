@@ -405,7 +405,7 @@ def query():
     casNo = request.args.get('casNo', '').strip()
     params = {
         "_search": "false", "nd": str(int(time.time()*1000)), "pageSize": pageSize, "pageNo": pageNo, "sidx": "", "sord": "asc",
-        "type": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE", "name": "", "casNo": "",
+        "type": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE", "casNo": "",
         "orgName": request.args.get('org_name', ''),
         "receiveUserName": "", "receiveStartDate": "", "receiveEndDate": "",
         "confirmUserName": "", "confirmStartDate": "", "confirmEndDate": "",
@@ -414,7 +414,7 @@ def query():
         "pid": pid, "pname": username, "loginId": pid
     }
     if keyword:
-        params["name"] = keyword
+        params["keyword"] = keyword
     if casNo:
         params["casNo"] = casNo
     try:
@@ -423,10 +423,10 @@ def query():
             if resp.status_code in (401,403): session.pop('logged_in', None); system.logout(); return jsonify({"success": False, "message": "远程会话已失效"})
             return jsonify({"success": False, "message": f"请求失败，状态码: {resp.status_code}"})
         result = resp.json()
+        rd = result.get("resultData") or {}
         if result.get("success"):
-            rd = result.get("resultData", {})
             return jsonify({"success": True, "data": rd.get("voList", []), "records": rd.get("records", 0), "page": rd.get("page", 1), "total": rd.get("total", 0)})
-        error_msg = result.get("errorCtx", {}).get("errorMsg", "查询失败")
+        error_msg = (result.get("errorCtx") or {}).get("errorMsg", "查询失败")
         if "未登录" in error_msg or "login" in error_msg.lower(): session.pop('logged_in', None); system.logout(); return jsonify({"success": False, "message": "远程会话已失效"})
         return jsonify({"success": False, "message": error_msg})
     except Exception as e:
@@ -2181,6 +2181,76 @@ def lims_export_docx():
                      mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 
 
+# ── Word XML helpers (模块级，供 export_bbcd_docx / export_verification_docx 复用) ──
+from docx.oxml.ns import qn as _docx_qn
+from docx.oxml import OxmlElement as _docx_OxmlElement
+
+def _docx_make_run(text, sz=18, underline=False):
+    r_el = _docx_OxmlElement('w:r')
+    rPr  = _docx_OxmlElement('w:rPr')
+    if underline:
+        u_el = _docx_OxmlElement('w:u')
+        u_el.set(_docx_qn('w:val'), 'single')
+        rPr.append(u_el)
+    sz_el = _docx_OxmlElement('w:sz')
+    sz_el.set(_docx_qn('w:val'), str(sz))
+    szCs_el = _docx_OxmlElement('w:szCs')
+    szCs_el.set(_docx_qn('w:val'), str(sz))
+    rPr.append(sz_el)
+    rPr.append(szCs_el)
+    r_el.append(rPr)
+    t_el = _docx_OxmlElement('w:t')
+    t_el.text = text
+    if text and (text[0] == ' ' or text[-1] == ' '):
+        t_el.set('{http://www.w3.org/XML/1998/XMLSchema-instance}space', 'preserve')
+    r_el.append(t_el)
+    return r_el
+
+def _docx_make_para(text, center=False, sz=18):
+    p_el = _docx_OxmlElement('w:p')
+    pPr  = _docx_OxmlElement('w:pPr')
+    if center:
+        jc = _docx_OxmlElement('w:jc')
+        jc.set(_docx_qn('w:val'), 'center')
+        pPr.append(jc)
+    p_el.append(pPr)
+    p_el.append(_docx_make_run(text, sz))
+    return p_el
+
+def _docx_clear_tc(tc):
+    for p in tc.findall(_docx_qn('w:p')):
+        tc.remove(p)
+
+def _docx_set_tc_text(tc, text, center=True, sz=18):
+    _docx_clear_tc(tc)
+    tc.append(_docx_make_para(text, center=center, sz=sz))
+
+def _docx_set_tc_two_lines(tc, line1, line2, sz=18):
+    _docx_clear_tc(tc)
+    tc.append(_docx_make_para(line1, center=True, sz=sz))
+    tc.append(_docx_make_para(line2, center=True, sz=sz))
+
+def _docx_set_tc_multi_lines(tc, lines, sz=18):
+    _docx_clear_tc(tc)
+    for line in lines:
+        tc.append(_docx_make_para(line, center=True, sz=sz))
+
+def _docx_set_vmerge(tc, mode):
+    tcPr = tc.find(_docx_qn('w:tcPr'))
+    if tcPr is None:
+        tcPr = _docx_OxmlElement('w:tcPr')
+        tc.insert(0, tcPr)
+    vm = tcPr.find(_docx_qn('w:vMerge'))
+    if vm is None:
+        vm = _docx_OxmlElement('w:vMerge')
+        tcPr.append(vm)
+    if mode == 'restart':
+        vm.set(_docx_qn('w:val'), 'restart')
+    else:
+        if _docx_qn('w:val') in vm.attrib:
+            del vm.attrib[_docx_qn('w:val')]
+
+
 @app.route('/api/lims/export_bbcd_docx', methods=['POST'])
 def lims_export_bbcd_docx():
     if not session.get('logged_in'):
@@ -2212,70 +2282,14 @@ def lims_export_bbcd_docx():
 
     doc = DocxDocument(template_path)
 
-    def _make_run(text, sz=18, underline=False):
-        r_el = OxmlElement('w:r')
-        rPr  = OxmlElement('w:rPr')
-        if underline:
-            u_el = OxmlElement('w:u')
-            u_el.set(qn('w:val'), 'single')
-            rPr.append(u_el)
-        sz_el = OxmlElement('w:sz')
-        sz_el.set(qn('w:val'), str(sz))
-        szCs_el = OxmlElement('w:szCs')
-        szCs_el.set(qn('w:val'), str(sz))
-        rPr.append(sz_el)
-        rPr.append(szCs_el)
-        r_el.append(rPr)
-        t_el = OxmlElement('w:t')
-        t_el.text = text
-        if text and (text[0] == ' ' or text[-1] == ' '):
-            t_el.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
-        r_el.append(t_el)
-        return r_el
-
-    def _make_para(text, center=False, sz=18):
-        p_el = OxmlElement('w:p')
-        pPr  = OxmlElement('w:pPr')
-        if center:
-            jc = OxmlElement('w:jc')
-            jc.set(qn('w:val'), 'center')
-            pPr.append(jc)
-        p_el.append(pPr)
-        p_el.append(_make_run(text, sz))
-        return p_el
-
-    def _clear_tc(tc):
-        for p in tc.findall(qn('w:p')):
-            tc.remove(p)
-
-    def _set_tc_text(tc, text, center=True, sz=18):
-        _clear_tc(tc)
-        tc.append(_make_para(text, center=center, sz=sz))
-
-    def _set_tc_two_lines(tc, line1, line2, sz=18):
-        _clear_tc(tc)
-        tc.append(_make_para(line1, center=True, sz=sz))
-        tc.append(_make_para(line2, center=True, sz=sz))
-
-    def _set_tc_multi_lines(tc, lines, sz=18):
-        _clear_tc(tc)
-        for line in lines:
-            tc.append(_make_para(line, center=True, sz=sz))
-
-    def _set_vmerge(tc, mode):
-        tcPr = tc.find(qn('w:tcPr'))
-        if tcPr is None:
-            tcPr = OxmlElement('w:tcPr')
-            tc.insert(0, tcPr)
-        vm = tcPr.find(qn('w:vMerge'))
-        if vm is None:
-            vm = OxmlElement('w:vMerge')
-            tcPr.append(vm)
-        if mode == 'restart':
-            vm.set(qn('w:val'), 'restart')
-        else:
-            if qn('w:val') in vm.attrib:
-                del vm.attrib[qn('w:val')]
+    # local aliases for module-level helpers (backward compat with existing code below)
+    _make_run = _docx_make_run
+    _make_para = _docx_make_para
+    _clear_tc = _docx_clear_tc
+    _set_tc_text = _docx_set_tc_text
+    _set_tc_two_lines = _docx_set_tc_two_lines
+    _set_tc_multi_lines = _docx_set_tc_multi_lines
+    _set_vmerge = _docx_set_vmerge
 
     def _parse_conc_val(raw):
         m = re.match(r'^\s*([\d.]+)', str(raw))
@@ -2441,9 +2455,12 @@ def lims_export_bbcd_docx():
     row_values = []
     for item in body_list:
         item_result_conc = _parse_conc_val(item.get('configurationConcentration', ''))
-        item_result_code = item.get('resultCode', '')
         if not item_result_conc:
             item_result_conc = _extract_conc_from_code(solution_code)
+        item_result_code = item.get('resultCode', '')
+        if not item_result_code:
+            original_no = item.get('originalNo', '')
+            item_result_code = original_no.split('\n')[-1].strip() if original_no else ''
         if not item_result_code:
             item_result_code = solution_code
         row_values.append({
@@ -2669,6 +2686,361 @@ def update_excel_usage():
 
     except Exception as e:
         return jsonify({"success": False, "message": f"更新失败: {str(e)}"}), 500
+
+
+
+# ── 标液核查端点 ──
+
+def _extract_d_concentration_points(record):
+    """从 D 型工作液记录的 detailList 中提取各浓度点。
+
+    detailList 分类：
+      - groupName='移取体积' → takeRow (每列=稀释点的取量)
+      - groupName='定容体积' → volRow (每列=稀释点的定容)
+      - 其余 → concRows (每个代表一个源组分的浓度信息)
+
+    返回 [{index, concentration, unit, name, source_name}]，浓度已计算。
+    """
+    detail_list = record.get('detailList') or []
+    dil_names = [
+        'dilutionOne', 'dilutionTwo', 'dilutionThree', 'dilutionFour',
+        'dilutionFive', 'dilutionSix', 'dilutionSeven', 'dilutionEight',
+        'dilutionNine', 'dilutionTen', 'dilutionEleven', 'dilutionTwelve',
+    ]
+
+    # 分类
+    take_row = vol_row = None
+    conc_rows = []
+    for dl in detail_list:
+        gn = str(dl.get('groupName', '')).strip()
+        if gn == '移取体积':
+            take_row = dl
+        elif gn == '定容体积':
+            vol_row = dl
+        else:
+            conc_rows.append(dl)
+
+    if not conc_rows:
+        return []
+
+    # 最大稀释点数
+    max_pts = 0
+    for dl in detail_list:
+        for n in range(12):
+            if dl.get(dil_names[n]) is not None:
+                max_pts = max(max_pts, n + 1)
+    if max_pts == 0:
+        return []
+
+    # 解析源液浓度
+    def _parse_conc(val_str, unit_str=''):
+        val_str = str(val_str).strip() if val_str else ''
+        unit_str = str(unit_str).strip() if unit_str else ''
+        if not val_str:
+            return 0.0, unit_str or 'mg/L'
+        m = re.match(r'^([\d.]+)', val_str)
+        if m:
+            return float(m.group(1)), unit_str or 'mg/L'
+        return 0.0, unit_str or 'mg/L'
+
+    points = []
+    for i in range(max_pts):
+        # 定容体积
+        const_vol = float(vol_row.get(dil_names[i]) or 0) if vol_row else 0
+        if const_vol <= 0:
+            continue
+        # 取量
+        take_vol = float(take_row.get(dil_names[i]) or 0) if take_row else 0
+        if take_vol <= 0:
+            continue
+        # 对每个源组分计算稀释后浓度
+        for dl in conc_rows:
+            src_conc, src_unit = _parse_conc(
+                dl.get('originalConcentration'),
+                dl.get('originalUnit'),
+            )
+            calc_conc = src_conc * (take_vol / const_vol)
+            # 修约：与配置记录一致（保留2位小数）
+            calc_conc = round(calc_conc, 2)
+            group_name = str(dl.get('groupName', '')).strip()
+            points.append({
+                'index': i,
+                'concentration': calc_conc,
+                'unit': src_unit,
+                'name': group_name or record.get('solutionName', ''),
+                'source_name': str(dl.get('originalName', '')).strip(),
+            })
+
+    return points
+
+
+def _build_concentration_point_code(record, point):
+    """构建浓度点编号: CK-CG-{num}-{concentration}-{date}"""
+    code = str(record.get('solutionCode', '')).strip()
+    date = str(record.get('configureDate', ''))[:10].replace('-', '')
+    conc = point['concentration']
+    # 如果 concentration 是整数则不补零
+    if conc == int(conc):
+        conc_str = str(int(conc))
+    else:
+        conc_str = str(conc)
+    # 从 solutionCode 中提取编号部分 (CK-CG-{num})
+    parts = code.split('-')
+    if len(parts) >= 3:
+        base = '-'.join(parts[:3])
+        return f"{base}-{conc_str}-{date}"
+    return f"{code}-{conc_str}-{date}"
+
+
+@app.route('/api/lims/get_verification_info', methods=['POST'])
+def lims_get_verification_info():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    p = request.get_json() or {}
+    solution_ids = p.get('solution_ids', [])
+    configure_orders = p.get('configure_orders', [])
+
+    if len(solution_ids) < 2 and len(configure_orders) < 2:
+        return jsonify({"success": False, "message": "请提供两个工作液的ID或编号"})
+
+    try:
+        system = get_system()
+        username = session.get('username', '')
+        if system.current_user != username:
+            system.current_user = username
+            system.load_session()
+
+        records = []
+        for idx in range(2):
+            sid = solution_ids[idx] if idx < len(solution_ids) else None
+            order = configure_orders[idx] if idx < len(configure_orders) else None
+            lims_id = sid
+            if not lims_id and order:
+                lims_id = _resolve_order_to_lims_id(system, order)
+            if not lims_id:
+                return jsonify({"success": False, "message": f"未找到记录: {order or sid}"}), 404
+            rec = _fetch_solution_view(system, lims_id, order_str=order)
+            if not rec or not rec.get('id'):
+                return jsonify({"success": False, "message": f"获取详情失败: {order or sid}"}), 404
+            records.append(rec)
+
+        # 判断新旧
+        d1 = str(records[0].get('configureDate', ''))[:10]
+        d2 = str(records[1].get('configureDate', ''))[:10]
+        if d1 >= d2:
+            new_rec, old_rec = records[0], records[1]
+        else:
+            new_rec, old_rec = records[1], records[0]
+
+        def _build_solution_info(rec):
+            points = _extract_d_concentration_points(rec)
+            point_codes = []
+            for pt in points:
+                pt['code'] = _build_concentration_point_code(rec, pt)
+                point_codes.append(pt['code'])
+            return {
+                'id': rec.get('id'),
+                'configureOrder': rec.get('configureOrder', ''),
+                'solutionCode': rec.get('solutionCode', ''),
+                'solutionName': rec.get('solutionName', ''),
+                'configureDate': str(rec.get('configureDate', ''))[:10],
+                'concentrationPoints': points,
+                'validityDate': str(rec.get('validityDate', ''))[:10],
+                'customType': rec.get('customType', ''),
+            }
+
+        new_info = _build_solution_info(new_rec)
+        old_info = _build_solution_info(old_rec)
+
+        # 溯源到A获取标准物质信息
+        def _trace_to_a(rec):
+            """溯源到A级祖先获取标准物质信息"""
+            rec_id = rec.get('id')
+            rec_order = rec.get('configureOrder', '')
+            if not rec_id:
+                return []
+            try:
+                matched, top = _trace_export_chain(
+                    system, [(rec_id, rec_order)],
+                    str(rec.get('configureDate', ''))[:10],
+                    rec.get('configuratorName') or rec.get('creatorName') or '',
+                )
+                ancestors = []
+                seen = set()
+                for r in matched:
+                    a_name = r.get('solution_name', '')
+                    a_order = r.get('configure_order', '')
+                    key = a_order
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    ancestors.append({
+                        'level': r.get('level', ''),
+                        'configureOrder': a_order,
+                        'solutionName': a_name,
+                        'controlledNo': r.get('controlled_no', ''),
+                        'storageCondition': r.get('storage_condition', ''),
+                        'concentration': r.get('concentration', ''),
+                    })
+                if top and top.get('configure_order') and top.get('configure_order') not in seen:
+                    ancestors.append({
+                        'level': top.get('level', 'A'),
+                        'configureOrder': top.get('configure_order', ''),
+                        'solutionName': top.get('solution_name', ''),
+                        'controlledNo': top.get('controlled_no', ''),
+                        'storageCondition': top.get('storage_condition', ''),
+                        'concentration': top.get('concentration', ''),
+                    })
+                return ancestors
+            except Exception as e:
+                print(f"[VerificationTrace] 溯源失败: {e}")
+                return []
+
+        new_info['ancestors'] = _trace_to_a(new_rec)
+        old_info['ancestors'] = _trace_to_a(old_rec)
+
+        return jsonify({
+            "success": True,
+            "new_solution": new_info,
+            "old_solution": old_info,
+            "mode": "new_verifies_old",
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"获取核查信息异常: {str(e)}"}), 500
+
+
+@app.route('/api/lims/parse_verification_pdf', methods=['POST'])
+def lims_parse_verification_pdf():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    import tempfile
+    from report_parser import parse_pdf_report
+
+    files = request.files.getlist('pdf_files')
+    if not files:
+        return jsonify({"success": False, "message": "请上传PDF文件"})
+
+    all_compounds = {}  # name -> {value, unit, source_file}
+
+    for f in files:
+        if not f.filename or not f.filename.lower().endswith('.pdf'):
+            continue
+        tmp = None
+        try:
+            tmp = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)
+            f.save(tmp.name)
+            tmp.close()
+            result = parse_pdf_report(tmp.name)
+            for name, (val, unit) in result.items():
+                all_compounds[name] = {
+                    'name': name,
+                    'measured_value': val,
+                    'unit': unit,
+                    'source_file': f.filename,
+                }
+        except Exception as e:
+            print(f"[ParsePDF] 解析 {f.filename} 失败: {e}")
+        finally:
+            if tmp:
+                try:
+                    os.unlink(tmp.name)
+                except OSError:
+                    pass
+
+    compounds = list(all_compounds.values())
+    return jsonify({"success": True, "compounds": compounds})
+
+
+@app.route('/api/lims/export_verification_docx', methods=['POST'])
+def lims_export_verification_docx():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    from docx import Document as DocxDocument
+    import io
+
+    p = request.get_json() or {}
+    template_name = 'RF11-04 标准物质期间核查记录 .docx'
+    template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'word_templates', template_name)
+    if not os.path.exists(template_path):
+        return jsonify({"success": False, "message": f"模板不存在: {template_name}"}), 404
+
+    try:
+        doc = DocxDocument(template_path)
+        t0 = doc.tables[0]  # 19行 x 9列
+        t1 = doc.tables[1]  # 23行 x 4列
+
+        # ── Table0: 标准物质信息 ──
+        table0_data = p.get('table0_data', [])
+        for ri, item in enumerate(table0_data):
+            row_idx = ri + 2  # 从第3行开始（0/1是表头）
+            if row_idx >= len(t0.rows):
+                break
+            row = t0.rows[row_idx]
+            row.cells[0].text = str(item.get('序号', ri + 1))
+            row.cells[1].text = str(item.get('标准物质名称', ''))
+            row.cells[2].text = str(item.get('标准物质编号', ''))
+            row.cells[3].text = str(item.get('保存条件', ''))
+            # checkbox 列
+            chk_val = '☐是；☐否'
+            chk_ok = '☑是；☐否'
+            row.cells[4].text = chk_ok if item.get('是否在有效期') else chk_val
+            row.cells[5].text = chk_ok if item.get('标志是否齐全') else chk_val
+            row.cells[6].text = chk_ok if item.get('容器是否损伤') else chk_val
+            row.cells[7].text = str(item.get('处理方法', ''))
+            row.cells[8].text = str(item.get('备注', ''))
+
+        # ── Table1: 核查结果 ──
+        # R0: 被核查对象编号 (合并单元格)
+        target_code = str(p.get('被核查对象编号', ''))
+        _docx_set_tc_multi_lines(t1.rows[0].cells[0], target_code.split(', '), sz=18)
+
+        # R1: 核查对象编号 (合并单元格)
+        source_code = str(p.get('核查对象编号', ''))
+        _docx_set_tc_multi_lines(t1.rows[1].cells[0], source_code.split(', '), sz=18)
+
+        # R2: 核查方法 + 核查时间
+        t1.rows[2].cells[0].text = '核查方法：' + str(p.get('核查方法', '新旧标准品对比'))
+        t1.rows[2].cells[2].text = '核查时间：' + str(p.get('核查时间', ''))
+
+        # R3: 核查方法描述
+        method_desc = str(p.get('核查方法描述', ''))
+        _docx_set_tc_multi_lines(t1.rows[3].cells[0], [method_desc], sz=18)
+
+        # R5-R20: 组分数据
+        table1_data = p.get('table1_data', [])
+        for ri, item in enumerate(table1_data):
+            row_idx = ri + 5
+            if row_idx >= len(t1.rows) - 2:  # 留出结论和备注行
+                break
+            row = t1.rows[row_idx]
+            row.cells[0].text = str(item.get('各组分名称', ''))
+            row.cells[1].text = str(item.get('理论值', ''))
+            row.cells[2].text = str(item.get('实测值', ''))
+            row.cells[3].text = str(item.get('相对偏差', ''))
+
+        # R21: 核查结论
+        conclusion = str(p.get('核查结论', '合格'))
+        conclusion_text = f"核查结论：{'☑合格；☐不合格' if conclusion == '合格' else '☐合格；☑不合格'}"
+        t1.rows[-2].cells[0].text = conclusion_text
+
+        # R22: 备注
+        t1.rows[-1].cells[0].text = '备注：' + str(p.get('备注', ''))
+
+        buf = io.BytesIO()
+        doc.save(buf)
+        buf.seek(0)
+
+        download_name = '标准物质期间核查记录.docx'
+        from flask import send_file
+        from urllib.parse import quote as _urlquote
+        resp = send_file(buf, as_attachment=True, download_name=download_name,
+                         mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        resp.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{_urlquote(download_name)}"
+        return resp
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"导出失败: {str(e)}"}), 500
 
 
 if __name__ == '__main__':

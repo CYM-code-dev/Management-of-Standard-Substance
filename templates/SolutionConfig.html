@@ -627,6 +627,11 @@
                     <input type="text" id="dTabFilterCode" class="form-control form-control-sm" placeholder="自编号关键词" style="height:31px;">
                   </div>
                   <div class="col">
+                    <label class="form-label mb-1 small fw-bold">类型</label>
+                    <input type="text" id="dTabFilterCustomType" class="form-control form-control-sm" list="dTabFilterCustomTypeList" placeholder="可输入" style="height:31px;">
+                    <datalist id="dTabFilterCustomTypeList"></datalist>
+                  </div>
+                  <div class="col">
                     <label class="form-label mb-1 small fw-bold">配置人</label>
                     <input type="text" id="dTabFilterOperator" class="form-control form-control-sm" placeholder="可输入" style="height:31px;">
                   </div>
@@ -703,6 +708,7 @@
                   <button class="btn btn-sm btn-outline-secondary dtab-page-btn" data-page="next" title="下一页"><i class="fas fa-angle-right"></i></button>
                   <button class="btn btn-sm btn-outline-secondary dtab-page-btn" data-page="last" title="末页"><i class="fas fa-angle-double-right"></i></button>
                 </div>
+                <button class="btn btn-sm btn-success" id="dTabCheckBtn"><i class="fas fa-clipboard-check me-1"></i>标液核查</button>
               </div>
             </div>
           </div>
@@ -836,6 +842,8 @@
           </datalist>
           <label class="form-label mb-0 small fw-bold text-nowrap">类型</label>
           <input type="text" id="bbcdCustomType" class="form-control form-control-sm" placeholder="如 TSCA" style="grid-column:span 1;">
+          <label class="form-label mb-0 small fw-bold text-nowrap" id="bbcdDeviceLabel" style="display:none;">配置设备 *</label>
+          <input type="text" id="bbcdDevice" class="form-control form-control-sm" list="solDeviceOptions" placeholder="选择或输入" autocomplete="off" style="display:none;">
           <label class="form-label mb-0 small fw-bold text-nowrap" id="bbcdMediumLabel" style="display:none;">溶剂/介质 *</label>
           <input type="text" id="bbcdMediumD" class="form-control form-control-sm" list="solMediumOptions" placeholder="选择或输入" autocomplete="off" style="display:none;">
         </div>
@@ -920,31 +928,151 @@
 
 <!-- B-BCD 标液类型选择模态框 -->
 <div class="modal fade" id="bbcdTypePickerModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:280px;">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white py-2">
                 <h6 class="modal-title mb-0"><i class="fas fa-flask me-2"></i>选择配置类型</h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <p class="small text-muted mb-3">已选 <span id="bbcdTypePickerCount" class="fw-bold text-primary">0</span> 条<span id="bbcdTypePickerSrcLabel">储备液 B</span>，请选择目标配置类型：</p>
+            <div class="modal-body py-3">
                 <div class="d-grid gap-2">
-                    <button type="button" class="btn btn-outline-primary text-start bbcd-type-pick" data-type="SOLUTION_TYPE_B" data-label="储备液">
-                        <i class="fas fa-flask me-2"></i><strong>储备液</strong>
-                        <span class="small text-muted ms-2">— 储备液 → 储备液</span>
+                    <button type="button" class="btn btn-outline-primary bbcd-type-pick" data-type="SOLUTION_TYPE_B" data-label="储备液">
+                        <i class="fas fa-flask me-2"></i>储备液
                     </button>
-                    <button type="button" class="btn btn-outline-success text-start bbcd-type-pick" data-type="SOLUTION_TYPE_C" data-label="应用液">
-                        <i class="fas fa-vial me-2"></i><strong>应用液</strong>
-                        <span class="small text-muted ms-2">— 储备液 → 应用液</span>
+                    <button type="button" class="btn btn-outline-success bbcd-type-pick" data-type="SOLUTION_TYPE_C" data-label="应用液">
+                        <i class="fas fa-vial me-2"></i>应用液
                     </button>
-                    <button type="button" class="btn btn-outline-warning text-start bbcd-type-pick" data-type="SOLUTION_TYPE_D" data-label="工作液">
-                        <i class="fas fa-tools me-2"></i><strong>工作液</strong>
-                        <span class="small text-muted ms-2">— 配制工作液</span>
+                    <button type="button" class="btn btn-outline-warning bbcd-type-pick" data-type="SOLUTION_TYPE_D" data-label="工作液">
+                        <i class="fas fa-tools me-2"></i>工作液
                     </button>
                 </div>
             </div>
+            <span id="bbcdTypePickerCount" style="display:none;"></span>
+            <span id="bbcdTypePickerSrcLabel" style="display:none;"></span>
         </div>
     </div>
+</div>
+
+
+<!-- 标液核查模态框 -->
+<div class="modal fade" id="verifyModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white py-2">
+        <h6 class="modal-title mb-0"><i class="fas fa-clipboard-check me-1"></i>标液核查</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <!-- 1. 核查参数 -->
+        <div class="row g-2 mb-3 align-items-end">
+          <div class="col-auto">
+            <label class="form-label mb-1 small fw-bold">核查模式</label>
+            <select id="verifyMode" class="form-select form-select-sm">
+              <option value="new_verifies_old">新验旧（新标液作标准曲线测旧标液）</option>
+              <option value="old_verifies_new">旧验新（旧标液作标准曲线测新标液）</option>
+            </select>
+          </div>
+          <div class="col-auto">
+            <label class="form-label mb-1 small fw-bold">核查时间</label>
+            <input type="date" id="verifyDate" class="form-control form-control-sm">
+          </div>
+          <div class="col-auto">
+            <label class="form-label mb-1 small fw-bold">偏差阈值</label>
+            <select id="verifyThreshold" class="form-select form-select-sm">
+              <option value="5">5%</option>
+              <option value="10">10%</option>
+            </select>
+          </div>
+          <div class="col-auto">
+            <label class="form-label mb-1 small fw-bold">核查方法</label>
+            <input type="text" class="form-control form-control-sm" value="新旧标准品对比" readonly>
+          </div>
+        </div>
+
+        <!-- 2. 编号区 -->
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label mb-1 small fw-bold">被核查对象编号</label>
+            <textarea id="verifyTargetCode" class="form-control form-control-sm" rows="2" readonly style="font-size:0.75rem;"></textarea>
+          </div>
+          <div class="col-6">
+            <label class="form-label mb-1 small fw-bold">核查对象编号</label>
+            <textarea id="verifySourceCode" class="form-control form-control-sm" rows="2" readonly style="font-size:0.75rem;"></textarea>
+          </div>
+        </div>
+
+        <!-- 3. 核查方法描述 -->
+        <div class="mb-3">
+          <label class="form-label mb-1 small fw-bold">核查方法描述</label>
+          <textarea id="verifyMethodDesc" class="form-control form-control-sm" rows="2" readonly></textarea>
+        </div>
+
+        <!-- 4. 标准物质信息 (Table0) -->
+        <h6 class="fw-bold mb-2 small"><i class="fas fa-info-circle me-1"></i>标准物质信息</h6>
+        <div class="table-responsive mb-3">
+          <table class="table table-sm table-bordered mb-0" id="verifyTable0">
+            <thead class="table-light">
+              <tr><th>序号</th><th>标准物质名称</th><th>标准物质编号</th><th>保存条件</th><th>有效期</th><th>标志</th><th>容器</th><th>处理方法</th><th>备注</th></tr>
+            </thead>
+            <tbody><tr><td colspan="9" class="text-center text-muted small">加载数据中...</td></tr></tbody>
+          </table>
+        </div>
+
+        <!-- 5. 上传PDF -->
+        <h6 class="fw-bold mb-2 small"><i class="fas fa-file-pdf me-1"></i>上传定量报告</h6>
+        <div class="mb-3">
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <input type="file" id="verifyPdfInput" accept=".pdf" multiple class="form-control form-control-sm" style="max-width:300px;">
+            <button id="verifyParseBtn" class="btn btn-sm btn-outline-primary"><i class="fas fa-search me-1"></i>解析PDF</button>
+            <span id="verifyParseStatus" class="small text-muted"></span>
+          </div>
+        </div>
+
+        <!-- 6. 待选物质列表 -->
+        <div id="verifyCompoundSelector" class="mb-3" style="display:none;">
+          <h6 class="fw-bold mb-2 small"><i class="fas fa-check-double me-1"></i>选择比对物质</h6>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0" id="verifyCompoundTable">
+              <thead class="table-light">
+                <tr><th style="width:40px;">选择</th><th>物质名称</th><th>实测值</th><th>理论浓度点</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 7. 核查结果 (Table1) -->
+        <h6 class="fw-bold mb-2 small"><i class="fas fa-chart-bar me-1"></i>核查结果</h6>
+        <div class="table-responsive mb-3">
+          <table class="table table-sm table-bordered mb-0" id="verifyTable1">
+            <thead class="table-light">
+              <tr><th>各组分名称</th><th>理论值</th><th>实测值</th><th>相对偏差(%)</th></tr>
+            </thead>
+            <tbody><tr><td colspan="4" class="text-center text-muted small">请先解析PDF并选择比对物质</td></tr></tbody>
+          </table>
+        </div>
+
+        <!-- 8. 结论 + 备注 -->
+        <div class="row g-2 mb-2 align-items-end">
+          <div class="col-auto">
+            <label class="form-label mb-1 small fw-bold">核查结论</label>
+            <select id="verifyConclusion" class="form-select form-select-sm">
+              <option value="合格">合格</option>
+              <option value="不合格">不合格</option>
+            </select>
+          </div>
+          <div class="col">
+            <label class="form-label mb-1 small fw-bold">备注</label>
+            <input type="text" id="verifyNotes" class="form-control form-control-sm" placeholder="可选">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+        <button id="verifyExportBtn" class="btn btn-sm btn-primary"><i class="fas fa-file-word me-1"></i>导出核查记录</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 
@@ -1084,11 +1212,13 @@
         showLoginBtn.style.display = 'none';
         userInfoBox.style.display = 'block';
         displayUserNameSpan.textContent = displayName;
+        localStorage.setItem('auth_logged_in', 'true');
     }
 
     function showLoggedOutUI() {
         showLoginBtn.style.display = 'inline-block';
         userInfoBox.style.display = 'none';
+        localStorage.removeItem('auth_logged_in');
     }
 
     async function doLogin(e) {
@@ -1165,6 +1295,12 @@
         togglePwdBtn.addEventListener('click', togglePasswordVisibility);
         document.getElementById('loginForm').addEventListener('submit', doLogin);
         await checkLoginStatus();
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') checkLoginStatus();
+        });
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'auth_logged_in') checkLoginStatus();
+        });
     });
 
     // ---------- 配置变量 ----------
@@ -2784,8 +2920,8 @@
             if (solType === 'SOLUTION_TYPE_D' && rec.detailList) {
                 const sources = new Map(); // order/id → {order, id}
                 rec.detailList.forEach(dl => {
-                    const order = (dl.originalCode || '').trim();
-                    const id = (dl.originalId || '').trim();
+                    const order = String(dl.originalCode || '').trim();
+                    const id = String(dl.originalId || '').trim();
                     if (order && !sources.has(order)) sources.set(order, {order, id: id || ''});
                     else if (!order && id && !sources.has(id)) sources.set(id, {order: '', id});
                 });
@@ -2800,8 +2936,8 @@
                             const d = await r.json();
                             if (d.success && d.data) {
                                 const info = d.data;
-                                if (src.order && info.solutionCode) results[src.order] = info;
-                                if (src.id && info.solutionCode) results[src.id] = info;
+                                if (src.order) results[src.order] = info;
+                                if (src.id) results[src.id] = info;
                             }
                         } catch (e) {}
                     }));
@@ -2881,59 +3017,149 @@
     function bbcdPopulateBCConfigTable(rec) {
         const detailList = rec.detailList || [];
         const tbody = document.querySelector('#bbcdConfigTable tbody');
-        // Reset thead to B/C format
-        document.querySelector('#bbcdConfigTable thead').innerHTML = '<tr><th>编号</th><th>源名称</th><th>源浓度</th><th>领用量(mL)</th><th style="min-width:90px;">溶剂/介质</th><th style="min-width:110px;width:110px;">定容体积(mL)</th><th style="min-width:160px;">计算浓度</th></tr>';
 
         if (!detailList.length) {
+            document.querySelector('#bbcdConfigTable thead').innerHTML = '<tr><th>编号</th><th>源名称</th><th>源浓度</th><th>领用量(mL)</th><th style="min-width:90px;">溶剂/介质</th><th style="min-width:110px;width:110px;">定容体积(mL)</th><th style="min-width:160px;">计算浓度</th></tr>';
             tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">无详细配置数据</td></tr>';
             return;
         }
 
-        const totalRows = detailList.length;
-        detailList.forEach((dl, idx) => {
+        // Detect % source (A-type weighing)
+        let isPctSource = false;
+        for (const dl of detailList) {
+            const c = String(dl.originalConcentration || '');
+            if (c.includes('%')) { isPctSource = true; break; }
+        }
+        const deviceLabel = document.getElementById('bbcdDeviceLabel');
+        const deviceInput = document.getElementById('bbcdDevice');
+        if (deviceLabel) deviceLabel.style.display = isPctSource ? '' : 'none';
+        if (deviceInput) {
+            deviceInput.style.display = isPctSource ? '' : 'none';
+            deviceInput.value = isPctSource ? (rec.deviceNames || '') : '';
+        }
+        const qtyHeader = isPctSource ? '领用量(g)' : '领用量(mL)';
+        document.querySelector('#bbcdConfigTable thead').innerHTML = '<tr><th>编号</th><th>源名称</th><th>源浓度</th><th>' + qtyHeader + '</th><th style="min-width:90px;">溶剂/介质</th><th style="min-width:110px;width:110px;">定容体积(mL)</th><th style="min-width:160px;">计算浓度</th></tr>';
+
+        // Pre-process: detect multi-component and calculate total row count
+        let totalRows = 0;
+        const processedEntries = detailList.map(dl => {
+            const concRaw = dl.concentrationCount || dl.originalConcentration || '';
+            const multiConc = bbcdParseMultiConc(concRaw);
+            const isMulti = !!multiConc;
+            const count = isMulti ? multiConc.length : 1;
+            totalRows += count;
+            return { dl, multiConc, isMulti, count };
+        });
+
+        let rowIdx = 0;
+        processedEntries.forEach(({ dl, multiConc, isMulti }) => {
             const origNoLines = (dl.originalNo || '').split('\n');
             const configureOrder = (origNoLines[0] || '').trim();
-            const controlledNo = (origNoLines[1] || '').trim();
-            const solutionCode = (origNoLines[2] || '').trim();
-            // Parse concentration: "1000(ug/mL)" or "50.00"
-            const concMatch = String(dl.originalConcentration || '').match(/^([\d.]+)\s*\(([^)]+)\)/);
-            const concVal = concMatch ? parseFloat(concMatch[1]) : parseFloat(dl.originalConcentration) || 0;
-            const concUnit = concMatch ? concMatch[2] : (dl.originalUnit || '');
-
-            const tr = document.createElement('tr');
-            tr._src = {
-                id: dl.originalId || dl.dataid,
-                configureOrder: configureOrder || dl.originalCode || '',
-                solutionName: dl.originalName || '',
-                solutionCode: solutionCode || '',
-                originalCode: dl.originalCode || '',
-                controlledNo: controlledNo || rec.controlledNo || '',
-                aSourceCount: 1,
-                sourceCodes: [],
-                aSourceCodes: [],
-                concValue: concVal,
-                concUnit: concUnit,
-                concentrationRaw: dl.originalConcentration || dl.concentrationCount || '',
-                constantVolume: Number(rec.totalConstantVolume || rec.constantVolume || 0),
-                validityDate: rec.validityDate || '',
-                casNo: '',
-                _detailRecord: dl,
-            };
-
-            let rowHTML = '';
-            rowHTML += '<td><span class="bbcd-c-order">' + bbcdEsc(tr._src.configureOrder) + '</span></td>';
-            rowHTML += '<td class="text-start small"><span class="bbcd-c-srcName">' + bbcdEsc(tr._src.solutionName) + '</span></td>';
-            rowHTML += '<td><span class="bbcd-c-srcConc">' + bbcdEsc(dl.originalConcentration || '\u2014') + '</span></td>';
-            rowHTML += '<td><input type="number" class="form-control form-control-sm bbcd-c-qty" step="0.01" min="0.01" value="' + bbcdEsc(dl.receivedQuantity || '') + '" style="-moz-appearance:textfield;"></td>';
-            if (idx === 0) {
-                rowHTML += '<td rowspan="' + totalRows + '"><input id="bbcdMedium" class="form-control form-control-sm" list="solMediumOptions" placeholder="选择或输入" autocomplete="off" value="' + bbcdEsc(dl.medium || '') + '"></td>';
-                rowHTML += '<td rowspan="' + totalRows + '"><input type="number" id="bbcdVolume" class="form-control form-control-sm" step="0.01" min="0.01" value="' + bbcdEsc(dl.volume || '') + '" style="-moz-appearance:textfield;"></td>';
+            let controlledNo = '';
+            let solutionCode = '';
+            if (origNoLines.length >= 3) {
+                controlledNo = (origNoLines[1] || '').trim();
+                solutionCode = (origNoLines[2] || '').trim();
+            } else if (origNoLines.length === 2) {
+                solutionCode = (origNoLines[1] || '').trim();
             }
-            rowHTML += '<td><span class="bbcd-c-conc">' + bbcdEsc(dl.configurationConcentration || '\u2014') + '</span><span class="bbcd-c-unit ms-1 text-muted small">' + bbcdEsc(dl.configurationUnit || '') + '</span></td>';
 
-            tr.innerHTML = rowHTML;
-            tbody.appendChild(tr);
+            if (isMulti) {
+                const compCount = multiConc.length;
+                multiConc.forEach((comp, compIdx) => {
+                    const tr = document.createElement('tr');
+                    tr._src = {
+                        id: dl.originalId || dl.dataid,
+                        configureOrder: configureOrder || dl.originalCode || '',
+                        solutionName: dl.originalName || '',
+                        solutionCode: solutionCode || '',
+                        originalCode: dl.originalCode || '',
+                        controlledNo: controlledNo || rec.controlledNo || '',
+                        aSourceCount: 1,
+                        sourceCodes: [],
+                        aSourceCodes: [],
+                        concValue: comp.value,
+                        concUnit: comp.unit,
+                        componentName: comp.name,
+                        concentrationRaw: dl.concentrationCount || dl.originalConcentration || '',
+                        constantVolume: Number(rec.totalConstantVolume || rec.constantVolume || 0),
+                        validityDate: rec.validityDate || '',
+                        casNo: '',
+                        isComponent: true,
+                        componentIdx: compIdx,
+                        componentCount: compCount,
+                        isPctSource: isPctSource,
+                        _detailRecord: dl,
+                    };
+
+                    let rowHTML = '';
+                    if (compIdx === 0) {
+                        rowHTML += '<td rowspan="' + compCount + '"><span class="bbcd-c-order">' + bbcdEsc(tr._src.configureOrder) + '</span></td>';
+                        rowHTML += '<td rowspan="' + compCount + '" class="text-start small"><span class="bbcd-c-srcName">' + bbcdEsc(tr._src.solutionName) + '</span></td>';
+                    }
+                    rowHTML += '<td class="text-start small"><span class="bbcd-c-srcConc">' + bbcdEsc(comp.name + ': ' + comp.value + ' ' + comp.unit) + '</span></td>';
+                    if (compIdx === 0) {
+                        rowHTML += '<td rowspan="' + compCount + '"><input type="number" class="form-control form-control-sm bbcd-c-qty" step="0.01" min="0.01" value="' + bbcdEsc(dl.receivedQuantity || '') + '" style="-moz-appearance:textfield;"></td>';
+                        if (rowIdx === 0) {
+                            rowHTML += '<td rowspan="' + totalRows + '"><input id="bbcdMedium" class="form-control form-control-sm" list="solMediumOptions" placeholder="选择或输入" autocomplete="off" value="' + bbcdEsc(dl.medium || '') + '"></td>';
+                            rowHTML += '<td rowspan="' + totalRows + '"><input type="number" id="bbcdVolume" class="form-control form-control-sm" step="0.01" min="0.01" value="' + bbcdEsc(dl.volume || '') + '" style="-moz-appearance:textfield;"></td>';
+                        }
+                    }
+                    const _concDisp = isPctSource ? (rec.concentration || '—') : (dl.configurationConcentration || '—');
+                    const _concHasUnit = String(_concDisp).includes('(');
+                    rowHTML += '<td><span class="bbcd-c-conc">' + bbcdEsc(_concDisp) + '</span>' + (_concHasUnit ? '' : '<span class="bbcd-c-unit ms-1 text-muted small">' + bbcdEsc(comp.unit) + '</span>') + '</td>';
+
+                    tr.innerHTML = rowHTML;
+                    tbody.appendChild(tr);
+                });
+                rowIdx += compCount;
+            } else {
+                const concMatch = String(dl.originalConcentration || '').match(/^([\d.]+)\s*\(([^)]+)\)/);
+                const concVal = concMatch ? parseFloat(concMatch[1]) : parseFloat(dl.originalConcentration) || 0;
+                const concUnit = concMatch ? concMatch[2] : (dl.originalUnit || '');
+
+                const tr = document.createElement('tr');
+                tr._src = {
+                    id: dl.originalId || dl.dataid,
+                    configureOrder: configureOrder || dl.originalCode || '',
+                    solutionName: dl.originalName || '',
+                    solutionCode: solutionCode || '',
+                    originalCode: dl.originalCode || '',
+                    controlledNo: controlledNo || rec.controlledNo || '',
+                    aSourceCount: 1,
+                    sourceCodes: [],
+                    aSourceCodes: [],
+                    concValue: concVal,
+                    concUnit: concUnit,
+                    concentrationRaw: dl.originalConcentration || dl.concentrationCount || '',
+                    constantVolume: Number(rec.totalConstantVolume || rec.constantVolume || 0),
+                    validityDate: rec.validityDate || '',
+                    casNo: '',
+                    isPctSource: isPctSource,
+                    _detailRecord: dl,
+                };
+
+                const sharedCells = rowIdx === 0
+                    ? '<td rowspan="' + totalRows + '"><input id="bbcdMedium" class="form-control form-control-sm" list="solMediumOptions" placeholder="选择或输入" autocomplete="off" value="' + bbcdEsc(dl.medium || '') + '"></td>'
+                    + '<td rowspan="' + totalRows + '"><input type="number" id="bbcdVolume" class="form-control form-control-sm" step="0.01" min="0.01" value="' + bbcdEsc(dl.volume || '') + '" style="-moz-appearance:textfield;"></td>'
+                    : '';
+
+                let rowHTML = '';
+                rowHTML += '<td><span class="bbcd-c-order">' + bbcdEsc(tr._src.configureOrder) + '</span></td>';
+                rowHTML += '<td class="text-start small"><span class="bbcd-c-srcName">' + bbcdEsc(tr._src.solutionName) + '</span></td>';
+                rowHTML += '<td><span class="bbcd-c-srcConc">' + bbcdEsc(dl.originalConcentration || '—') + '</span></td>';
+                rowHTML += '<td><input type="number" class="form-control form-control-sm bbcd-c-qty" step="0.01" min="0.01" value="' + bbcdEsc(dl.receivedQuantity || '') + '" style="-moz-appearance:textfield;"></td>';
+                rowHTML += sharedCells;
+                const _concDisp2 = isPctSource ? (rec.concentration || '—') : (dl.configurationConcentration || '—');
+                const _concHasUnit2 = String(_concDisp2).includes('(');
+                rowHTML += '<td><span class="bbcd-c-conc">' + bbcdEsc(_concDisp2) + '</span>' + (_concHasUnit2 ? '' : '<span class="bbcd-c-unit ms-1 text-muted small">' + bbcdEsc(dl.configurationUnit || '') + '</span>') + '</td>';
+
+                tr.innerHTML = rowHTML;
+                tbody.appendChild(tr);
+                rowIdx++;
+            }
         });
+
 
         bbcdRecalcAll();
     }
@@ -2955,12 +3181,25 @@
         }
 
         // Classify detailList rows
-        let takeRow = null, volRow = null, concRows = [];
+        // 多源时 groupName = "B-1001移取体积", 单源时 groupName = "移取体积"
+        let volRow = null;
+        const takeRowMap = {};
+        let singleTakeRow = null;
+        const concRows = [];
         for (const dl of detailList) {
             const gName = String(dl.groupName || '').trim();
-            if (gName === '\u79fb\u53d6\u4f53\u79ef') takeRow = dl;  // 移取体积
-            else if (gName === '\u5b9a\u5bb9\u4f53\u79ef') volRow = dl;  // 定容体积
-            else concRows.push(dl);  // concentration rows
+            if (gName.endsWith('移取体积')) {
+                if (gName === '移取体积') {
+                    singleTakeRow = dl;
+                } else {
+                    const srcCode = gName.replace('移取体积', '').trim();
+                    takeRowMap[srcCode] = dl;
+                }
+            } else if (gName === '定容体积') {
+                volRow = dl;
+            } else {
+                concRows.push(dl);
+            }
         }
 
         // Build sourceItems: group concRows by originalCode (multi-component shares same code)
@@ -2971,8 +3210,8 @@
             codeGroups[code].push(dl);
         });
         const sourceItems = Object.entries(codeGroups).flatMap(([, rows]) => {
-            const order = (rows[0].originalCode || '').trim();
-            const origId = (rows[0].originalId || '').trim();
+            const order = String(rows[0].originalCode || '').trim();
+            const origId = String(rows[0].originalId || '').trim();
             const matchItem = bbcdLastResults.find(it => it.configureOrder === order);
             if (matchItem) return [matchItem];
             // Look up source info by order first, then by originalId
@@ -3028,21 +3267,36 @@
             if (!src) return;
             if (concRows[srcIdx]) {
                 tr._src._detailRecord = concRows[srcIdx];
-                if (takeRow) tr._src._takeDetailRecord = takeRow;
+                const srcOrder = tr._src.configureOrder;
+                const trTakeRow = takeRowMap[srcOrder] || singleTakeRow;
+                if (trTakeRow) tr._src._takeDetailRecord = trTakeRow;
                 if (volRow) tr._src._volDetailRecord = volRow;
             }
             srcIdx++;
         });
 
         // Fill take (移取体积) values
-        if (takeRow) {
+        if (singleTakeRow) {
             for (let i = 0; i < maxPts; i++) {
-                const val = takeRow[dilNames[i]];
+                const val = singleTakeRow[dilNames[i]];
                 if (val != null) {
                     const qtyInputs = document.querySelectorAll(`.bbcd-d-qty[data-dilution="${i}"]`);
                     qtyInputs.forEach(el => { el.value = val; });
                 }
             }
+        } else {
+            document.querySelectorAll('#bbcdConfigTable tbody tr').forEach(tr => {
+                const src = tr._src;
+                if (!src) return;
+                if (src.isComponent && src.componentIdx > 0) return;
+                const trTakeRow = takeRowMap[src.configureOrder];
+                if (!trTakeRow) return;
+                const qtyInputs = tr.querySelectorAll('.bbcd-d-qty');
+                for (let i = 0; i < maxPts && i < qtyInputs.length; i++) {
+                    const val = trTakeRow[dilNames[i]];
+                    if (val != null) qtyInputs[i].value = val;
+                }
+            });
         }
 
         // Fill volume (定容体积) values
@@ -3365,6 +3619,9 @@
     function bbcdRecalcRow(tr) {
         const src = tr._src;
         if (!src) return;
+
+        // % 源 (A型称量) 不用稀释公式重算，保留原始值
+        if (src.isPctSource) return;
 
         // 获取移取体积输入框：多组分后续行没有自己的输入框，需要向前查找
         let qtyEl = tr.querySelector('.bbcd-c-qty');
@@ -4217,7 +4474,7 @@
                             medium, volume: volStr,
                             configurationConcentration: concStr,
                             configurationUnit: firstSrc.concUnit,
-                            originalNo: `${firstSrc.configureOrder}\n${firstSrc.solutionCode}`,
+                            originalNo: firstSrc.solutionCode ? `${firstSrc.configureOrder}\n${firstSrc.solutionCode}` : firstSrc.configureOrder,
                             resultCode: rowCode,
                         });
                     } else {
@@ -4230,7 +4487,7 @@
                             medium, volume: volStr,
                             configurationConcentration: concStr,
                             configurationUnit: firstSrc.concUnit,
-                            originalNo: `${firstSrc.configureOrder}\n${firstSrc.solutionCode}`,
+                            originalNo: firstSrc.solutionCode ? `${firstSrc.configureOrder}\n${firstSrc.solutionCode}` : firstSrc.configureOrder,
                             resultCode: rowCode,
                         });
                     }
@@ -4250,6 +4507,44 @@
             custom_type:       document.getElementById('bbcdCustomType').value.trim(),
             is_multi_source:   isMultiSource,
             detail_list:       detailList,
+        };
+    }
+
+    function bbcdBuildStockExportPayload() {
+        const rec = window.bbcdViewDetailRecord;
+        if (!rec || !rec.detailList || !rec.detailList.length) return null;
+        const dl = rec.detailList[0];
+        const concStr = String(dl.originalConcentration || '');
+        const concMatch = concStr.match(/^([\d.]+)\s*\(([^)]+)\)/);
+        if (!concMatch || !concMatch[2].includes('%')) return null;
+        const purity = concMatch[1];
+        const unit = concMatch[2];
+        const origNoLines = (dl.originalNo || '').split('\n');
+        const deviceEl = document.getElementById('bbcdDevice');
+        return {
+            original_id: String(dl.originalId || dl.dataid || ''),
+            original_name: dl.originalName || rec.solutionName || '',
+            purity_str: purity,
+            original_unit: unit,
+            received_unit: 'g',
+            batch_no: '',
+            expiry_date: rec.validityDate || '',
+            base_custom_num: (origNoLines[2] || '').trim(),
+            solution_name: rec.solutionName || '',
+            solution_code: rec.solutionCode || '',
+            configure_date: (rec.configureDate || '').slice(0, 10),
+            validity_date: (rec.validityDate || '').slice(0, 10),
+            medium: dl.medium || '',
+            volume_ml: parseFloat(dl.volume) || 0,
+            use_quantity: parseFloat(dl.receivedQuantity) || 0,
+            solution_type: 'SOLUTION_TYPE_B',
+            page_type: 'SOLUTION_TYPE_A',
+            storage_condition: rec.storageCondition || '-4℃冰箱',
+            temperature: rec.temperature || '',
+            humidity: rec.humidity || '',
+            device_names: deviceEl ? deviceEl.value.trim() : '',
+            original_no: dl.originalNo || '',
+            config_conc: parseFloat(rec.concentration) || parseFloat(dl.configurationConcentration) || 0,
         };
     }
 
@@ -4286,7 +4581,7 @@
                     medium, volume: volStr,
                     configurationConcentration: bbcdFmtConc(c),
                     configurationUnit: firstSrc.concUnit,
-                    originalNo: `${firstSrc.configureOrder}\n${firstSrc.solutionCode}`,
+                    originalNo: firstSrc.solutionCode ? `${firstSrc.configureOrder}\n${firstSrc.solutionCode}` : firstSrc.configureOrder,
                 };
             } else {
                 const c = bbcdRoundConc(firstSrc.concValue * qty / volume);
@@ -4297,7 +4592,7 @@
                     medium, volume: volStr,
                     configurationConcentration: bbcdFmtConc(c),
                     configurationUnit: firstSrc.concUnit,
-                    originalNo: `${firstSrc.configureOrder}\n${firstSrc.solutionCode}`,
+                    originalNo: firstSrc.solutionCode ? `${firstSrc.configureOrder}\n${firstSrc.solutionCode}` : firstSrc.configureOrder,
                 };
             }
         });
@@ -4373,9 +4668,32 @@
                 }
                 ok = true;
             } else {
-                const payload = bbcdBuildExportPayload();
-                if (!payload) { alert('导出失败：定容体积无效'); return; }
-                await doExportOne(payload);
+                // B/C type: check for % source (A-type weighing) first
+                const stockPayload = bbcdBuildStockExportPayload();
+                if (stockPayload) {
+                    const resp = await fetch('/api/lims/export_docx', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(stockPayload),
+                    });
+                    if (!resp.ok) {
+                        const err = await resp.json().catch(() => ({message: resp.statusText}));
+                        throw new Error(err.message || resp.statusText);
+                    }
+                    const blob = await resp.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    const cd = resp.headers.get('Content-Disposition') || '';
+                    const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)/i);
+                    a.download = m ? decodeURIComponent(m[1]) : '配制记录.docx';
+                    a.href = url;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                } else {
+                    const payload = bbcdBuildExportPayload();
+                    if (!payload) { alert('导出失败：定容体积无效'); return; }
+                    await doExportOne(payload);
+                }
                 ok = true;
             }
         } catch (e) {
@@ -4731,7 +5049,7 @@
         const params = new URLSearchParams({
             name: document.getElementById('dTabFilterName').value.trim(),
             code: document.getElementById('dTabFilterCode').value.trim(),
-            custom_type: '',
+            custom_type: document.getElementById('dTabFilterCustomType').value.trim(),
             operator: document.getElementById('dTabFilterOperator').value.trim(),
             audit_status: document.getElementById('dTabFilterAuditStatus').value,
             config_status: document.getElementById('dTabFilterStatus').value,
@@ -4763,6 +5081,7 @@
     function dTabRenderResults(list) {
         dTabFilteredResults = list;
         dTabCurrentPage = 1;
+        dTabRefreshFilterOptions(list);
         dTabRenderCurrentPage();
         // 单条结果自动选中
         if (list.length === 1) {
@@ -4814,6 +5133,12 @@
         dTabUpdateSelection();
     }
 
+    function dTabRefreshFilterOptions(list) {
+        const dl = document.getElementById('dTabFilterCustomTypeList');
+        const customTypes = [...new Set(list.map(it => it.customType).filter(Boolean))].sort();
+        dl.innerHTML = customTypes.map(v => `<option value="${bbcdEsc(v)}"></option>`).join('');
+    }
+
     function dTabUpdateSelection() {
         const checks = document.querySelectorAll('.dtab-row-check');
         checks.forEach(c => {
@@ -4831,7 +5156,7 @@
     }
 
     function dTabResetFilters() {
-        ['dTabFilterName','dTabFilterCode','dTabFilterDateFrom','dTabFilterDateTo','dTabFilterOperator'].forEach(id => document.getElementById(id).value = '');
+        ['dTabFilterName','dTabFilterCode','dTabFilterCustomType','dTabFilterDateFrom','dTabFilterDateTo','dTabFilterOperator'].forEach(id => document.getElementById(id).value = '');
         document.getElementById('dTabFilterAuditStatus').value = '';
         document.getElementById('dTabFilterStatus').value = '0';
     }
@@ -4841,6 +5166,156 @@
         bbcdLastResults = dTabLastResults;
         try { await bbcdViewDetail(idx); }
         finally { bbcdLastResults = saved; }
+    }
+
+// ── 标液核查 ──
+    let _verifyData = null;
+    let _verifyMeasured = [];
+
+    async function verifyCheckBtnHandler() {
+        if (dTabSelectedIds.size !== 2) { alert('请选择恰好2条D型工作液记录进行核查'); return; }
+        const [idx1, idx2] = [...dTabSelectedIds];
+        const item1 = dTabLastResults[idx1], item2 = dTabLastResults[idx2];
+        _verifyData = null; _verifyMeasured = [];
+        document.getElementById('verifyCompoundSelector').style.display = 'none';
+        document.querySelector('#verifyCompoundTable tbody').innerHTML = '';
+        document.querySelector('#verifyTable1 tbody').innerHTML = '<tr><td colspan="4" class="text-center text-muted small">请先解析PDF并选择比对物质</td></tr>';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('verifyModal')).show();
+        try {
+            const resp = await fetch('/api/lims/get_verification_info', { method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ solution_ids: [item1.id, item2.id], configure_orders: [item1.configureOrder, item2.configureOrder] }) });
+            const data = await resp.json();
+            if (!data.success) { alert('获取核查信息失败: ' + (data.message || '')); return; }
+            _verifyData = data; verifyPopulateModal(data);
+        } catch (e) { alert('获取核查信息异常: ' + e.message); }
+    }
+
+    function verifyPopulateModal(data) {
+        document.getElementById('verifyDate').value = new Date().toISOString().slice(0, 10);
+        document.getElementById('verifyMode').value = data.mode;
+        verifyUpdateCodes();
+        const tbody0 = document.querySelector('#verifyTable0 tbody');
+        const aItems = []; const seen = new Set();
+        [data.new_solution, data.old_solution].forEach(sol => {
+            (sol.ancestors || []).forEach(a => { if (a.level === 'A' && !seen.has(a.configureOrder)) { seen.add(a.configureOrder); aItems.push(a); } });
+        });
+        if (aItems.length) {
+            tbody0.innerHTML = aItems.map((a, i) => '<tr><td>'+(i+1)+'</td><td>'+bbcdEsc(a.solutionName)+'</td><td>'+bbcdEsc(a.controlledNo||a.configureOrder)+'</td><td>'+bbcdEsc(a.storageCondition||'')+'</td><td><input type="checkbox" checked></td><td><input type="checkbox" checked></td><td><input type="checkbox"></td><td><input type="text" class="form-control form-control-sm py-0" style="font-size:0.75rem;"></td><td><input type="text" class="form-control form-control-sm py-0" style="font-size:0.75rem;"></td></tr>').join('');
+        } else { tbody0.innerHTML = '<tr><td colspan="9" class="text-center text-muted small">无溯源数据</td></tr>'; }
+        document.getElementById('verifyConclusion').value = '合格';
+        document.getElementById('verifyNotes').value = '';
+    }
+
+    function verifyUpdateCodes() {
+        if (!_verifyData) return;
+        const mode = document.getElementById('verifyMode').value;
+        const newSol = _verifyData.new_solution, oldSol = _verifyData.old_solution;
+        const threshold = document.getElementById('verifyThreshold').value;
+        let targetCode = '', sourceCode = '', methodDesc = '';
+        if (mode === 'new_verifies_old') {
+            targetCode = newSol.solutionCode || '';
+            sourceCode = (oldSol.concentrationPoints || []).map(p => p.code).join(', ');
+            methodDesc = '用新配制的标液作标准曲线，测定原来配制的标液点的浓度，比较其浓度值相对偏差在' + threshold + '%以内';
+        } else {
+            targetCode = (newSol.concentrationPoints || []).map(p => p.code).join(', ');
+            sourceCode = oldSol.solutionCode || '';
+            methodDesc = '用原来配制的标液作标准曲线，测定新配制的标液点的浓度，比较其浓度值相对偏差在' + threshold + '%以内';
+        }
+        document.getElementById('verifyTargetCode').value = targetCode;
+        document.getElementById('verifySourceCode').value = sourceCode;
+        document.getElementById('verifyMethodDesc').value = methodDesc;
+    }
+
+    function verifyBuildTheoryOptions() {
+        if (!_verifyData) return [];
+        const mode = document.getElementById('verifyMode').value;
+        const theorySol = mode === 'new_verifies_old' ? _verifyData.old_solution : _verifyData.new_solution;
+        const points = theorySol.concentrationPoints || [];
+        const seen = new Set(); const opts = [];
+        points.forEach(p => { const key = p.concentration + '_' + p.unit; if (!seen.has(key)) { seen.add(key); opts.push({value: p.concentration, unit: p.unit, name: p.name, code: p.code}); } });
+        return opts;
+    }
+
+    async function verifyParsePdf() {
+        const input = document.getElementById('verifyPdfInput');
+        if (!input.files.length) { alert('请选择PDF文件'); return; }
+        const formData = new FormData();
+        for (const f of input.files) formData.append('pdf_files', f);
+        const status = document.getElementById('verifyParseStatus');
+        status.textContent = '解析中...'; status.className = 'small text-warning';
+        try {
+            const resp = await fetch('/api/lims/parse_verification_pdf', { method: 'POST', body: formData });
+            const data = await resp.json();
+            if (!data.success) { status.textContent = '解析失败: '+(data.message||''); status.className = 'small text-danger'; return; }
+            _verifyMeasured = data.compounds || [];
+            status.textContent = '解析成功，提取到 ' + _verifyMeasured.length + ' 个化合物';
+            status.className = 'small text-success';
+            verifyShowCompoundSelector();
+        } catch (e) { status.textContent = '解析异常: '+e.message; status.className = 'small text-danger'; }
+    }
+
+    function verifyShowCompoundSelector() {
+        if (!_verifyMeasured.length) { document.getElementById('verifyCompoundSelector').style.display = 'none'; return; }
+        const theoryOpts = verifyBuildTheoryOptions();
+        const tbody = document.querySelector('#verifyCompoundTable tbody');
+        tbody.innerHTML = _verifyMeasured.map((c, i) => {
+            const optHtml = theoryOpts.length
+                ? '<select class="form-select form-select-sm py-0 verify-theory-select" data-idx="'+i+'" style="font-size:0.75rem;"><option value="">-- 选择理论浓度点 --</option>'+theoryOpts.map((o,j)=>'<option value="'+j+'">'+bbcdEsc(o.name)+': '+o.value+' '+o.unit+'</option>').join('')+'</select>'
+                : '<input type="number" class="form-control form-control-sm py-0 verify-theory-input" data-idx="'+i+'" step="0.01" placeholder="手动输入" style="font-size:0.75rem;">';
+            return '<tr><td><input type="checkbox" class="verify-comp-check" data-idx="'+i+'" checked></td><td>'+bbcdEsc(c.name)+'</td><td>'+c.measured_value+' '+bbcdEsc(c.unit)+'</td><td>'+optHtml+'</td></tr>';
+        }).join('');
+        document.getElementById('verifyCompoundSelector').style.display = 'block';
+        verifyRecalcResults();
+    }
+
+    function verifyRecalcResults() {
+        if (!_verifyData || !_verifyMeasured.length) return;
+        const threshold = parseFloat(document.getElementById('verifyThreshold').value);
+        const theoryOpts = verifyBuildTheoryOptions();
+        const rows = document.querySelectorAll('#verifyCompoundTable tbody tr');
+        const results = []; let allPass = true;
+        rows.forEach(tr => {
+            const chk = tr.querySelector('.verify-comp-check');
+            if (!chk || !chk.checked) return;
+            const idx = parseInt(chk.dataset.idx, 10);
+            const compound = _verifyMeasured[idx]; if (!compound) return;
+            let theoretical = null, theoreticalUnit = '';
+            const sel = tr.querySelector('.verify-theory-select');
+            if (sel && sel.value !== '') { const opt = theoryOpts[parseInt(sel.value,10)]; if (opt) { theoretical = opt.value; theoreticalUnit = opt.unit; } }
+            else { const inp = tr.querySelector('.verify-theory-input'); if (inp && inp.value) theoretical = parseFloat(inp.value); }
+            const measured = compound.measured_value;
+            let deviation = null, pass = true;
+            if (theoretical !== null && measured !== null && (theoretical + measured) !== 0) { deviation = Math.abs((theoretical - measured) / (theoretical + measured)) * 100; if (deviation > threshold) { pass = false; allPass = false; } }
+            results.push({ name: compound.name, theoretical, theoreticalUnit, measured, measuredUnit: compound.unit||'', deviation, pass });
+        });
+        const tbody1 = document.querySelector('#verifyTable1 tbody');
+        if (results.length) {
+            tbody1.innerHTML = results.map(r => '<tr class="'+(r.pass?'':'table-danger')+'"><td>'+bbcdEsc(r.name)+'</td><td>'+(r.theoretical!==null?r.theoretical.toFixed(2)+' '+r.theoreticalUnit:'--')+'</td><td>'+r.measured.toFixed(2)+' '+bbcdEsc(r.measuredUnit)+'</td><td>'+(r.deviation!==null?r.deviation.toFixed(2):'--')+'</td></tr>').join('');
+        } else { tbody1.innerHTML = '<tr><td colspan="4" class="text-center text-muted small">未选择比对物质</td></tr>'; }
+        document.getElementById('verifyConclusion').value = allPass ? '合格' : '不合格';
+    }
+
+    async function verifyExportDocx() {
+        if (!_verifyData) { alert('请先获取核查信息'); return; }
+        const table0Data = [];
+        document.querySelectorAll('#verifyTable0 tbody tr').forEach((tr, i) => {
+            const cells = tr.querySelectorAll('td'), checks = tr.querySelectorAll('input[type="checkbox"]'), texts = tr.querySelectorAll('input[type="text"]');
+            if (cells.length < 9) return;
+            table0Data.push({'序号':i+1,'标准物质名称':cells[1]?.textContent?.trim()||'','标准物质编号':cells[2]?.textContent?.trim()||'','保存条件':cells[3]?.textContent?.trim()||'','是否在有效期':checks[0]?.checked||false,'标志是否齐全':checks[1]?.checked||false,'容器是否损伤':checks[2]?.checked||false,'处理方法':texts[0]?.value||'','备注':texts[1]?.value||''});
+        });
+        const table1Data = [];
+        document.querySelectorAll('#verifyTable1 tbody tr').forEach(tr => {
+            const cells = tr.querySelectorAll('td');
+            if (cells.length===4 && !tr.classList.contains('text-muted') && cells[0].textContent.trim()) {
+                table1Data.push({'各组分名称':cells[0]?.textContent?.trim()||'','理论值':cells[1]?.textContent?.trim()||'','实测值':cells[2]?.textContent?.trim()||'','相对偏差':cells[3]?.textContent?.trim()||''});
+            }
+        });
+        const payload = {'被核查对象编号':document.getElementById('verifyTargetCode').value,'核查对象编号':document.getElementById('verifySourceCode').value,'核查方法':'新旧标准品对比','核查时间':document.getElementById('verifyDate').value,'核查方法描述':document.getElementById('verifyMethodDesc').value,'核查结论':document.getElementById('verifyConclusion').value,'备注':document.getElementById('verifyNotes').value,'table0_data':table0Data,'table1_data':table1Data};
+        try {
+            const resp = await fetch('/api/lims/export_verification_docx',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+            if (!resp.ok) { const err = await resp.json().catch(()=>({})); alert('导出失败: '+(err.message||resp.statusText)); return; }
+            const blob = await resp.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='标准物质期间核查记录.docx'; a.click(); URL.revokeObjectURL(url);
+        } catch (e) { alert('导出异常: '+e.message); }
     }
 
 
@@ -4927,21 +5402,6 @@
             else if (hasB && hasC) srcLabel = `源液（B:${cntB} / C:${cntC}）`;
             document.getElementById('bbcdTypePickerSrcLabel').textContent = srcLabel;
             document.getElementById('bbcdTypePickerCount').textContent = checkedIdxs.length;
-            // 动态更新类型按钮说明文字
-            const spanB = btnB && btnB.querySelector('span.small.text-muted');
-            const spanC = btnC && btnC.querySelector('span.small.text-muted');
-            const spanD = btnD && btnD.querySelector('span.small.text-muted');
-            if (spanB) spanB.textContent = '— 储备液 B → 储备液 B';
-            if (spanC) {
-                if (hasB && !hasC) spanC.textContent = '— 储备液 B → 应用液 C';
-                else if (!hasB && hasC) spanC.textContent = '— 应用液 C → 应用液 C';
-                else spanC.textContent = '— 混合 → 应用液 C';
-            }
-            if (spanD) {
-                if (hasB && !hasC) spanD.textContent = '— 储备液 B → 工作液 D';
-                else if (!hasB && hasC) spanD.textContent = '— 应用液 C → 工作液 D';
-                else spanD.textContent = '— 混合 → 工作液 D';
-            }
             bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdTypePickerModal')).show();
         });
         document.getElementById('bbcdValidityDate').addEventListener('change', bbcdCheckValidity);
@@ -5072,7 +5532,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('dTabQueryBtn').addEventListener('click', dTabQuery);
         document.getElementById('dTabResetFilterBtn').addEventListener('click', dTabResetFilters);
-        ['dTabFilterName','dTabFilterCode','dTabFilterOperator','dTabFilterDateFrom','dTabFilterDateTo'].forEach(id => {
+        ['dTabFilterName','dTabFilterCode','dTabFilterCustomType','dTabFilterOperator','dTabFilterDateFrom','dTabFilterDateTo'].forEach(id => {
             document.getElementById(id).addEventListener('keypress', e => { if (e.key === 'Enter') dTabQuery(); });
         });
         document.getElementById('dTabCheckAll').addEventListener('change', e => {
@@ -5107,6 +5567,17 @@
             dTabPageSize = parseInt(e.target.value, 10) || 20;
             dTabCurrentPage = 1;
             dTabRenderCurrentPage();
+        });
+        document.getElementById('dTabCheckBtn').addEventListener('click', verifyCheckBtnHandler);
+        document.getElementById('verifyMode').addEventListener('change', () => { verifyUpdateCodes(); if (_verifyMeasured.length) verifyRecalcResults(); });
+        document.getElementById('verifyThreshold').addEventListener('change', () => { verifyUpdateCodes(); if (_verifyMeasured.length) verifyRecalcResults(); });
+        document.getElementById('verifyParseBtn').addEventListener('click', verifyParsePdf);
+        document.getElementById('verifyExportBtn').addEventListener('click', verifyExportDocx);
+        document.querySelector('#verifyCompoundTable tbody').addEventListener('change', e => {
+            if (e.target.classList.contains('verify-theory-select') || e.target.classList.contains('verify-comp-check')) verifyRecalcResults();
+        });
+        document.querySelector('#verifyCompoundTable tbody').addEventListener('input', e => {
+            if (e.target.classList.contains('verify-theory-input')) verifyRecalcResults();
         });
         document.querySelector('#dTabResultTable tbody').addEventListener('change', e => {
             if (e.target.classList.contains('dtab-row-check')) dTabUpdateSelection();
@@ -5269,6 +5740,10 @@
             window.bbcdViewDetailMode = false;
             window.bbcdViewDetailRecord = null;
             window.bbcdDetailIds = null;
+            const _devL = document.getElementById('bbcdDeviceLabel');
+            const _devI = document.getElementById('bbcdDevice');
+            if (_devL) _devL.style.display = 'none';
+            if (_devI) _devI.style.display = 'none';
             if (bbcdSelectedIndices.length > 0) {
                 // 恢复之前保存的选中状态
                 document.querySelectorAll('.bbcd-row-check').forEach(checkbox => {
@@ -5345,12 +5820,28 @@
 
     function qqEsc(v) { return v == null ? '' : String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+    // 获取上一个工作日（从 date 出发往回找，跳过周末）
+    function qqPrevWorkday(date) {
+        const d = new Date(date);
+        d.setDate(d.getDate() - 1);
+        while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+        return d.toISOString().slice(0, 10);
+    }
+    // 获取下一个工作日（若 date 本身是工作日则返回自身，否则往后找）
+    function qqNextWorkday(date) {
+        const d = new Date(date);
+        const dow = d.getDay();
+        if (dow === 6) d.setDate(d.getDate() + 2);
+        else if (dow === 0) d.setDate(d.getDate() + 1);
+        return d.toISOString().slice(0, 10);
+    }
+
     async function openQuickQueryModal() {
         const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('quickQueryModal'));
         document.getElementById('qqOperator').value = displayUserNameSpan?.textContent || '';
         const today = new Date().toISOString().slice(0, 10);
-        document.getElementById('qqDateFrom').value = today;
-        document.getElementById('qqDateTo').value = today;
+        document.getElementById('qqDateFrom').value = qqPrevWorkday(today);
+        document.getElementById('qqDateTo').value = qqNextWorkday(today);
         modal.show();
         qqDoQuery(1);
     }
@@ -5494,13 +5985,22 @@
             bbcdPopulateConfigModal(data.data, solType);
             // 构建导出 payload 并下载
             let payload;
+            let useExportDocx = false;
             if (solType === 'SOLUTION_TYPE_D') {
                 payload = typeof bbcdBuildWorkingSolutionExportPayload === 'function' ? bbcdBuildWorkingSolutionExportPayload() : null;
             } else {
-                payload = typeof bbcdBuildExportPayload === 'function' ? bbcdBuildExportPayload() : null;
+                // Check for % source (A-type weighing)
+                const stockPayload = typeof bbcdBuildStockExportPayload === 'function' ? bbcdBuildStockExportPayload() : null;
+                if (stockPayload) {
+                    payload = stockPayload;
+                    useExportDocx = true;
+                } else {
+                    payload = typeof bbcdBuildExportPayload === 'function' ? bbcdBuildExportPayload() : null;
+                }
             }
             if (!payload) { alert('导出失败：无法构建导出数据'); return; }
-            const exportResp = await fetch('/api/lims/export_bbcd_docx', {
+            const endpoint = useExportDocx ? '/api/lims/export_docx' : '/api/lims/export_bbcd_docx';
+            const exportResp = await fetch(endpoint, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload),
