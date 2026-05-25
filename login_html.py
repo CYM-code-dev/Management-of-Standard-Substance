@@ -1829,6 +1829,83 @@ def save_working_solution():
         return jsonify({"success": False, "message": f"配置异常: {str(e)}"}), 500
 
 
+@app.route('/api/lims/update_solution', methods=['POST'])
+def lims_update_solution():
+    """代理工作液/储备液/应用液修改请求 → updateObj1"""
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    payload = request.get_json() or {}
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+    pid = session.get('pid') or system.current_pid or ''
+    pname = session.get('display_name') or system.current_real_name or username
+    payload['pid'] = pid
+    payload['pname'] = pname
+    payload['loginId'] = pid
+    try:
+        url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/updateObj1"
+        headers = {
+            "Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544",
+            "Content-Type": "application/json;charset=UTF-8",
+        }
+        resp = system.session.post(url, json=payload, headers=headers)
+        if not resp.ok:
+            print(f"[updateObj1] status={resp.status_code} body={resp.text[:500]}")
+        result = resp.json()
+        if not result.get("success"):
+            err_ctx = result.get('errorCtx') or {}
+            err_msg = result.get('errorDesc') or (err_ctx.get('errorMsg') if isinstance(err_ctx, dict) else '') or '修改失败'
+            return jsonify({"success": False, "message": err_msg})
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"[updateObj1] exception: {e}")
+        return jsonify({"success": False, "message": f"修改异常: {str(e)}"}), 500
+
+
+@app.route('/api/lims/delete_solution', methods=['POST'])
+def lims_delete_solution():
+    """代理删除溶液配置请求 → delById"""
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    p = request.get_json() or {}
+    solution_id = p.get('id')
+    solution_type = p.get('type', '')
+    if not solution_id:
+        return jsonify({"success": False, "message": "缺少记录ID"})
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+    pid = session.get('pid') or system.current_pid or ''
+    pname = session.get('display_name') or system.current_real_name or username
+    try:
+        url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/delById"
+        form_data = {
+            'ids': str(solution_id),
+            'type': solution_type,
+            'pid': str(pid),
+            'pname': pname,
+            'loginId': str(pid),
+            '_method': 'DELETE',
+        }
+        resp = system.session.post(url, data=form_data)
+        if not resp.ok:
+            print(f"[delById] status={resp.status_code} body={resp.text[:500]}")
+        result = resp.json()
+        if not result.get("success"):
+            err_ctx = result.get('errorCtx') or {}
+            err_msg = result.get('errorDesc') or (err_ctx.get('errorMsg') if isinstance(err_ctx, dict) else '') or '删除失败'
+            return jsonify({"success": False, "message": err_msg})
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"[delById] exception: {e}")
+        return jsonify({"success": False, "message": f"删除异常: {str(e)}"}), 500
+
+
 @app.route('/api/lims/get_solution_detail', methods=['POST'])
 def lims_get_solution_detail():
     if not session.get('logged_in'):

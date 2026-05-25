@@ -584,9 +584,10 @@
                       <th>配置日期</th>
                       <th>有效期</th>
                       <th>审核</th>
+                      <th style="width:40px;">操作</th>
                     </tr>
                   </thead>
-                  <tbody><tr><td colspan="10" class="text-center text-muted small py-3">请先查询</td></tr>
+                  <tbody><tr><td colspan="11" class="text-center text-muted small py-3">请先查询</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -684,9 +685,10 @@
                       <th>配置日期</th>
                       <th>有效期</th>
                       <th>审核</th>
+                      <th style="width:40px;">操作</th>
                     </tr>
                   </thead>
-                  <tbody><tr><td colspan="9" class="text-center text-muted small py-3">请先查询</td></tr>
+                  <tbody><tr><td colspan="10" class="text-center text-muted small py-3">请先查询</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -2555,7 +2557,7 @@
             bbcdSelectedIds.clear();
             bbcdRenderResults(bbcdLastResults);
         } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger small py-3">查询异常: ${bbcdEsc(e.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="11" class="text-center text-danger small py-3">查询异常: ${bbcdEsc(e.message)}</td></tr>`;
             bbcdLastResults = [];
         }
     }
@@ -2593,7 +2595,7 @@
         if (bbcdCurrentPage > totalPages) bbcdCurrentPage = totalPages;
 
         if (!total) {
-            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted small py-3">无匹配记录</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted small py-3">无匹配记录</td></tr>';
             paginationBar.style.display = 'none';
             bbcdUpdateSelection();
             return;
@@ -2619,6 +2621,7 @@
                 <td>${bbcdEsc(item.configureDate || '—')}</td>
                 <td>${bbcdEsc(item.validityDate || '—')}</td>
                 <td>${item.auditUserName ? '<span class="badge bg-success">已审核</span>' : '<span class="badge bg-secondary">未审核</span>'}</td>
+                <td><i class="fas fa-trash-alt solution-config-icon bbcd-delete-btn" data-idx="${realIdx}" title="删除" style="cursor:pointer;color:#ef4444;"></i></td>
             </tr>`;
         }).join('');
 
@@ -4007,10 +4010,10 @@
                 const overallConc = codeParts.length >= 2 && /^[\d.]+$/.test(codeParts[codeParts.length - 2])
                     ? codeParts[codeParts.length - 2] : '';
                 const origConc = overallConc ? `${overallConc}(${firstSrc.concUnit})` : firstSrc.concentrationRaw;
-
+                const dlRec = firstSrc._detailRecord || null;
                 return {
-                    id: null, createDatetime: nowStr, serialVersionUID: null,
-                    configureId: null,
+                    id: dlRec ? dlRec.id : null, createDatetime: dlRec ? dlRec.createDatetime : nowStr, serialVersionUID: null,
+                    configureId: dlRec ? dlRec.configureId : null,
                     originalId: firstSrc.id,
                     originalCode: firstSrc.originalCode,
                     originalName: firstSrc.solutionName,
@@ -4024,12 +4027,12 @@
                     configurationConcentration: configConcParts.join(';'),
                     configurationUnit: firstSrc.concUnit,
                     configurationUncertainty: null, remark: null,
-                    consumableReceive: null,
+                    consumableReceive: dlRec ? dlRec.consumableReceive : null,
                     dataid: firstSrc.id,
-                    configurationRecordId: null, creatorName: null, creatorId: null,
+                    configurationRecordId: null, creatorName: dlRec ? dlRec.creatorName : null, creatorId: dlRec ? dlRec.creatorId : null,
                     modifierName: null, modifyDatetime: nowStr,
                     originalNo: `${firstSrc.configureOrder}\n${firstSrc.solutionCode}`,
-                    _X_ID: `row_${Date.now() + idx}`,
+                    _X_ID: dlRec ? dlRec._X_ID : `row_${Date.now() + idx}`,
                 };
             } else {
                 // 单组分：保持现有逻辑
@@ -4037,10 +4040,10 @@
                 const c = bbcdRoundConc(src.concValue * qty / volume);
                 const concStr = bbcdFmtConc(c);
                 concParts.push(`${src.solutionName}:${concStr}(${src.concUnit})`);
-
+                const dlRec = src._detailRecord || null;
                 return {
-                    id: null, createDatetime: nowStr, serialVersionUID: null,
-                    configureId: null,
+                    id: dlRec ? dlRec.id : null, createDatetime: dlRec ? dlRec.createDatetime : nowStr, serialVersionUID: null,
+                    configureId: dlRec ? dlRec.configureId : null,
                     originalId: src.id,
                     originalCode: src.originalCode,
                     originalName: src.solutionName,
@@ -4054,12 +4057,12 @@
                     configurationConcentration: concStr,
                     configurationUnit: src.concUnit,
                     configurationUncertainty: null, remark: null,
-                    consumableReceive: null,
+                    consumableReceive: dlRec ? dlRec.consumableReceive : null,
                     dataid: src.id,
-                    configurationRecordId: null, creatorName: null, creatorId: null,
+                    configurationRecordId: null, creatorName: dlRec ? dlRec.creatorName : null, creatorId: dlRec ? dlRec.creatorId : null,
                     modifierName: null, modifyDatetime: nowStr,
                     originalNo: `${src.configureOrder}\n${src.solutionCode}`,
-                    _X_ID: `row_${Date.now() + idx}`,
+                    _X_ID: dlRec ? dlRec._X_ID : `row_${Date.now() + idx}`,
                 };
             }
         });
@@ -4163,21 +4166,23 @@
             const firstTr = group.rows[0];
             const src = firstTr._src;
             const qtyInputs = firstTr.querySelectorAll('.bbcd-d-qty');
+            const takeRec = src._takeDetailRecord || null;
             const row = {
-                id: null, createDatetime: nowStr, serialVersionUID: null,
-                configureId: null, originalId: null,
-                originalCode: null, originalName: null,
-                originalConcentration: null, concentrationCount: null, originalUnit: null,
+                id: takeRec ? takeRec.id : null, createDatetime: takeRec ? takeRec.createDatetime : nowStr, serialVersionUID: null,
+                configureId: takeRec ? takeRec.configureId : null, originalId: takeRec ? takeRec.originalId : null,
+                originalCode: takeRec ? takeRec.originalCode : null, originalName: takeRec ? takeRec.originalName : null,
+                originalConcentration: takeRec ? takeRec.originalConcentration : null, concentrationCount: takeRec ? takeRec.concentrationCount : null, originalUnit: takeRec ? takeRec.originalUnit : null,
                 groupName: isSingleSource ? '移取体积' : `${src.configureOrder}移取体积`,
                 groupUnit: 'mL',
                 dilutionSix: null, dilutionSeven: null, dilutionEight: null,
                 dilutionNine: null, dilutionTen: null, dilutionEleven: null, dilutionTwelve: null,
-                remark: null, dataSeq: dataSeq++,
+                remark: null, dataSeq: takeRec ? takeRec.dataSeq : dataSeq++,
                 receivedQuantity: 0, receivedUint: null, medium: null,
                 consumableReceive: null, configurationProcess: null,
-                configurationRecordId: null, creatorName: null, creatorId: null,
+                configurationRecordId: null, creatorName: takeRec ? takeRec.creatorName : null, creatorId: takeRec ? takeRec.creatorId : null,
                 modifierName: null, modifyDatetime: nowStr,
             };
+            if (!takeRec) dataSeq++;
             for (let i = 0; i < count; i++) {
                 const fieldName = bbcdGetDilutionFieldName(i);
                 if (fieldName) row[fieldName] = qtyInputs[i]?.value || '';
@@ -4186,21 +4191,23 @@
         });
 
         // 2. 定容体积行
+        const volRec = (sourceGroups.length > 0 && sourceGroups[0].rows[0]._src._volDetailRecord) || null;
         const volumeRow = {
-            id: null, createDatetime: nowStr, serialVersionUID: null,
-            configureId: null, originalId: null,
-            originalCode: null, originalName: null,
-            originalConcentration: null, concentrationCount: null, originalUnit: null,
+            id: volRec ? volRec.id : null, createDatetime: volRec ? volRec.createDatetime : nowStr, serialVersionUID: null,
+            configureId: volRec ? volRec.configureId : null, originalId: volRec ? volRec.originalId : null,
+            originalCode: volRec ? volRec.originalCode : null, originalName: volRec ? volRec.originalName : null,
+            originalConcentration: volRec ? volRec.originalConcentration : null, concentrationCount: volRec ? volRec.concentrationCount : null, originalUnit: volRec ? volRec.originalUnit : null,
             groupName: '定容体积',
             groupUnit: 'mL',
             dilutionSix: null, dilutionSeven: null, dilutionEight: null,
             dilutionNine: null, dilutionTen: null, dilutionEleven: null, dilutionTwelve: null,
-            remark: null, dataSeq: dataSeq++,
+            remark: null, dataSeq: volRec ? volRec.dataSeq : dataSeq++,
             receivedQuantity: 0, receivedUint: null, medium: null,
             consumableReceive: null, configurationProcess: null,
-            configurationRecordId: null, creatorName: null, creatorId: null,
+            configurationRecordId: null, creatorName: volRec ? volRec.creatorName : null, creatorId: volRec ? volRec.creatorId : null,
             modifierName: null, modifyDatetime: nowStr,
         };
+        if (!volRec) dataSeq++;
         for (let i = 0; i < count; i++) {
             const fieldName = bbcdGetDilutionFieldName(i);
             if (fieldName) volumeRow[fieldName] = dilutionVols[i].toFixed(2);
@@ -4223,9 +4230,10 @@
                 if (!src) return;
                 const concCells = tr.querySelectorAll('.bbcd-d-conc');
                 const groupName = src.isComponent ? src.componentName : src.solutionName;
+                const concRec = src._detailRecord || null;
                 const row = {
-                    id: null, createDatetime: nowStr, serialVersionUID: null,
-                    configureId: null, originalId: src.id,
+                    id: concRec ? concRec.id : null, createDatetime: concRec ? concRec.createDatetime : nowStr, serialVersionUID: null,
+                    configureId: concRec ? concRec.configureId : null, originalId: src.id,
                     originalCode: src.configureOrder,
                     originalName: src.solutionName,
                     originalConcentration: String(src.concValue),
@@ -4235,14 +4243,15 @@
                     groupUnit: src.concUnit,
                     dilutionSix: null, dilutionSeven: null, dilutionEight: null,
                     dilutionNine: null, dilutionTen: null, dilutionEleven: null, dilutionTwelve: null,
-                    remark: null, dataSeq: dataSeq++,
+                    remark: null, dataSeq: concRec ? concRec.dataSeq : dataSeq++,
                     receivedQuantity: firstQty,
                     receivedUint: 'mL',
                     medium: document.getElementById('bbcdMediumD')?.value.trim() || null,
-                    consumableReceive: null, configurationProcess: null,
-                    configurationRecordId: null, creatorName: null, creatorId: null,
+                    consumableReceive: concRec ? concRec.consumableReceive : null, configurationProcess: null,
+                    configurationRecordId: null, creatorName: concRec ? concRec.creatorName : null, creatorId: concRec ? concRec.creatorId : null,
                     modifierName: null, modifyDatetime: nowStr,
                 };
+                if (!concRec) dataSeq++;
                 for (let i = 0; i < count; i++) {
                     const fieldName = bbcdGetDilutionFieldName(i);
                     if (fieldName) row[fieldName] = concCells[i]?.value.trim() || '';
@@ -4955,6 +4964,7 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>保存中...';
         try {
+            const isUpdateMode = !!window.bbcdViewDetailMode;
             // 检测类型并选择接口/payload
             const solType = document.getElementById('bbcdSolType').value;
             const isWorkingSolution = (solType === 'SOLUTION_TYPE_D');
@@ -4963,40 +4973,58 @@
                 ? bbcdBuildWorkingSolutionPayload()
                 : bbcdBuildPayload();
 
-            // 工作液需要先检查编号并添加用户参数
-            if (isWorkingSolution) {
-                // 获取用户信息
+            if (isUpdateMode) {
+                // 修改模式 → updateObj1（跳过编号检查）
                 const statusResp = await fetch('/api/status', { credentials: 'include' });
                 const statusData = await statusResp.json();
                 if (!statusData.logged_in) {
                     alert('请先登录');
-                    btn.innerHTML = orig;
-                    btn.disabled = false;
+                    btn.innerHTML = orig; btn.disabled = false; return;
+                }
+                const userId = statusData.user_id || statusData.id || 377;
+                const userName = statusData.username || statusData.display_name || 'cym';
+                payload.pid = userId;
+                payload.pname = userName;
+                payload.loginId = userId;
+
+                const resp = await fetch('/api/lims/update_solution', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    btn.innerHTML = orig; btn.disabled = false;
+                    alert('修改失败: ' + (data.message || '未知错误'));
                     return;
+                }
+            } else if (isWorkingSolution) {
+                // 工作液新建
+                const statusResp = await fetch('/api/status', { credentials: 'include' });
+                const statusData = await statusResp.json();
+                if (!statusData.logged_in) {
+                    alert('请先登录');
+                    btn.innerHTML = orig; btn.disabled = false; return;
                 }
 
                 const userId = statusData.user_id || statusData.id || 377;
                 const userName = statusData.username || statusData.display_name || 'cym';
 
-                // 检查编号
                 const solutionCode = encodeURIComponent(document.getElementById('bbcdSolutionCode').value.trim());
                 const checkUrl = `/api/lims/solution_code_check?solutionCode=${solutionCode}&pid=${userId}&pname=${userName}&loginId=${userId}&_=${Date.now()}`;
 
                 const checkResp = await fetch(checkUrl);
                 const checkData = await checkResp.json();
                 if (!checkData.success) {
-                    btn.innerHTML = orig;
-                    btn.disabled = false;
+                    btn.innerHTML = orig; btn.disabled = false;
                     alert('编号检查失败: ' + (checkData.message || '编号已存在或无效'));
                     return;
                 }
 
-                // 添加用户参数到 payload
                 payload.pid = userId;
                 payload.pname = userName;
                 payload.loginId = userId;
 
-                // 保存
                 const endpoint = '/api/lims/save_working_solution';
                 const resp = await fetch(endpoint, {
                     method: 'POST',
@@ -5005,13 +5033,12 @@
                 });
                 const data = await resp.json();
                 if (!data.success) {
-                    btn.innerHTML = orig;
-                    btn.disabled = false;
+                    btn.innerHTML = orig; btn.disabled = false;
                     alert('保存失败: ' + (data.message || '未知错误'));
                     return;
                 }
             } else {
-                // 储备液/应用液的保存逻辑
+                // 储备液/应用液新建
                 const endpoint = '/api/lims/save_solution_b';
                 const resp = await fetch(endpoint, {
                     method: 'POST',
@@ -5020,8 +5047,7 @@
                 });
                 const data = await resp.json();
                 if (!data.success) {
-                    btn.innerHTML = orig;
-                    btn.disabled = false;
+                    btn.innerHTML = orig; btn.disabled = false;
                     alert('保存失败: ' + (data.message || '未知错误'));
                     return;
                 }
@@ -5059,12 +5085,12 @@
             page_no: 1,
         });
         const tbody = document.querySelector('#dTabResultTable tbody');
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted small py-3"><i class="fas fa-spinner fa-spin me-1"></i>查询中...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted small py-3"><i class="fas fa-spinner fa-spin me-1"></i>查询中...</td></tr>';
         try {
             const resp = await fetch('/api/lims/list_d_solutions?' + params.toString());
             const data = await resp.json();
             if (!data.success) {
-                tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger small py-3">查询失败: ${bbcdEsc(data.message)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger small py-3">查询失败: ${bbcdEsc(data.message)}</td></tr>`;
                 dTabLastResults = [];
                 return;
             }
@@ -5073,7 +5099,7 @@
             dTabSelectedIds.clear();
             dTabRenderResults(dTabLastResults);
         } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger small py-3">查询异常: ${bbcdEsc(e.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger small py-3">查询异常: ${bbcdEsc(e.message)}</td></tr>`;
             dTabLastResults = [];
         }
     }
@@ -5100,7 +5126,7 @@
         if (dTabCurrentPage > totalPages) dTabCurrentPage = totalPages;
 
         if (!total) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted small py-3">无匹配记录</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted small py-3">无匹配记录</td></tr>';
             paginationBar.style.display = 'none';
             dTabUpdateSelection();
             return;
@@ -5125,6 +5151,7 @@
                 <td>${bbcdEsc(item.configureDate || '—')}</td>
                 <td>${bbcdEsc(item.validityDate || '—')}</td>
                 <td>${item.auditUserName ? '<span class="badge bg-success">已审核</span>' : '<span class="badge bg-secondary">未审核</span>'}</td>
+                <td><i class="fas fa-trash-alt solution-config-icon dtab-delete-btn" data-idx="${realIdx}" title="删除" style="cursor:pointer;color:#ef4444;"></i></td>
             </tr>`;
         }).join('');
 
@@ -5166,6 +5193,66 @@
         bbcdLastResults = dTabLastResults;
         try { await bbcdViewDetail(idx); }
         finally { bbcdLastResults = saved; }
+    }
+
+    async function dTabDeleteRecord(idx) {
+        const item = dTabLastResults[idx];
+        if (!item || !item.id) { alert('无法获取记录ID'); return; }
+        const label = item.configureOrder || item.solutionName || item.id;
+        if (!confirm(`确定要删除记录 [${label}] 吗？此操作不可恢复。`)) return;
+        try {
+            const resp = await fetch('/api/lims/delete_solution', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: item.id, type: 'SOLUTION_TYPE_D' })
+            });
+            const data = await resp.json();
+            if (!data.success) { alert('删除失败: ' + (data.message || '未知错误')); return; }
+            dTabLastResults.splice(idx, 1);
+            dTabFilteredResults = dTabLastResults.filter(it => {
+                const filterName = document.getElementById('dTabFilterName').value.trim();
+                const filterCode = document.getElementById('dTabFilterCode').value.trim();
+                if (filterName && !(it.solutionName || '').includes(filterName)) return false;
+                if (filterCode && !(it.solutionCode || '').includes(filterCode)) return false;
+                return true;
+            });
+            dTabSelectedIds.delete(idx);
+            dTabRenderCurrentPage();
+        } catch (e) { alert('删除异常: ' + e.message); }
+    }
+
+    async function bbcdDeleteRecord(idx, source) {
+        const item = bbcdLastResults[idx];
+        if (!item || !item.id) { alert('无法获取记录ID'); return; }
+        const order = String(item.configureOrder || '').toUpperCase();
+        let solType = 'SOLUTION_TYPE_B';
+        if (order.startsWith('C-')) solType = 'SOLUTION_TYPE_C';
+        else if (order.startsWith('D-')) solType = 'SOLUTION_TYPE_D';
+        else solType = item.type || item.solutionType || 'SOLUTION_TYPE_B';
+        const label = item.configureOrder || item.solutionName || item.id;
+        if (!confirm(`确定要删除记录 [${label}] 吗？此操作不可恢复。`)) return;
+        try {
+            const resp = await fetch('/api/lims/delete_solution', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: item.id, type: solType })
+            });
+            const data = await resp.json();
+            if (!data.success) { alert('删除失败: ' + (data.message || '未知错误')); return; }
+            bbcdLastResults.splice(idx, 1);
+            bbcdFilteredResults = bbcdLastResults.filter(it => {
+                const typeFilter = document.getElementById('bbcdFilterSolType').value;
+                if (typeFilter) {
+                    const order = String(it.configureOrder || '').toUpperCase();
+                    let t = '';
+                    if (order.startsWith('B-')) t = 'SOLUTION_TYPE_B';
+                    else if (order.startsWith('C-')) t = 'SOLUTION_TYPE_C';
+                    else t = it.type || it.solutionType || '';
+                    if (t !== typeFilter) return false;
+                }
+                return true;
+            });
+            bbcdSelectedIds.delete(idx);
+            bbcdRenderCurrentPage();
+        } catch (e) { alert('删除异常: ' + e.message); }
     }
 
 // ── 标液核查 ──
@@ -5367,7 +5454,13 @@
             const icon = e.target.closest('.solution-config-icon');
             if (icon) {
                 const idx = parseInt(icon.dataset.idx, 10);
-                if (!isNaN(idx)) bbcdViewDetail(idx);
+                if (!isNaN(idx)) {
+                    if (icon.classList.contains('bbcd-delete-btn')) {
+                        bbcdDeleteRecord(idx, 'bbcd');
+                    } else {
+                        bbcdViewDetail(idx);
+                    }
+                }
             }
         });
         document.getElementById('bbcdConfigBtn').addEventListener('click', () => {
@@ -5584,9 +5677,15 @@
         });
         document.querySelector('#dTabResultTable tbody').addEventListener('click', e => {
             const icon = e.target.closest('.solution-config-icon');
-            if (icon && icon.dataset.tab === 'd') {
+            if (icon) {
                 const idx = parseInt(icon.dataset.idx, 10);
-                if (!isNaN(idx)) dTabViewDetail(idx);
+                if (!isNaN(idx)) {
+                    if (icon.classList.contains('dtab-delete-btn')) {
+                        dTabDeleteRecord(idx);
+                    } else if (icon.dataset.tab === 'd') {
+                        dTabViewDetail(idx);
+                    }
+                }
             }
         });
         // Tab shown event: ensure pagination bar display is correct
@@ -5913,6 +6012,7 @@
                         <i class="fas fa-tag solution-config-icon qq-print-btn" data-idx="${realIdx}" title="标签打印" style="color:#6366f1;"></i>
                         <i class="fas fa-file-export solution-config-icon qq-export-btn" data-idx="${realIdx}" title="导出配置记录" style="color:#f59e0b;"></i>
                         <i class="fas fa-eye solution-config-icon qq-detail-btn" data-idx="${realIdx}" title="查看详情" style="color:#14b8a6;"></i>
+                        <i class="fas fa-trash-alt solution-config-icon qq-delete-btn" data-idx="${realIdx}" title="删除" style="color:#ef4444;"></i>
                     </div>
                 </td>
             </tr>`;
@@ -5927,6 +6027,9 @@
         });
         tbody.querySelectorAll('.qq-print-btn').forEach(icon => {
             icon.addEventListener('click', () => qqPrintLabel(parseInt(icon.dataset.idx)));
+        });
+        tbody.querySelectorAll('.qq-delete-btn').forEach(icon => {
+            icon.addEventListener('click', () => qqDeleteRecord(parseInt(icon.dataset.idx)));
         });
     }
 
@@ -6027,6 +6130,29 @@
         const item = qqLastResults[idx];
         if (!item) return;
         alert('标签打印功能开发中：' + (item.configureOrder || ''));
+    }
+
+    async function qqDeleteRecord(idx) {
+        const item = qqLastResults[idx];
+        if (!item || !item.id) { alert('无法获取记录ID'); return; }
+        const solType = qqDetectType(item);
+        const label = item.configureOrder || item.solutionName || item.id;
+        if (!confirm(`确定要删除记录 [${label}] 吗？此操作不可恢复。`)) return;
+        try {
+            const resp = await fetch('/api/lims/delete_solution', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: item.id, type: solType })
+            });
+            const data = await resp.json();
+            if (!data.success) { alert('删除失败: ' + (data.message || '未知错误')); return; }
+            qqLastResults.splice(idx, 1);
+            qqFilteredResults = [...qqLastResults];
+            qqTotalRecords = qqFilteredResults.length;
+            qqTotalPages = Math.max(1, Math.ceil(qqFilteredResults.length / qqPageSize));
+            if (qqPageNo > qqTotalPages) qqPageNo = qqTotalPages;
+            document.getElementById('qqTotalCount').textContent = qqTotalRecords;
+            qqRenderCurrentPage();
+        } catch (e) { alert('删除异常: ' + e.message); }
     }
 
     document.addEventListener('DOMContentLoaded', () => {

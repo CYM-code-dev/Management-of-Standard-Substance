@@ -54,7 +54,8 @@
       "Bash(ls -la *.doc)",
       "Bash(ls -d node_modules .codegraph .claude/worktrees)",
       "Bash(git ls-files *)",
-      "Bash(ls -la debug_consumable_bill.json package-lock.json package.json)"
+      "Bash(ls -la debug_consumable_bill.json package-lock.json package.json)",
+      "Bash(grep -E \"\\\\.\\(py|js|html|css\\)$\")"
     ]
   }
 }
