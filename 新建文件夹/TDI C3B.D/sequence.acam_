@@ -1,0 +1,2573 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ACAML xmlns="urn:schemas-agilent-com:acaml15" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<Checksum Algorithm="MD5">
+		<Value>nG9ITiH9mU/878J+wpukEA==</Value>
+	</Checksum>
+	<Doc ContentVersioned="false">
+		<DocID>1a018bc5-6267-4361-89fa-fd4daf26e792</DocID>
+		<DocInfo>
+			<Description>ACAML Export</Description>
+			<CreatedByUser>CK-PC\Administrator</CreatedByUser>
+			<CreatedByApplication>
+				<AgilentApp>
+					<Name>ChemStation</Name>
+					<Version>2.169.0.0</Version>
+				</AgilentApp>
+			</CreatedByApplication>
+			<CreationDate>2026-05-25T13:24:42.97+08:00</CreationDate>
+			<ClientName>ck-PC</ClientName>
+		</DocInfo>
+		<Content>
+			<Resources>
+				<Instrument xsi:type="InstrumentType" id="1887b840-bcce-4903-a340-4a3e3aafdaa1" ver="0">
+					<Name>GC-FID</Name>
+					<Technique>GasChromatography</Technique>
+					<Module>
+						<Name>Agilent 7890B</Name>
+						<Type>GC</Type>
+						<PartNo>7890B</PartNo>
+						<SerialNo>CN16163156</SerialNo>
+						<FirmwareRevision>B.02.04.2</FirmwareRevision>
+					</Module>
+				</Instrument>
+				<SeparationMedium xsi:type="SeparationMediumType" id="890d27aa-b6b0-4021-bd34-f2153dfc9b8a" ver="0">
+					<Name>DB-5</Name>
+					<Type>
+						<Column>
+							<SerialNo>autoID-1</SerialNo>
+							<ProdNo>122-5032</ProdNo>
+							<BatchNo>Agilent</BatchNo>
+							<DeadVolume val="0" unit="min" />
+							<Diameter val="250" unit="µm" />
+							<Length val="30" unit="m" />
+							<ParticleSize val="0.25" unit="µm" />
+							<MaxTemp val="325" unit="°C" />
+							<MaxPH val="2" />
+							<VoidTime val="1.89578461150102" unit="min" />
+						</Column>
+					</Type>
+				</SeparationMedium>
+				<CalibrationCurve xsi:type="CalibrationCurveType" id="cc111d87-9159-4559-96dc-31837f7d0c4c">
+					<CorrCoefficient val="0.998896375553838" />
+					<Origin>Undefined</Origin>
+					<Type>Quadratic</Type>
+					<TypeDescription>Quadratic</TypeDescription>
+					<Formula> y = ax² + bx + c</Formula>
+					<Coefficients>
+						<A val="0.0210771682838916" />
+						<B val="0.11337597983456" />
+						<C val="-0.187797209321417" />
+						<D val="0" />
+						<E val="0" />
+						<F val="0" />
+					</Coefficients>
+					<WeightType>Equal</WeightType>
+					<Residual val="0.228147854461554" />
+					<CalibrationLevel>
+						<Level val="1" />
+						<Amount val="0.4107048" />
+						<AverageResponse val="0.0112502634129129" />
+						<ResponseFactor val="36.506238558699" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="2" />
+						<Amount val="1.026762" />
+						<AverageResponse val="0.0270896911164812" />
+						<ResponseFactor val="37.902314780375" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="3" />
+						<Amount val="2.566905" />
+						<AverageResponse val="0.10089270458786" />
+						<ResponseFactor val="25.4419287349431" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="4" />
+						<Amount val="5.13381" />
+						<AverageResponse val="0.649390706958959" />
+						<ResponseFactor val="7.90557971493185" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="5" />
+						<Amount val="10.26762" />
+						<AverageResponse val="3.45923966152508" />
+						<ResponseFactor val="2.96817249009954" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="6" />
+						<Amount val="20.53524" />
+						<AverageResponse val="10.9840706744429" />
+						<ResponseFactor val="1.86954732982374" />
+					</CalibrationLevel>
+					<Info>
+						<LastModifiedDate>2026-05-25T05:24:29Z</LastModifiedDate>
+					</Info>
+					<ResponseFactorCalcMode>ResponsePerAmount</ResponseFactorCalcMode>
+					<AreRelativeValues>true</AreRelativeValues>
+				</CalibrationCurve>
+				<CalibrationCurve xsi:type="CalibrationCurveType" id="670ca0e6-e717-443c-8535-214d6623dcb3">
+					<CorrCoefficient val="0.999950868407641" />
+					<Origin>Undefined</Origin>
+					<Type>Quadratic</Type>
+					<TypeDescription>Quadratic</TypeDescription>
+					<Formula> y = ax² + bx + c</Formula>
+					<Coefficients>
+						<A val="0.0142240353992611" />
+						<B val="0.0258532258994115" />
+						<C val="-0.0308707312280061" />
+						<D val="0" />
+						<E val="0" />
+						<F val="0" />
+					</Coefficients>
+					<WeightType>Equal</WeightType>
+					<Residual val="0.0275760541719999" />
+					<CalibrationLevel>
+						<Level val="1" />
+						<Amount val="0.405594" />
+						<AverageResponse val="0.00581011563325139" />
+						<ResponseFactor val="69.8082491988247" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="2" />
+						<Amount val="1.013985" />
+						<AverageResponse val="0.0202109026526804" />
+						<ResponseFactor val="50.1701986014722" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="3" />
+						<Amount val="2.5349625" />
+						<AverageResponse val="0.0830958878733714" />
+						<ResponseFactor val="30.5064734835374" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="4" />
+						<Amount val="5.069925" />
+						<AverageResponse val="0.457825548192447" />
+						<ResponseFactor val="11.0739232880662" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="5" />
+						<Amount val="10.13985" />
+						<AverageResponse val="1.71472422405308" />
+						<ResponseFactor val="5.91339986789977" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="6" />
+						<Amount val="20.2797" />
+						<AverageResponse val="6.33918115547423" />
+						<ResponseFactor val="3.19910403293766" />
+					</CalibrationLevel>
+					<Info>
+						<LastModifiedDate>2026-05-25T05:24:29Z</LastModifiedDate>
+					</Info>
+					<ResponseFactorCalcMode>ResponsePerAmount</ResponseFactorCalcMode>
+					<AreRelativeValues>true</AreRelativeValues>
+				</CalibrationCurve>
+				<CalibrationCurve xsi:type="CalibrationCurveType" id="1b3bdaa3-e981-4b0a-a372-00c31199df9d">
+					<CorrCoefficient val="0.998056724784717" />
+					<Origin>Undefined</Origin>
+					<Type>Quadratic</Type>
+					<TypeDescription>Quadratic</TypeDescription>
+					<Formula> y = ax² + bx + c</Formula>
+					<Coefficients>
+						<A val="0.01105470991548" />
+						<B val="0.261833212729312" />
+						<C val="-0.304833853083126" />
+						<D val="0" />
+						<E val="0" />
+						<F val="0" />
+					</Coefficients>
+					<WeightType>Equal</WeightType>
+					<Residual val="0.258027103436654" />
+					<CalibrationLevel>
+						<Level val="1" />
+						<Amount val="0.4022" />
+						<AverageResponse val="0.00940016071880861" />
+						<ResponseFactor val="42.7865024898186" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="2" />
+						<Amount val="1.0055" />
+						<AverageResponse val="0.0440017417190405" />
+						<ResponseFactor val="22.8513681667491" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="3" />
+						<Amount val="2.5137" />
+						<AverageResponse val="0.192069844012978" />
+						<ResponseFactor val="13.0874266750076" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="4" />
+						<Amount val="5.0274" />
+						<AverageResponse val="1.00610804040141" />
+						<ResponseFactor val="4.99687886202976" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="5" />
+						<Amount val="10.05485" />
+						<AverageResponse val="3.72983332230939" />
+						<ResponseFactor val="2.69579070460295" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="6" />
+						<Amount val="20.1097" />
+						<AverageResponse val="9.38113540359719" />
+						<ResponseFactor val="2.14363178174456" />
+					</CalibrationLevel>
+					<Info>
+						<LastModifiedDate>2026-05-25T05:24:29Z</LastModifiedDate>
+					</Info>
+					<ResponseFactorCalcMode>ResponsePerAmount</ResponseFactorCalcMode>
+					<AreRelativeValues>true</AreRelativeValues>
+				</CalibrationCurve>
+				<CalibrationCurve xsi:type="CalibrationCurveType" id="93f7954f-5f45-4ece-a93b-9e4d9086636f">
+					<CorrCoefficient val="1" />
+					<Origin>Include</Origin>
+					<Type>Linear</Type>
+					<TypeDescription>Linear</TypeDescription>
+					<Formula>y = ax + b</Formula>
+					<Coefficients>
+						<A val="1" />
+						<B val="0" />
+						<C val="0" />
+						<D val="0" />
+						<E val="0" />
+						<F val="0" />
+					</Coefficients>
+					<WeightType>Equal</WeightType>
+					<Residual val="0" />
+					<CalibrationLevel>
+						<Level val="1" />
+						<Amount val="1" />
+						<AverageResponse val="1" />
+						<ResponseFactor val="1" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="2" />
+						<Amount val="1" />
+						<AverageResponse val="1" />
+						<ResponseFactor val="1" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="3" />
+						<Amount val="1" />
+						<AverageResponse val="1" />
+						<ResponseFactor val="1" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="4" />
+						<Amount val="1" />
+						<AverageResponse val="1" />
+						<ResponseFactor val="1" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="5" />
+						<Amount val="1" />
+						<AverageResponse val="1" />
+						<ResponseFactor val="1" />
+					</CalibrationLevel>
+					<CalibrationLevel>
+						<Level val="6" />
+						<Amount val="1" />
+						<AverageResponse val="1" />
+						<ResponseFactor val="1" />
+					</CalibrationLevel>
+					<Info>
+						<LastModifiedDate>2026-05-25T05:24:29Z</LastModifiedDate>
+					</Info>
+					<ResponseFactorCalcMode>ResponsePerAmount</ResponseFactorCalcMode>
+					<AreRelativeValues>true</AreRelativeValues>
+				</CalibrationCurve>
+			</Resources>
+			<Method xsi:type="MethodType" id="a4aefc89-6062-4bc0-93e3-ec4099cc95c5" ver="0">
+				<Info>
+					<LastModifiedBy>
+						<Username />
+					</LastModifiedBy>
+					<LastModifiedDate>2026-05-25T05:24:27Z</LastModifiedDate>
+				</Info>
+				<BinaryData>
+					<DirItem>
+						<Name>CG-FID-TDI-CAL-125.M</Name>
+						<OriginalFilePath>D:\方法\消费品\计算方法\CG-FID-TDI-CAL-125.M</OriginalFilePath>
+						<DataItem>
+							<Name>damethod.reg</Name>
+							<Data>
+								<DataFileReference>
+									<Path>D:\方法\消费品\计算方法\CG-FID-TDI-CAL-125.M\damethod.reg</Path>
+								</DataFileReference>
+							</Data>
+						</DataItem>
+					</DirItem>
+				</BinaryData>
+				<Name>CG-FID-TDI-CAL-125.M</Name>
+				<QuantitationMethod>ISTD</QuantitationMethod>
+				<Integrator>Agilent, TwelveTone</Integrator>
+				<MethodConfigurationLink>
+					<ExternalMethodConfiguration_ID xsi:type="MethodConfigurationExternalRefType" id="4a5dc6ea-deb8-4805-a209-3c3d2c57a6c0" ver="0" path="da.macaml" />
+				</MethodConfigurationLink>
+			</Method>
+			<Method xsi:type="MethodType" id="a61dc363-98be-46fe-be89-948a6d5c8851" ver="0">
+				<Info>
+					<LastModifiedBy>
+						<Username />
+					</LastModifiedBy>
+					<LastModifiedDate>2025-12-05T09:41:18Z</LastModifiedDate>
+				</Info>
+				<BinaryData>
+					<DirItem>
+						<Name>CG-FID-TDI-20250722.M</Name>
+						<OriginalFilePath>D:\数据\20260209-TDI\20260209 TDI 2026-02-09 14-59-34\CG-FID-TDI-20250722.M</OriginalFilePath>
+						<DataItem>
+							<Name>damethod.reg</Name>
+							<Data>
+								<DataFileReference>
+									<Path>D:\数据\20260209-TDI\20260209 TDI 2026-02-09 14-59-34\CG-FID-TDI-20250722.M\damethod.reg</Path>
+								</DataFileReference>
+							</Data>
+						</DataItem>
+					</DirItem>
+				</BinaryData>
+				<Name>CG-FID-TDI-20250722.M</Name>
+				<QuantitationMethod>ISTD</QuantitationMethod>
+				<Integrator>Agilent, TwelveTone</Integrator>
+				<MethodConfigurationLink>
+					<ExternalMethodConfiguration_ID xsi:type="MethodConfigurationExternalRefType" id="84f7f2ff-6542-47de-a949-fbbf29f72067" ver="0" path="acq.macaml" />
+				</MethodConfigurationLink>
+			</Method>
+			<Compound xsi:type="CompoundType" id="0db43d43-6bb3-4927-87fc-d5e51bd03158" ver="0">
+				<Name>2,6-TDI</Name>
+			</Compound>
+			<Compound xsi:type="CompoundType" id="ba55d1fb-82bb-4d7e-83bb-6c95ff374d1d" ver="0">
+				<Name>2,4-TDI</Name>
+			</Compound>
+			<Compound xsi:type="CompoundType" id="d8b1833a-1189-4d66-85b9-4d5242f53eee" ver="0">
+				<Name>HDI</Name>
+			</Compound>
+			<Compound xsi:type="CompoundType" id="664fae04-a5c8-4cc6-a9b1-312b94a38fa4" ver="0">
+				<Name>正十四烷</Name>
+			</Compound>
+			<SampleContexts>
+				<Setup xsi:type="SampleSetupContextType" id="0e76fcda-0f24-4864-83e0-f7eca262212d" ver="0">
+					<IdentParam_ID xsi:type="SampleContextIdentParamRefType" id="d1196de4-bfcf-4713-8a4e-f9f7e019e102" />
+					<AcqParam_ID xsi:type="SampleContextAcquisitionParamRefType" id="ce64ea07-ff49-48f4-9388-72583ce6060c" />
+					<DAParam_ID xsi:type="SampleContextDataAnalysisParamRefType" id="521dd2f3-fa09-4623-bacd-79404e6e2a61" />
+					<SampleSetup_ID xsi:type="SampleSetupRefType" id="3b4b9936-9e8a-430e-a4ea-9eb5a21013d5" ver="0" />
+				</Setup>
+				<MeasData xsi:type="SampleMeasDataContextType" id="1d0e792c-3422-4da4-8576-207e4e828ab9" ver="0">
+					<Info>
+						<CreatedBy>
+							<Username>系统</Username>
+						</CreatedBy>
+						<CreatedDate>2026-02-09T06:59:34Z</CreatedDate>
+						<LastModifiedBy>
+							<Username>系统</Username>
+						</LastModifiedBy>
+					</Info>
+					<SampleSetupContext_ID xsi:type="SampleSetupContextRefType" id="0e76fcda-0f24-4864-83e0-f7eca262212d" ver="0" />
+					<IdentParam_ID xsi:type="SampleContextIdentParamRefType" id="d1196de4-bfcf-4713-8a4e-f9f7e019e102" />
+					<AcqParam_ID xsi:type="SampleContextAcquisitionParamRefType" id="ce64ea07-ff49-48f4-9388-72583ce6060c" />
+					<SampleMeasData_ID xsi:type="SampleMeasDataRefType" id="ccf3f87f-8109-4dab-a6d6-2049e3a1e5c1" ver="0" />
+				</MeasData>
+				<Result xsi:type="SampleResultContextType" id="75857b94-8ab4-451c-9a8e-940ecb89e1ef" ver="0">
+					<Info>
+						<LastModifiedBy>
+							<Username>系统</Username>
+						</LastModifiedBy>
+						<LastModifiedDate>2026-02-11T09:02:18Z</LastModifiedDate>
+					</Info>
+					<IdentParam_ID xsi:type="SampleContextIdentParamRefType" id="d1196de4-bfcf-4713-8a4e-f9f7e019e102" />
+					<DAParam_ID xsi:type="SampleContextDataAnalysisParamRefType" id="521dd2f3-fa09-4623-bacd-79404e6e2a61" />
+					<SampleSetupContext_ID xsi:type="SampleSetupContextRefType" id="0e76fcda-0f24-4864-83e0-f7eca262212d" ver="0" />
+					<SampleMeasDataContext_ID xsi:type="SampleMeasDataContextRefType" id="1d0e792c-3422-4da4-8576-207e4e828ab9" ver="0" />
+					<SampleResult_ID xsi:type="SampleResultRefType" id="e4820032-470c-41c4-8335-5f1384e6775e" ver="0" />
+					<DataAnalysisSoftware>ChemStation 版本 C.01.07 [27] Copyright © Agilent Technologies</DataAnalysisSoftware>
+					<PackagingMode>FullResultSet</PackagingMode>
+				</Result>
+			</SampleContexts>
+			<SampleContextParams>
+				<IdentParam xsi:type="SampleContextIdentParamType" id="d1196de4-bfcf-4713-8a4e-f9f7e019e102">
+					<Name>20260209 TDI 2026-02-09 14-59-34</Name>
+					<Description />
+					<ContextInfo>
+						<ContentType>Sequence</ContentType>
+						<SourceType>Undefined</SourceType>
+						<ContentIntegrity>Undefined</ContentIntegrity>
+					</ContextInfo>
+				</IdentParam>
+				<AcqParam xsi:type="SampleContextAcquisitionParamType" id="ce64ea07-ff49-48f4-9388-72583ce6060c">
+					<Instrument_ID xsi:type="InstrumentRefType" id="1887b840-bcce-4903-a340-4a3e3aafdaa1" ver="0" />
+				</AcqParam>
+				<DAParam xsi:type="SampleContextDataAnalysisParamType" id="521dd2f3-fa09-4623-bacd-79404e6e2a61">
+					<BracketingMode>None</BracketingMode>
+				</DAParam>
+			</SampleContextParams>
+			<Samples>
+				<Setup xsi:type="SampleSetupType" id="3b4b9936-9e8a-430e-a4ea-9eb5a21013d5" ver="0">
+					<IdentParam_ID xsi:type="SampleIdentParamRefType" id="329dc81c-43e0-422c-8e76-6e4132397594" />
+					<AcqParam_ID xsi:type="SampleAcquisitionParamRefType" id="bba43e22-0405-4244-852e-047fe3fa9405" />
+					<DAParam_ID xsi:type="SampleDataAnalysisParamRefType" id="85ad6884-3646-4ff5-9c28-7fa253849577" />
+					<InjectionSetup_ID xsi:type="InjectionSetupRefType" id="53b55420-1f82-4264-868f-205eeecf879a" ver="0" />
+				</Setup>
+				<MeasData xsi:type="SampleMeasDataType" id="ccf3f87f-8109-4dab-a6d6-2049e3a1e5c1" ver="0">
+					<Info>
+						<CreatedBy>
+							<Username>系统</Username>
+						</CreatedBy>
+						<CreatedDate>2026-02-09T09:15:34Z</CreatedDate>
+					</Info>
+					<IdentParam_ID xsi:type="SampleIdentParamRefType" id="329dc81c-43e0-422c-8e76-6e4132397594" />
+					<AcqParam_ID xsi:type="SampleAcquisitionParamRefType" id="bba43e22-0405-4244-852e-047fe3fa9405" />
+					<SampleSetup_ID xsi:type="SampleSetupRefType" id="3b4b9936-9e8a-430e-a4ea-9eb5a21013d5" ver="0" />
+					<InjectionMeasData_ID xsi:type="InjectionMeasDataRefType" id="e26a5420-8f9b-4b06-8faa-565a91e47038" ver="0" />
+				</MeasData>
+				<Result xsi:type="SampleResultType" id="e4820032-470c-41c4-8335-5f1384e6775e" ver="0">
+					<IdentParam_ID xsi:type="SampleIdentParamRefType" id="329dc81c-43e0-422c-8e76-6e4132397594" />
+					<DAParam_ID xsi:type="SampleDataAnalysisParamRefType" id="3f6c7c3a-0294-495a-9627-a05549587af3" />
+					<SampleSetup_ID xsi:type="SampleSetupRefType" id="3b4b9936-9e8a-430e-a4ea-9eb5a21013d5" ver="0" />
+					<SampleMeasData_ID xsi:type="SampleMeasDataRefType" id="ccf3f87f-8109-4dab-a6d6-2049e3a1e5c1" ver="0" />
+					<InjectionResult_ID xsi:type="InjectionResultRefType" id="ed1fd5d0-0096-4cfa-bd55-c16fe39e802f" ver="0" />
+				</Result>
+			</Samples>
+			<SampleParams>
+				<IdentParam xsi:type="SampleIdentParamType" id="329dc81c-43e0-422c-8e76-6e4132397594">
+					<Name>TDI C3B</Name>
+					<Description>TDI C3B</Description>
+					<LimsID key="" />
+					<LimsID key="" />
+					<LimsID key="" />
+					<Barcode />
+				</IdentParam>
+				<AcqParam xsi:type="SampleAcquisitionParamType" id="bba43e22-0405-4244-852e-047fe3fa9405">
+					<OrderNo val="8" />
+					<VialNumber>4</VialNumber>
+					<NumberOfInjections val="1" />
+					<InjectionVolume val="1" />
+					<InjectorPosition>Front</InjectorPosition>
+					<InjectionSource>StandardInjection</InjectionSource>
+				</AcqParam>
+				<DAParam xsi:type="SampleDataAnalysisParamType" id="85ad6884-3646-4ff5-9c28-7fa253849577">
+					<Type>Sample</Type>
+					<OrderNo val="8" />
+					<SampleAmount val="0" />
+					<DilutionFactor>
+						<CorrectionFactor val="1" />
+					</DilutionFactor>
+					<DilutionFactor>
+						<CorrectionFactor val="-1" />
+					</DilutionFactor>
+					<DilutionFactor>
+						<CorrectionFactor val="-1" />
+					</DilutionFactor>
+					<DilutionFactor>
+						<CorrectionFactor val="-1" />
+					</DilutionFactor>
+					<DilutionFactor>
+						<CorrectionFactor val="-1" />
+					</DilutionFactor>
+					<Multiplier>
+						<CorrectionFactor val="1" />
+					</Multiplier>
+					<Multiplier>
+						<CorrectionFactor val="-1" />
+					</Multiplier>
+					<Multiplier>
+						<CorrectionFactor val="-1" />
+					</Multiplier>
+					<Multiplier>
+						<CorrectionFactor val="-1" />
+					</Multiplier>
+					<Multiplier>
+						<CorrectionFactor val="-1" />
+					</Multiplier>
+				</DAParam>
+				<DAParam xsi:type="SampleDataAnalysisParamType" id="3f6c7c3a-0294-495a-9627-a05549587af3">
+					<Type>Sample</Type>
+					<OrderNo val="8" />
+					<SampleAmount val="0" />
+					<DilutionFactor>
+						<CorrectionFactor val="1" />
+					</DilutionFactor>
+					<DilutionFactor>
+						<CorrectionFactor val="-1" />
+					</DilutionFactor>
+					<DilutionFactor>
+						<CorrectionFactor val="-1" />
+					</DilutionFactor>
+					<DilutionFactor>
+						<CorrectionFactor val="-1" />
+					</DilutionFactor>
+					<DilutionFactor>
+						<CorrectionFactor val="-1" />
+					</DilutionFactor>
+					<Multiplier>
+						<CorrectionFactor val="1" />
+					</Multiplier>
+					<Multiplier>
+						<CorrectionFactor val="-1" />
+					</Multiplier>
+					<Multiplier>
+						<CorrectionFactor val="-1" />
+					</Multiplier>
+					<Multiplier>
+						<CorrectionFactor val="-1" />
+					</Multiplier>
+					<Multiplier>
+						<CorrectionFactor val="-1" />
+					</Multiplier>
+					<InternalStandard>
+						<Identifier>
+							<CompoundName>正十四烷</CompoundName>
+						</Identifier>
+						<Amount val="10" />
+					</InternalStandard>
+				</DAParam>
+			</SampleParams>
+			<Injections>
+				<Setup xsi:type="InjectionSetupType" id="53b55420-1f82-4264-868f-205eeecf879a" ver="0">
+					<AcqParam_ID xsi:type="InjectionAcquisitionParamRefType" id="38e4dce3-1968-4354-8e1d-745c8d45918b" />
+					<DAParam_ID xsi:type="InjectionDataAnalysisParamRefType" id="44b842e5-d3f0-4598-9a83-d9a565b88858" />
+				</Setup>
+				<MeasData xsi:type="InjectionMeasDataType" id="e26a5420-8f9b-4b06-8faa-565a91e47038" ver="0">
+					<Info>
+						<CreatedBy>
+							<Username>系统</Username>
+						</CreatedBy>
+						<CreatedDate>2026-02-09T09:15:34Z</CreatedDate>
+					</Info>
+					<BinaryData>
+						<DirItem>
+							<Name>TDI C3B.D</Name>
+							<OriginalFilePath>D:\数据\20260209-TDI\20260209 TDI 2026-02-09 14-59-34</OriginalFilePath>
+							<DataItem>
+								<Name>acq.txt</Name>
+								<Data>
+									<DataFileReference>
+										<Path>TDI C3B.D\acq.txt</Path>
+									</DataFileReference>
+								</Data>
+							</DataItem>
+							<DataItem>
+								<Name>ACQRES.REG</Name>
+								<Data>
+									<DataFileReference>
+										<Path>TDI C3B.D\ACQRES.REG</Path>
+									</DataFileReference>
+								</Data>
+							</DataItem>
+							<DataItem>
+								<Name>DiagResults.REG</Name>
+								<Data>
+									<DataFileReference>
+										<Path>TDI C3B.D\DiagResults.REG</Path>
+									</DataFileReference>
+								</Data>
+							</DataItem>
+							<DataItem>
+								<Name>FID1A.ch</Name>
+								<Data>
+									<DataFileReference>
+										<Path>TDI C3B.D\FID1A.ch</Path>
+									</DataFileReference>
+								</Data>
+							</DataItem>
+							<DataItem>
+								<Name>Limsinf.xml</Name>
+								<Data>
+									<DataFileReference>
+										<Path>TDI C3B.D\Limsinf.xml</Path>
+									</DataFileReference>
+								</Data>
+							</DataItem>
+							<DataItem>
+								<Name>RUN.LOG</Name>
+								<Data>
+									<DataFileReference>
+										<Path>TDI C3B.D\RUN.LOG</Path>
+									</DataFileReference>
+								</Data>
+							</DataItem>
+							<DataItem>
+								<Name>SAMPLE.XML</Name>
+								<Data>
+									<DataFileReference>
+										<Path>TDI C3B.D\SAMPLE.XML</Path>
+									</DataFileReference>
+								</Data>
+							</DataItem>
+						</DirItem>
+					</BinaryData>
+					<AcqParam_ID xsi:type="InjectionAcquisitionParamRefType" id="38e4dce3-1968-4354-8e1d-745c8d45918b" />
+					<InjectionSetup_ID xsi:type="InjectionSetupRefType" id="53b55420-1f82-4264-868f-205eeecf879a" ver="0" />
+					<Signal xsi:type="SignalType" id="1c12373d-a9ed-4b56-a283-560075477732" ver="0">
+						<BinaryData>
+							<DataItem>
+								<Name>FID1A.CH</Name>
+								<Data>
+									<DataFileReference>
+										<Path>TDI C3B.D\FID1A.CH</Path>
+									</DataFileReference>
+								</Data>
+							</DataItem>
+						</BinaryData>
+						<Name>FID1A</Name>
+						<Description>FID1 A, 前部信号</Description>
+						<Type>FID1</Type>
+						<BeginTime val="2.0666666328907E-06" />
+						<EndTime val="13.14266875" />
+						<YAxisScalingFactor val="1" />
+						<TraceID />
+					</Signal>
+					<InjectionSeparationMedium>
+						<AutoDetect>false</AutoDetect>
+						<Position>Left</Position>
+						<InjectionCount val="0" />
+						<UsedForInjection>true</UsedForInjection>
+						<SeparationMedium_ID xsi:type="SeparationMediumRefType" id="890d27aa-b6b0-4021-bd34-f2153dfc9b8a" ver="0" />
+					</InjectionSeparationMedium>
+					<ActualInjVolume val="0.999999999999998" />
+					<DiagnosticData>
+						<Item Name="ADVANCED_RUN_INFORMATION">
+							<CustomField Name="7890B:CN16163156" Description="Agilent 7890B">
+								<CustomField Name="Column1" Description="色谱柱 1">
+									<Value type="String">122-5032 : </Value>
+								</CustomField>
+							</CustomField>
+						</Item>
+					</DiagnosticData>
+					<AcquisitionSoftware>ChemStation 版本 C.01.07 [27] Copyright © Agilent Technologies</AcquisitionSoftware>
+				</MeasData>
+				<Result xsi:type="InjectionResultType" id="ed1fd5d0-0096-4cfa-bd55-c16fe39e802f" ver="0">
+					<Info>
+						<CreatedDate>2026-02-09T09:15:34Z</CreatedDate>
+						<LastModifiedBy>
+							<Username>系统</Username>
+						</LastModifiedBy>
+						<LastModifiedDate>2026-05-25T05:24:43.017Z</LastModifiedDate>
+					</Info>
+					<DAParam_ID xsi:type="InjectionDataAnalysisParamRefType" id="44b842e5-d3f0-4598-9a83-d9a565b88858" />
+					<InjectionSetup_ID xsi:type="InjectionSetupRefType" id="53b55420-1f82-4264-868f-205eeecf879a" ver="0" />
+					<InjectionMeasData_ID xsi:type="InjectionMeasDataRefType" id="e26a5420-8f9b-4b06-8faa-565a91e47038" ver="0" />
+					<SignalResult xsi:type="InjectionSignalResultType" id="5912f487-725e-47c1-a142-63c01e723144">
+						<Signal_ID xsi:type="SignalRefType" id="1c12373d-a9ed-4b56-a283-560075477732" ver="0" />
+						<Peak xsi:type="PeakType" id="b3528e08-1b70-4fbf-8482-d00d190557ea">
+							<RetentionTime val="1.04652893543243" />
+							<Type>NormalPeak</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="515.789001464844" />
+							<AreaPercent val="0.0404984514851565" />
+							<Height val="123.398155212402" />
+							<HeightPercent val="0.0722363018183664" />
+							<Symmetry val="0.562566757202148" />
+							<BeginTime val="0.94500207901001" />
+							<EndTime val="1.10976338386536" />
+							<BaselineCode>BV  </BaselineCode>
+							<BaselineStart val="10.7854166030884" />
+							<BaselineEnd val="10.8646373748779" />
+							<LevelStart val="0" />
+							<LevelEnd val="32.4200057983398" />
+							<Excess val="-0.814545034745725" />
+							<StatisticalMoment0 val="374.766263706143" />
+							<StatisticalMoment1 val="1.05468446028465" />
+							<StatisticalMoment2 val="0.000582259342324819" />
+							<StatisticalMoment3 val="-1.80612194873152E-07" />
+							<StatisticalMoment4 val="7.40925927691883E-07" />
+							<Plate5Sigma val="2460.89617360963" />
+							<PlatesStatistical val="1910.4190004484" />
+							<PlatesPerColumn_FoleyDorsey val="2216.21790496616" />
+							<TheoreticalPlates_EP val="838.951777443402" />
+							<TheoreticalPlates_USP val="1263.97743233555" />
+							<TheoreticalPlates_JP val="838.951777443402" />
+							<Skew val="-0.0128550086181254" />
+							<TailingFactor val="1.26513580638477" />
+							<WidthBase val="0.0527652241289616" />
+							<Width5Sigma val="0.10542798386539" />
+							<Width_5Perc val="0.10542798386539" />
+							<Width_50Perc val="0.085" />
+							<WidthTangent val="0.117685477547676" />
+							<Asymmetry_10Perc val="1.28395062129587" />
+							<PeakValleyRatio val="3.80623482857987" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="0.480819404125214" />
+								<BaselineParameter val="10.3310413360596" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="10.8342323303223" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="14ea8a12-b8ef-436c-a8d8-c1d99131c52e">
+							<RetentionTime val="1.31461191177368" />
+							<Type>Solvent</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="1271806.5" />
+							<AreaPercent val="99.8590386620862" />
+							<Height val="169007.453125" />
+							<HeightPercent val="98.9356232471771" />
+							<Symmetry val="14.5597314834595" />
+							<BeginTime val="1.10976338386536" />
+							<EndTime val="2.66316866874695" />
+							<BaselineCode>VB S</BaselineCode>
+							<BaselineStart val="10.8646373748779" />
+							<BaselineEnd val="11.2087240219116" />
+							<LevelStart val="32.4200057983398" />
+							<LevelEnd val="0.00169270834885538" />
+							<Excess val="13.1648261097533" />
+							<StatisticalMoment0 val="1272248.08195231" />
+							<StatisticalMoment1 val="1.25166619507572" />
+							<StatisticalMoment2 val="0.00232579263145106" />
+							<StatisticalMoment3 val="6.09302855544532E-05" />
+							<StatisticalMoment4 val="8.74405775808495E-05" />
+							<Plate5Sigma val="1254.14695453727" />
+							<PlatesStatistical val="673.60616880013" />
+							<PlatesPerColumn_FoleyDorsey val="98.330297665098" />
+							<TheoreticalPlates_EP val="513.173415951843" />
+							<TheoreticalPlates_USP val="736.026341448607" />
+							<TheoreticalPlates_JP val="513.173415951843" />
+							<Resolution_EP val="1.42553586363447" />
+							<Resolution5Sigma val="2.29943497457375" />
+							<Resolution_USP val="1.71869183701943" />
+							<Resolution_AOH val="1.41949545743263" />
+							<Resolution_JP val="1.42553586363447" />
+							<ResolutionStatistical val="1.36118850691509" />
+							<Skew val="0.543221221910028" />
+							<TailingFactor val="0.524915974076755" />
+							<WidthBase val="0.0921934247016907" />
+							<Width5Sigma val="0.186038158149501" />
+							<Width_5Perc val="0.18545734278423" />
+							<Width_50Perc val="0.136908069907238" />
+							<WidthTangent val="0.194276179064552" />
+							<Asymmetry_10Perc val="0.523607695788686" />
+							<PeakValleyRatio val="5213.06054589461" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="0.221504867076874" />
+								<BaselineParameter val="10.6188192367554" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="10.9100122451782" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="d480813a-6df1-40ce-8504-41e8661d86de">
+							<RetentionTime val="1.36716842651367" />
+							<Type>TangentSkimNormal</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="75.3644638061523" />
+							<AreaPercent val="0.00591742761573083" />
+							<Height val="189.298126220703" />
+							<HeightPercent val="0.110813622422417" />
+							<Symmetry val="1.15621209144592" />
+							<BeginTime val="1.34347629547119" />
+							<EndTime val="1.37633538246155" />
+							<BaselineCode>BV T</BaselineCode>
+							<BaselineStart val="30.4838848114014" />
+							<BaselineEnd val="20.4536457061768" />
+							<LevelStart val="0.11213605850935" />
+							<LevelEnd val="0" />
+							<Excess val="5.40758809481244" />
+							<StatisticalMoment0 val="75.2947812499989" />
+							<StatisticalMoment1 val="1.36651348000336" />
+							<StatisticalMoment2 val="1.54753093180657E-05" />
+							<StatisticalMoment3 val="-1.13060955959366E-07" />
+							<StatisticalMoment4 val="2.01349290370672E-09" />
+							<Plate5Sigma val="81146.0979207059" />
+							<PlatesStatistical val="120666.996222877" />
+							<PlatesPerColumn_FoleyDorsey val="261144.277537617" />
+							<TheoreticalPlates_EP val="313273.883473877" />
+							<TheoreticalPlates_USP val="321131.791454976" />
+							<TheoreticalPlates_JP val="313273.883473877" />
+							<Resolution_EP val="0.43472260232817" />
+							<Resolution5Sigma val="0.625559127006122" />
+							<Resolution_USP val="0.515442759871778" />
+							<Resolution_AOH val="0.432880557403051" />
+							<Resolution_JP val="0.43472260232817" />
+							<ResolutionStatistical val="1.10090622989417" />
+							<Skew val="-1.85717849273499" />
+							<TailingFactor val="0.689560439560456" />
+							<WidthBase val="0.0066448007710278" />
+							<Width5Sigma val="0.024" />
+							<Width_5Perc val="0.0209166666666667" />
+							<Width_50Perc val="0.00575000000000014" />
+							<WidthTangent val="0.00965146850998821" />
+							<Asymmetry_10Perc val="0.923611111111179" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="-305.249755859375" />
+								<BaselineParameter val="440.579681396484" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="23.2518749237061" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="5bf7da33-0ae2-4619-8e49-6f139470b4a2">
+							<RetentionTime val="1.4348338842392" />
+							<Type>TangentSkimNormal</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="45.4872093200684" />
+							<AreaPercent val="0.00357154094913268" />
+							<Height val="55.2172622680664" />
+							<HeightPercent val="0.0323237475950455" />
+							<Symmetry val="2.13415837287903" />
+							<BeginTime val="1.38603043556213" />
+							<EndTime val="1.45383536815643" />
+							<BaselineCode>VV T</BaselineCode>
+							<BaselineStart val="20.4210376739502" />
+							<BaselineEnd val="14.7423830032349" />
+							<LevelStart val="0" />
+							<LevelEnd val="0" />
+							<Excess val="1.19218799024693" />
+							<StatisticalMoment0 val="45.4894427083327" />
+							<StatisticalMoment1 val="1.4286298091042" />
+							<StatisticalMoment2 val="0.00012216713036007" />
+							<StatisticalMoment3 val="-1.63797566934168E-06" />
+							<StatisticalMoment4 val="6.25675997661099E-08" />
+							<Plate5Sigma val="15676.9136797565" />
+							<PlatesStatistical val="16706.4833678715" />
+							<PlatesPerColumn_FoleyDorsey val="6349.39733394037" />
+							<TheoreticalPlates_EP val="164277.206778382" />
+							<TheoreticalPlates_USP val="165079.26348041" />
+							<TheoreticalPlates_JP val="164277.206778382" />
+							<Resolution_EP val="5.66948450528654" />
+							<Resolution5Sigma val="2.08060658390864" />
+							<Resolution_USP val="5.69119477386267" />
+							<Resolution_AOH val="5.64546126585736" />
+							<Resolution_JP val="5.66948450528654" />
+							<ResolutionStatistical val="2.07236922737777" />
+							<Skew val="-1.21304213806096" />
+							<TailingFactor val="0.583381607703047" />
+							<WidthBase val="0.0116108367219567" />
+							<Width5Sigma val="0.0573049644378327" />
+							<Width_5Perc val="0.0571382977711661" />
+							<Width_50Perc val="0.0083333333333333" />
+							<WidthTangent val="0.0141275305979969" />
+							<Asymmetry_10Perc val="0.592105263157904" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="-83.7498550415039" />
+								<BaselineParameter val="136.500885009766" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="16.3337593078613" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="262f7cd4-d328-4684-b52d-0b7a393d881a">
+							<RetentionTime val="1.47751915454865" />
+							<Type>TangentSkimNormal</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="581.684265136719" />
+							<AreaPercent val="0.0456723813893189" />
+							<Height val="766.195190429688" />
+							<HeightPercent val="0.448524590439719" />
+							<Symmetry val="0.730573773384094" />
+							<BeginTime val="1.4543354511261" />
+							<EndTime val="1.50718998908997" />
+							<BaselineCode>VV T</BaselineCode>
+							<BaselineStart val="14.671875" />
+							<BaselineEnd val="13.9803991317749" />
+							<LevelStart val="0" />
+							<LevelEnd val="0.0587811656296253" />
+							<Excess val="0.0802428144757181" />
+							<StatisticalMoment0 val="581.585936025943" />
+							<StatisticalMoment1 val="1.47866417764406" />
+							<StatisticalMoment2 val="3.15214611174894E-05" />
+							<StatisticalMoment3 val="-3.41789414899283E-11" />
+							<StatisticalMoment4 val="3.06053699489548E-09" />
+							<Plate5Sigma val="70713.6442446145" />
+							<PlatesStatistical val="69363.7817770653" />
+							<PlatesPerColumn_FoleyDorsey val="82971.5186206024" />
+							<TheoreticalPlates_EP val="88833.0134047992" />
+							<TheoreticalPlates_USP val="125136.867054309" />
+							<TheoreticalPlates_JP val="88833.0134047992" />
+							<Resolution_EP val="2.51843094825744" />
+							<Resolution5Sigma val="1.25422821355705" />
+							<Resolution_USP val="2.76884645562927" />
+							<Resolution_AOH val="2.50775963068008" />
+							<Resolution_JP val="2.51843094825744" />
+							<ResolutionStatistical val="1.50097206258493" />
+							<Skew val="-0.000193129714449758" />
+							<TailingFactor val="1.07964601769917" />
+							<WidthBase val="0.0112571632489562" />
+							<Width5Sigma val="0.0277777777777779" />
+							<Width_5Perc val="0.0271111111111113" />
+							<Width_50Perc val="0.0116666666666667" />
+							<WidthTangent val="0.0167049991167989" />
+							<Asymmetry_10Perc val="1.15384615384623" />
+							<PeakValleyRatio val="13034.7056276055" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="-13.082612991333" />
+								<BaselineParameter val="33.6983833312988" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="14.3685703277588" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="baf72870-5c31-44d7-ac1d-578aca50ea4a">
+							<RetentionTime val="1.52579641342163" />
+							<Type>TangentSkimNormal</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="43.9836120605469" />
+							<AreaPercent val="0.00345348228464971" />
+							<Height val="81.1215667724609" />
+							<HeightPercent val="0.0474879220946837" />
+							<Symmetry val="0.966081142425537" />
+							<BeginTime val="1.50718998908997" />
+							<EndTime val="1.5445020198822" />
+							<BaselineCode>VB T</BaselineCode>
+							<BaselineStart val="13.9803991317749" />
+							<BaselineEnd val="13.4475259780884" />
+							<LevelStart val="0.0587811656296253" />
+							<LevelEnd val="0" />
+							<Excess val="0.700360999194815" />
+							<StatisticalMoment0 val="43.9017734374999" />
+							<StatisticalMoment1 val="1.52571494020713" />
+							<StatisticalMoment2 val="1.45452718518113E-05" />
+							<StatisticalMoment3 val="2.0580834440901E-09" />
+							<StatisticalMoment4 val="7.82866627770003E-10" />
+							<Plate5Sigma val="163097.639959806" />
+							<PlatesStatistical val="160038.678031402" />
+							<PlatesPerColumn_FoleyDorsey val="177619.113851976" />
+							<TheoreticalPlates_EP val="185691.809730881" />
+							<TheoreticalPlates_USP val="189534.347119157" />
+							<TheoreticalPlates_JP val="185691.809730881" />
+							<Resolution_EP val="2.84835827350616" />
+							<Resolution5Sigma val="2.58628172533852" />
+							<Resolution_USP val="3.14277618134652" />
+							<Resolution_AOH val="2.83628895878792" />
+							<Resolution_JP val="2.84835827350616" />
+							<ResolutionStatistical val="2.49520812303813" />
+							<Skew val="0.0371005386555019" />
+							<TailingFactor val="1.02469135802474" />
+							<WidthBase val="0.00912559404969215" />
+							<Width5Sigma val="0.018888888888889" />
+							<Width_5Perc val="0.0184444444444443" />
+							<Width_50Perc val="0.0083333333333333" />
+							<WidthTangent val="0.0140176843243753" />
+							<Asymmetry_10Perc val="1.02898550724644" />
+							<PeakValleyRatio val="1380.06053305578" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="-14.2815084457397" />
+								<BaselineParameter val="35.5053443908691" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="13.7146711349487" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="5cba3681-7eda-4821-94f9-767e18332808">
+							<RetentionTime val="1.63077509403229" />
+							<Type>TangentSkimNormal</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="55.5218391418457" />
+							<AreaPercent val="0.00435943477365126" />
+							<Height val="85.1773910522461" />
+							<HeightPercent val="0.0498621694753883" />
+							<Symmetry val="0.985410213470459" />
+							<BeginTime val="1.59886014461517" />
+							<EndTime val="1.65960454940796" />
+							<BaselineCode>BV T</BaselineCode>
+							<BaselineStart val="12.1235408782959" />
+							<BaselineEnd val="11.9426174163818" />
+							<LevelStart val="0.00204053125344217" />
+							<LevelEnd val="0.277753859758377" />
+							<Excess val="1.43492660256452" />
+							<StatisticalMoment0 val="55.0056223958334" />
+							<StatisticalMoment1 val="1.63056837843414" />
+							<StatisticalMoment2 val="2.07595310837709E-05" />
+							<StatisticalMoment3 val="-1.50972071500635E-09" />
+							<StatisticalMoment4 val="1.91126767895645E-09" />
+							<Plate5Sigma val="134615.951217212" />
+							<PlatesStatistical val="128073.858027933" />
+							<PlatesPerColumn_FoleyDorsey val="141433.236728595" />
+							<TheoreticalPlates_EP val="147313.060690044" />
+							<TheoreticalPlates_USP val="147473.611628752" />
+							<TheoreticalPlates_JP val="147313.060690044" />
+							<Resolution_EP val="6.75680962475864" />
+							<Resolution5Sigma val="6.38383868578318" />
+							<Resolution_USP val="6.77220583708653" />
+							<Resolution_AOH val="6.72817907550119" />
+							<Resolution_JP val="6.75680962475864" />
+							<ResolutionStatistical val="6.26357946300822" />
+							<Skew val="-0.0159613751392872" />
+							<TailingFactor val="0.994897959183731" />
+							<WidthBase val="0.0104047739878297" />
+							<Width5Sigma val="0.0222222222222221" />
+							<Width_5Perc val="0.0216666666666667" />
+							<Width_50Perc val="0.01" />
+							<WidthTangent val="0.0169851183476177" />
+							<Asymmetry_10Perc val="1.00000000000007" />
+							<PeakValleyRatio val="306.665013139128" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="-2.97843384742737" />
+								<BaselineParameter val="16.8856391906738" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="12.0284843444824" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="7bdbe483-9872-413e-b771-120654d5a57c">
+							<RetentionTime val="1.6682676076889" />
+							<Type>TangentSkimNormal</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="0.435463964939117" />
+							<AreaPercent val="3.41915322109147E-05" />
+							<Height val="0.571627676486969" />
+							<HeightPercent val="0.000334626310218081" />
+							<Symmetry val="0.918321847915649" />
+							<BeginTime val="1.65960454940796" />
+							<EndTime val="1.6805020570755" />
+							<BaselineCode>VV T</BaselineCode>
+							<BaselineStart val="11.9426174163818" />
+							<BaselineEnd val="11.8803749084473" />
+							<LevelStart val="0.277753859758377" />
+							<LevelEnd val="0.0888629332184792" />
+							<Excess val="-0.263446762840544" />
+							<StatisticalMoment0 val="0.210914398521489" />
+							<StatisticalMoment1 val="1.66914850052434" />
+							<StatisticalMoment2 val="1.26152365697095E-05" />
+							<StatisticalMoment3 val="8.13896931420347E-09" />
+							<StatisticalMoment4 val="4.35506558471509E-10" />
+							<Plate5Sigma val="159401.087143131" />
+							<PlatesStatistical val="220848.550988909" />
+							<PlatesPerColumn_FoleyDorsey val="132888.578563331" />
+							<TheoreticalPlates_EP val="73927.6213908402" />
+							<TheoreticalPlates_USP val="157766.552845183" />
+							<TheoreticalPlates_JP val="73927.6213908402" />
+							<Resolution_EP val="1.80981466253545" />
+							<Resolution5Sigma val="2.17374469601656" />
+							<Resolution_USP val="2.21918103049497" />
+							<Resolution_AOH val="1.80214595633827" />
+							<Resolution_JP val="1.80981466253545" />
+							<ResolutionStatistical val="2.37912273895173" />
+							<Skew val="0.181646198102895" />
+							<TailingFactor val="1.15275174465072" />
+							<WidthBase val="0.0112876258790493" />
+							<Width5Sigma val="0.0208975076675415" />
+							<Width_5Perc val="0.0208975076675415" />
+							<Width_50Perc val="0.0144451363062932" />
+							<WidthTangent val="0.0168043861059723" />
+							<Asymmetry_10Perc val="1.14618534943547" />
+							<PeakValleyRatio val="2.05803684234753" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="-2.97843384742737" />
+								<BaselineParameter val="16.8856391906738" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.9168148040771" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="18b4981b-6c37-41f9-9dc1-810903ad8c99">
+							<RetentionTime val="1.69503498077393" />
+							<Type>TangentSkimNormal</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="1.89451575279236" />
+							<AreaPercent val="0.000148752598609949" />
+							<Height val="2.20714068412781" />
+							<HeightPercent val="0.00129204265930734" />
+							<Symmetry val="0.682966291904449" />
+							<BeginTime val="1.6805020570755" />
+							<EndTime val="1.72793221473694" />
+							<BaselineCode>VV T</BaselineCode>
+							<BaselineStart val="11.8803749084473" />
+							<BaselineEnd val="11.7391080856323" />
+							<LevelStart val="0.0888629332184792" />
+							<LevelEnd val="0.0265406724065542" />
+							<Excess val="0.755590894654792" />
+							<StatisticalMoment0 val="1.73089823717946" />
+							<StatisticalMoment1 val="1.6980574788459" />
+							<StatisticalMoment2 val="5.56701117998858E-05" />
+							<StatisticalMoment3 val="4.17716061519944E-07" />
+							<StatisticalMoment4 val="1.1639182138908E-08" />
+							<Plate5Sigma val="48197.7156333099" />
+							<PlatesStatistical val="51794.3849624245" />
+							<PlatesPerColumn_FoleyDorsey val="67738.7432921443" />
+							<TheoreticalPlates_EP val="131593.868896296" />
+							<TheoreticalPlates_USP val="141148.865181069" />
+							<TheoreticalPlates_JP val="131593.868896296" />
+							<Resolution_EP val="1.2413177850619" />
+							<Resolution5Sigma val="1.12451647006086" />
+							<Resolution_USP val="1.53595486857796" />
+							<Resolution_AOH val="1.23605796393876" />
+							<Resolution_JP val="1.2413177850619" />
+							<ResolutionStatistical val="1.31248928102811" />
+							<Skew val="1.00565272405961" />
+							<TailingFactor val="1.29026166130688" />
+							<WidthBase val="0.0128141706809402" />
+							<Width5Sigma val="0.0386111207022439" />
+							<Width_5Perc val="0.0382777873689106" />
+							<Width_50Perc val="0.0109999999999999" />
+							<WidthTangent val="0.0180499883715852" />
+							<Asymmetry_10Perc val="1.44897959183685" />
+							<PeakValleyRatio val="24.8375853034393" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="-2.97843384742737" />
+								<BaselineParameter val="16.8856391906738" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.8370895385742" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="a41ef630-6706-4478-8e14-988e14b795c5">
+							<RetentionTime val="1.7411767244339" />
+							<Type>TangentSkimNormal</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="0.383037030696869" />
+							<AreaPercent val="3.00751015640896E-05" />
+							<Height val="0.344624042510986" />
+							<HeightPercent val="0.000201740182467388" />
+							<Symmetry val="0.500733494758606" />
+							<BeginTime val="1.72793221473694" />
+							<EndTime val="1.76733541488647" />
+							<BaselineCode>VV T</BaselineCode>
+							<BaselineStart val="11.7391080856323" />
+							<BaselineEnd val="11.6088542938232" />
+							<LevelStart val="0.0265406724065542" />
+							<LevelEnd val="0" />
+							<Excess val="-0.557428655093485" />
+							<StatisticalMoment0 val="0.345408412782464" />
+							<StatisticalMoment1 val="1.74592868562369" />
+							<StatisticalMoment2 val="6.01292627363775E-05" />
+							<StatisticalMoment3 val="1.62653791824526E-07" />
+							<StatisticalMoment4 val="8.83118566893471E-09" />
+							<Plate5Sigma val="69343.6374054279" />
+							<PlatesStatistical val="50695.2328460782" />
+							<PlatesPerColumn_FoleyDorsey val="64605.2046818504" />
+							<TheoreticalPlates_EP val="61726.6896997481" />
+							<TheoreticalPlates_USP val="235864.87331955" />
+							<TheoreticalPlates_JP val="61726.6896997481" />
+							<Resolution_EP val="1.97990027340977" />
+							<Resolution5Sigma val="1.6092744687247" />
+							<Resolution_USP val="2.84871570278343" />
+							<Resolution_AOH val="1.97151086547159" />
+							<Resolution_JP val="1.97990027340977" />
+							<ResolutionStatistical val="1.57310176514273" />
+							<Skew val="0.34884730629784" />
+							<TailingFactor val="1.20068699958305" />
+							<WidthBase val="0.0157670732587576" />
+							<Width5Sigma val="0.0330698519296948" />
+							<Width_5Perc val="0.0329865185963616" />
+							<Width_50Perc val="0.0165" />
+							<WidthTangent val="0.0143447806921644" />
+							<Asymmetry_10Perc val="1.12485507322125" />
+							<PeakValleyRatio val="12.9847517512737" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="-3.30566191673279" />
+								<BaselineParameter val="17.4510669708252" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.6953258514404" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="5de3d091-9e88-4b87-86d2-22a7ab423af1">
+							<RetentionTime val="1.81364643573761" />
+							<Type>TangentSkimNormal</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="4.11360549926758" />
+							<AreaPercent val="0.000322989928571628" />
+							<Height val="5.20132350921631" />
+							<HeightPercent val="0.00304481354863036" />
+							<Symmetry val="1.00765347480774" />
+							<BeginTime val="1.77133536338806" />
+							<EndTime val="1.84266877174377" />
+							<BaselineCode>VV T</BaselineCode>
+							<BaselineStart val="11.6106767654419" />
+							<BaselineEnd val="11.5433597564697" />
+							<LevelStart val="0" />
+							<LevelEnd val="0" />
+							<Excess val="5.30022457599287" />
+							<StatisticalMoment0 val="4.11360546874999" />
+							<StatisticalMoment1 val="1.81332825716334" />
+							<StatisticalMoment2 val="5.17373948740443E-05" />
+							<StatisticalMoment3 val="-3.77780732086836E-07" />
+							<StatisticalMoment4 val="2.221769277092E-08" />
+							<Plate5Sigma val="106151.344502986" />
+							<PlatesStatistical val="63554.7919687904" />
+							<PlatesPerColumn_FoleyDorsey val="123844.53776945" />
+							<TheoreticalPlates_EP val="133885.06001236" />
+							<TheoreticalPlates_USP val="145410.017388752" />
+							<TheoreticalPlates_JP val="133885.06001236" />
+							<Resolution_EP val="3.03600920727972" />
+							<Resolution5Sigma val="2.97479150682881" />
+							<Resolution_USP val="4.34345555133518" />
+							<Resolution_AOH val="3.02314476148617" />
+							<Resolution_JP val="3.03600920727972" />
+							<ResolutionStatistical val="2.25459197662032" />
+							<Skew val="-1.01515642683081" />
+							<TailingFactor val="1.0389610389611" />
+							<WidthBase val="0.0124268941581249" />
+							<Width5Sigma val="0.0278333333333332" />
+							<Width_5Perc val="0.0266666666666666" />
+							<Width_50Perc val="0.0116666666666667" />
+							<WidthTangent val="0.0190248304145655" />
+							<Asymmetry_10Perc val="1.01515151515159" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="-0.943706214427948" />
+								<BaselineParameter val="13.2822971343994" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.5707473754883" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="503fe285-566f-42e6-b8e7-963315a4ec7c">
+							<RetentionTime val="1.87612211704254" />
+							<Type>TangentSkimNormal</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="283.611053466797" />
+							<AreaPercent val="0.022268424601648" />
+							<Height val="385.118682861328" />
+							<HeightPercent val="0.225445423905872" />
+							<Symmetry val="0.990142822265625" />
+							<BeginTime val="1.84546482563019" />
+							<EndTime val="1.96850204467773" />
+							<BaselineCode>VV T</BaselineCode>
+							<BaselineStart val="11.5464191436768" />
+							<BaselineEnd val="11.4393262863159" />
+							<LevelStart val="0" />
+							<LevelEnd val="0.0465457439422607" />
+							<Excess val="21.6623551821882" />
+							<StatisticalMoment0 val="283.476776041667" />
+							<StatisticalMoment1 val="1.87642958457354" />
+							<StatisticalMoment2 val="3.3393084218399E-05" />
+							<StatisticalMoment3 val="4.37086982037468E-07" />
+							<StatisticalMoment4 val="2.75009447545185E-08" />
+							<Plate5Sigma val="140825.381331722" />
+							<PlatesStatistical val="105440.634438996" />
+							<PlatesPerColumn_FoleyDorsey val="140517.242406286" />
+							<TheoreticalPlates_EP val="151850.205735284" />
+							<TheoreticalPlates_USP val="153490.280953497" />
+							<TheoreticalPlates_JP val="151850.205735284" />
+							<Resolution_EP val="3.20527408433995" />
+							<Resolution5Sigma val="2.95626252231539" />
+							<Resolution_USP val="3.27252509702052" />
+							<Resolution_AOH val="3.19169241449106" />
+							<Resolution_JP val="3.20527408433995" />
+							<ResolutionStatistical val="2.43229785709011" />
+							<Skew val="2.26507753476342" />
+							<TailingFactor val="0.986486486486541" />
+							<WidthBase val="0.0117916250601411" />
+							<Width5Sigma val="0.0249999999999999" />
+							<Width_5Perc val="0.0243333333333333" />
+							<Width_50Perc val="0.0113333333333334" />
+							<WidthTangent val="0.019157111329327" />
+							<Asymmetry_10Perc val="0.962121212121274" />
+							<PeakValleyRatio val="8273.98275853237" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="-0.870403528213501" />
+								<BaselineParameter val="13.152717590332" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.5197343826294" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="fb95989d-736f-4e9a-b2a1-ce5f1f6fc7d0">
+							<RetentionTime val="1.98930633068085" />
+							<Type>TangentSkimNormal</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="0.266409277915955" />
+							<AreaPercent val="2.09177845712754E-05" />
+							<Height val="0.156548917293549" />
+							<HeightPercent val="9.1642495136902E-05" />
+							<Symmetry val="0.903042018413544" />
+							<BeginTime val="1.96850204467773" />
+							<EndTime val="2.03733539581299" />
+							<BaselineCode>VV T</BaselineCode>
+							<BaselineStart val="11.4393262863159" />
+							<BaselineEnd val="11.3674478530884" />
+							<LevelStart val="0.0465457439422607" />
+							<LevelEnd val="0" />
+							<CapacityFactor val="0.0493314053782607" />
+							<Excess val="0.352315403451778" />
+							<StatisticalMoment0 val="0.183027626811582" />
+							<StatisticalMoment1 val="1.99424162655903" />
+							<StatisticalMoment2 val="0.00024565549731563" />
+							<StatisticalMoment3 val="4.06197972130723E-06" />
+							<StatisticalMoment4 val="2.02300915040689E-07" />
+							<Plate5Sigma val="66971.228624088" />
+							<PlatesStatistical val="16189.3371349673" />
+							<PlatesPerColumn_FoleyDorsey val="38724.6837851577" />
+							<TheoreticalPlates_EP val="117775.450341994" />
+							<TheoreticalPlates_USP val="299344.592399893" />
+							<TheoreticalPlates_JP val="117775.450341994" />
+							<Resolution_EP val="5.342294883728" />
+							<Resolution5Sigma val="4.45606986002668" />
+							<Resolution_USP val="6.71209935902773" />
+							<Resolution_AOH val="5.31965804100034" />
+							<Resolution_JP val="5.342294883728" />
+							<ResolutionStatistical val="2.74593569684204" />
+							<Skew val="1.05498921519548" />
+							<TailingFactor val="0.796551454310126" />
+							<WidthBase val="0.0234539117664099" />
+							<Width5Sigma val="0.0385000219888991" />
+							<Width_5Perc val="0.0385000219888991" />
+							<Width_50Perc val="0.0136666666666667" />
+							<WidthTangent val="0.0145683172092341" />
+							<Asymmetry_10Perc val="0.75517218161569" />
+							<PeakValleyRatio val="3.3633347334129" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="-1.0442430973053" />
+								<BaselineParameter val="13.4949216842651" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.4176015853882" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="421ea548-4915-4a5e-ba31-b7b3148ca80b">
+							<RetentionTime val="2.24702906608582" />
+							<Type>TangentSkimNormal</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="35.3854293823242" />
+							<AreaPercent val="0.0027783746668727" />
+							<Height val="36.6634254455566" />
+							<HeightPercent val="0.0214624786053059" />
+							<Symmetry val="1.04221999645233" />
+							<BeginTime val="2.20708131790161" />
+							<EndTime val="2.33276438713074" />
+							<BaselineCode>VV T</BaselineCode>
+							<BaselineStart val="11.2416725158691" />
+							<BaselineEnd val="11.2317276000977" />
+							<LevelStart val="0" />
+							<LevelEnd val="0.0301613602787256" />
+							<CapacityFactor val="0.185276561722215" />
+							<Excess val="14.9713029009766" />
+							<StatisticalMoment0 val="35.2791354166667" />
+							<StatisticalMoment1 val="2.24703069056847" />
+							<StatisticalMoment2 val="6.14640795282681E-05" />
+							<StatisticalMoment3 val="9.00046143607891E-07" />
+							<StatisticalMoment4 val="6.78925824508623E-08" />
+							<Plate5Sigma val="118287.079832458" />
+							<PlatesStatistical val="82147.9303539306" />
+							<PlatesPerColumn_FoleyDorsey val="116984.303104153" />
+							<TheoreticalPlates_EP val="127127.409074583" />
+							<TheoreticalPlates_USP val="130579.058576794" />
+							<TheoreticalPlates_JP val="127127.409074583" />
+							<Resolution_EP val="10.6706255360654" />
+							<Resolution5Sigma val="9.05348907872829" />
+							<Resolution_USP val="13.0686957227597" />
+							<Resolution_AOH val="10.625411021082" />
+							<Resolution_JP val="10.6706255360654" />
+							<ResolutionStatistical val="5.37544753869618" />
+							<Selectivity val="3.75575275631336" />
+							<Skew val="1.8678100259949" />
+							<TailingFactor val="0.950495049504993" />
+							<WidthBase val="0.0148599948734045" />
+							<Width5Sigma val="0.0326666666666666" />
+							<Width_5Perc val="0.032" />
+							<Width_50Perc val="0.0148333333333333" />
+							<WidthTangent val="0.0248729156226135" />
+							<Asymmetry_10Perc val="0.95402298850581" />
+							<PeakValleyRatio val="1215.57599215501" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="-0.0791219100356102" />
+								<BaselineParameter val="11.4163007736206" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.2385110855103" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="da03e1e3-4a27-46e6-90b6-6cbf88bec4d8">
+							<RetentionTime val="2.36274099349976" />
+							<Type>TangentSkimNormal</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="37.4862937927246" />
+							<AreaPercent val="0.00294332924163071" />
+							<Height val="40.4949264526367" />
+							<HeightPercent val="0.0237054089204991" />
+							<Symmetry val="0.759356677532196" />
+							<BeginTime val="2.33276438713074" />
+							<EndTime val="2.60666871070862" />
+							<BaselineCode>VB T</BaselineCode>
+							<BaselineStart val="11.2317276000977" />
+							<BaselineEnd val="11.2006511688232" />
+							<LevelStart val="0.0301613602787256" />
+							<LevelEnd val="0" />
+							<CapacityFactor val="0.24631299313534" />
+							<Excess val="52.622485199155" />
+							<StatisticalMoment0 val="37.2456217685523" />
+							<StatisticalMoment1 val="2.36713574741793" />
+							<StatisticalMoment2 val="0.000441957423753261" />
+							<StatisticalMoment3 val="6.06274299325721E-05" />
+							<StatisticalMoment4 val="1.08645378134344E-05" />
+							<Plate5Sigma val="133488.765786048" />
+							<PlatesStatistical val="12678.4421882053" />
+							<PlatesPerColumn_FoleyDorsey val="169607.096497733" />
+							<TheoreticalPlates_EP val="165573.271075229" />
+							<TheoreticalPlates_USP val="172280.26436076" />
+							<TheoreticalPlates_JP val="165573.271075229" />
+							<Resolution_EP val="4.79087980170003" />
+							<Resolution5Sigma val="4.45045874669002" />
+							<Resolution_USP val="4.85756231186472" />
+							<Resolution_AOH val="4.77057946355724" />
+							<Resolution_JP val="4.79087980170003" />
+							<ResolutionStatistical val="2.0806285124123" />
+							<Selectivity val="1.32943417583837" />
+							<Skew val="6.52527032955007" />
+							<TailingFactor val="1.16250000000006" />
+							<WidthBase val="0.0143998730927706" />
+							<Width5Sigma val="0.0323333333333333" />
+							<Width_5Perc val="0.0310000000000001" />
+							<Width_50Perc val="0.0136666666666665" />
+							<WidthTangent val="0.0227690578550344" />
+							<Asymmetry_10Perc val="1.10000000000007" />
+							<PeakValleyRatio val="1342.60942074287" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="-0.113458670675755" />
+								<BaselineParameter val="11.4963998794556" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.2283267974854" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="8bfeb830-bd50-45d8-b9fc-37264a16cd53">
+							<RetentionTime val="3.01915335655212" />
+							<Type>NormalPeak</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="0.294417977333069" />
+							<AreaPercent val="2.311695700668E-05" />
+							<Height val="0.0912920832633972" />
+							<HeightPercent val="5.34416618213706E-05" />
+							<Symmetry val="2.01859164237976" />
+							<BeginTime val="2.94466876983643" />
+							<EndTime val="3.04866862297058" />
+							<BaselineCode>BB  </BaselineCode>
+							<BaselineStart val="11.1649742126465" />
+							<BaselineEnd val="11.1664066314697" />
+							<LevelStart val="0" />
+							<LevelEnd val="0" />
+							<CapacityFactor val="0.592561379724279" />
+							<Excess val="-1.24872064642033" />
+							<StatisticalMoment0 val="0.294417968750004" />
+							<StatisticalMoment1 val="3.0000847761892" />
+							<StatisticalMoment2 val="0.000817959241786123" />
+							<StatisticalMoment3 val="-3.77274164237699E-06" />
+							<StatisticalMoment4 val="1.17170627301974E-06" />
+							<Plate5Sigma val="21066.9360685798" />
+							<PlatesStatistical val="11003.6151002688" />
+							<PlatesPerColumn_FoleyDorsey val="10294.4088357266" />
+							<TheoreticalPlates_EP val="139871.548673397" />
+							<TheoreticalPlates_USP val="22723.1584305825" />
+							<TheoreticalPlates_JP val="139871.548673397" />
+							<Resolution_EP val="23.7112220939325" />
+							<Resolution5Sigma val="12.0369144897985" />
+							<Resolution_USP val="12.7608017469273" />
+							<Resolution_AOH val="23.6107508138735" />
+							<Resolution_JP val="23.7112220939325" />
+							<ResolutionStatistical val="6.37760675553518" />
+							<Selectivity val="2.4057252205071" />
+							<Skew val="-0.161272222184419" />
+							<TailingFactor val="0.699550925150782" />
+							<WidthBase val="0.0400251261889935" />
+							<Width5Sigma val="0.103999853134155" />
+							<Width_5Perc val="0.103999853134155" />
+							<Width_50Perc val="0.0190000000000001" />
+							<WidthTangent val="0.0801104282572593" />
+							<Asymmetry_10Perc val="0.708919410591205" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="0.0137720350176096" />
+								<BaselineParameter val="11.1244201660156" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.1659994125366" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="6551c54b-9dd6-47e4-8d0f-f27a8fac40b7">
+							<RetentionTime val="3.80988049507141" />
+							<Type>NormalPeak</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="0.540716171264648" />
+							<AreaPercent val="4.24556699871653E-05" />
+							<Height val="0.147287860512733" />
+							<HeightPercent val="8.62211459147481E-05" />
+							<Symmetry val="0.489824235439301" />
+							<BeginTime val="3.74366879463196" />
+							<EndTime val="3.9010021686554" />
+							<BaselineCode>BB  </BaselineCode>
+							<BaselineStart val="11.1513023376465" />
+							<BaselineEnd val="11.1515626907349" />
+							<LevelStart val="0" />
+							<LevelEnd val="0" />
+							<CapacityFactor val="1.00965894118893" />
+							<Excess val="-0.248719708141956" />
+							<StatisticalMoment0 val="0.540716145833332" />
+							<StatisticalMoment1 val="3.82438482837707" />
+							<StatisticalMoment2 val="0.00116906973922662" />
+							<StatisticalMoment3 val="2.31851723432835E-06" />
+							<StatisticalMoment4 val="3.76024095741239E-06" />
+							<Plate5Sigma val="14660.4978540082" />
+							<PlatesStatistical val="12510.7329569545" />
+							<PlatesPerColumn_FoleyDorsey val="26092.0000520048" />
+							<TheoreticalPlates_EP val="49434.7060443603" />
+							<TheoreticalPlates_USP val="43728.5678462942" />
+							<TheoreticalPlates_JP val="49434.7060443603" />
+							<Resolution_EP val="15.7256970244847" />
+							<Resolution5Sigma val="7.56435707697487" />
+							<Resolution_USP val="10.3370147791889" />
+							<Resolution_AOH val="15.6590627150589" />
+							<Resolution_JP val="15.7256970244847" />
+							<ResolutionStatistical val="6.56377138361075" />
+							<Selectivity val="1.70388921002366" />
+							<Skew val="0.058002898932632" />
+							<TailingFactor val="1.18939471203612" />
+							<WidthBase val="0.0456301085650921" />
+							<Width5Sigma val="0.157333374023438" />
+							<Width_5Perc val="0.157000101988762" />
+							<Width_50Perc val="0.0403333333333333" />
+							<WidthTangent val="0.0728790286430487" />
+							<Asymmetry_10Perc val="1.99450549450566" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="0.00165519071742892" />
+								<BaselineParameter val="11.1451053619385" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.1514120101929" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="fd1b97f7-4330-4686-9677-0fe28dfb61d0">
+							<RetentionTime val="6.32837629318237" />
+							<Type>NormalPeak</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="6.303" />
+							<Area val="16.2597064971924" />
+							<AreaPercent val="0.00127667114434256" />
+							<Height val="6.11700916290283" />
+							<HeightPercent val="0.00358084867117001" />
+							<Symmetry val="0.797256052494049" />
+							<BeginTime val="6.26900196075439" />
+							<EndTime val="6.38043689727783" />
+							<BaselineCode>BV  </BaselineCode>
+							<BaselineStart val="10.9880208969116" />
+							<BaselineEnd val="11.0019865036011" />
+							<LevelStart val="0" />
+							<LevelEnd val="0.627197563648224" />
+							<CapacityFactor val="2.33813042620478" />
+							<Excess val="-0.257731386027984" />
+							<StatisticalMoment0 val="14.1619394648195" />
+							<StatisticalMoment1 val="6.329939094052" />
+							<StatisticalMoment2 val="0.000249802659873859" />
+							<StatisticalMoment3 val="3.84907220963584E-07" />
+							<StatisticalMoment4 val="1.71121315348665E-07" />
+							<Plate5Sigma val="120646.216370309" />
+							<PlatesStatistical val="160399.128474616" />
+							<PlatesPerColumn_FoleyDorsey val="120409.460694164" />
+							<TheoreticalPlates_EP val="131997.826036256" />
+							<TheoreticalPlates_USP val="139924.750336913" />
+							<TheoreticalPlates_JP val="131997.826036256" />
+							<Resolution_EP val="36.5388324807904" />
+							<Resolution5Sigma val="25.3436221022342" />
+							<Resolution_USP val="35.8368194922977" />
+							<Resolution_AOH val="36.3840069194311" />
+							<Resolution_JP val="36.5388324807904" />
+							<ResolutionStatistical val="25.057142072226" />
+							<Selectivity val="2.31576261133438" />
+							<Skew val="0.0974900899447231" />
+							<TailingFactor val="1.16369440954453" />
+							<WidthBase val="0.0414113290607929" />
+							<Width5Sigma val="0.0911014972778652" />
+							<Width_5Perc val="0.0907681639445324" />
+							<Width_50Perc val="0.0409999999999995" />
+							<WidthTangent val="0.0676745044991574" />
+							<Asymmetry_10Perc val="1.26883411798715" />
+							<PeakValleyRatio val="9.75292239230329" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="0.125329822301865" />
+								<BaselineParameter val="10.2023277282715" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="10.9954624176025" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="e2ffc10b-c929-472e-bc6e-100fb6348afc">
+							<RetentionTime val="6.42218494415283" />
+							<Type>NormalPeak</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="6.422" />
+							<Area val="9.92432308197021" />
+							<AreaPercent val="0.000779232817521768" />
+							<Height val="3.1209614276886" />
+							<HeightPercent val="0.00182698607824353" />
+							<Symmetry val="0.789121866226196" />
+							<BeginTime val="6.38043689727783" />
+							<EndTime val="6.47764873504639" />
+							<BaselineCode>VV  </BaselineCode>
+							<BaselineStart val="11.0019865036011" />
+							<BaselineEnd val="11.0141706466675" />
+							<LevelStart val="0.627197563648224" />
+							<LevelEnd val="0.584716618061066" />
+							<CapacityFactor val="2.38761318410953" />
+							<Excess val="-0.292430648617299" />
+							<StatisticalMoment0 val="6.3895173819207" />
+							<StatisticalMoment1 val="6.42533184709505" />
+							<StatisticalMoment2 val="0.000279179071237183" />
+							<StatisticalMoment3 val="1.19894209702609E-06" />
+							<StatisticalMoment4 val="2.11030537772054E-07" />
+							<Plate5Sigma val="109138.460981626" />
+							<PlatesStatistical val="147879.599865204" />
+							<PlatesPerColumn_FoleyDorsey val="89724.2392687852" />
+							<TheoreticalPlates_EP val="97834.5818617549" />
+							<TheoreticalPlates_USP val="135058.459185835" />
+							<TheoreticalPlates_JP val="97834.5818617549" />
+							<Resolution_EP val="1.23911427028144" />
+							<Resolution5Sigma val="1.24537982065018" />
+							<Resolution_USP val="1.36365481964884" />
+							<Resolution_AOH val="1.23386378608533" />
+							<Resolution_JP val="1.23911427028144" />
+							<ResolutionStatistical val="1.46695795869407" />
+							<Selectivity val="1.02116338650324" />
+							<Skew val="0.257024144417368" />
+							<TailingFactor val="1.14191766606788" />
+							<WidthBase val="0.0462987497448921" />
+							<Width5Sigma val="0.0972118377685547" />
+							<Width_5Perc val="0.0972118377685547" />
+							<Width_50Perc val="0.0483333333333338" />
+							<WidthTangent val="0.0699096548038778" />
+							<Asymmetry_10Perc val="1.14191766606788" />
+							<PeakValleyRatio val="4.97604201383514" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="0.125329822301865" />
+								<BaselineParameter val="10.2023277282715" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.0072193145752" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="3ed5dba4-3d38-4d56-a266-bcebe83f07a2">
+							<RetentionTime val="6.52781581878662" />
+							<Type>Manual</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="6.526" />
+							<Area val="18.2416896820068" />
+							<AreaPercent val="0.00143229146510676" />
+							<Height val="5.08784484863281" />
+							<HeightPercent val="0.00297838404033063" />
+							<Symmetry val="0.755692720413208" />
+							<BeginTime val="6.47764873504639" />
+							<EndTime val="6.60453319549561" />
+							<BaselineCode>MF  </BaselineCode>
+							<BaselineStart val="11.0141706466675" />
+							<BaselineEnd val="11.0300731658936" />
+							<LevelStart val="0.584719955921173" />
+							<LevelEnd val="0.738689184188843" />
+							<CapacityFactor val="2.44333200047346" />
+							<Excess val="0.0419356503004042" />
+							<StatisticalMoment0 val="13.1558399360233" />
+							<StatisticalMoment1 val="6.5324804152083" />
+							<StatisticalMoment2 val="0.000434730330584627" />
+							<StatisticalMoment3 val="4.28517300810413E-06" />
+							<StatisticalMoment4 val="5.74896818845177E-07" />
+							<Plate5Sigma val="66194.3024380207" />
+							<PlatesStatistical val="98160.3936345846" />
+							<PlatesPerColumn_FoleyDorsey val="57877.5470417209" />
+							<TheoreticalPlates_EP val="90767.417471172" />
+							<TheoreticalPlates_USP val="96379.5385443933" />
+							<TheoreticalPlates_JP val="90767.417471172" />
+							<Resolution_EP val="1.25480971880406" />
+							<Resolution5Sigma val="1.17851458037265" />
+							<Resolution_USP val="1.37165409842341" />
+							<Resolution_AOH val="1.24949272847015" />
+							<Resolution_JP val="1.25480971880406" />
+							<ResolutionStatistical val="1.42640942932329" />
+							<Selectivity val="1.02333661781345" />
+							<Skew val="0.472757523026941" />
+							<TailingFactor val="1.26024300161139" />
+							<WidthBase val="0.0597557872533798" />
+							<Width5Sigma val="0.126864462162305" />
+							<Width_5Perc val="0.126864462162305" />
+							<Width_50Perc val="0.0510000000000002" />
+							<WidthTangent val="0.0841100426624184" />
+							<Asymmetry_10Perc val="1.26024300161139" />
+							<PeakValleyRatio val="8.70133607911051" />
+							<CentroidTime val="0" />
+							<BaselineModel>Undefined</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.0204582214355" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="0564f7d6-be1c-465c-9342-e7c0c570fd7a">
+							<RetentionTime val="7.12580013275146" />
+							<Type>Manual</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="7.126" />
+							<Area val="38.6873321533203" />
+							<AreaPercent val="0.00303763174447637" />
+							<Height val="11.2790307998657" />
+							<HeightPercent val="0.00660265521535012" />
+							<Symmetry val="0.981133043766022" />
+							<BeginTime val="7.04133558273315" />
+							<EndTime val="7.19438409805298" />
+							<BaselineCode>MF  </BaselineCode>
+							<BaselineStart val="11.021484375" />
+							<BaselineEnd val="11.0162601470947" />
+							<LevelStart val="4.78247011415078E-06" />
+							<LevelEnd val="0.15102244913578" />
+							<CapacityFactor val="2.75876040427899" />
+							<Excess val="-0.122926071303154" />
+							<StatisticalMoment0 val="38.0371640624998" />
+							<StatisticalMoment1 val="7.12569871149553" />
+							<StatisticalMoment2 val="0.000493519794413148" />
+							<StatisticalMoment3 val="-5.87706676762707E-07" />
+							<StatisticalMoment4 val="7.00745268778592E-07" />
+							<Plate5Sigma val="96551.1655555453" />
+							<PlatesStatistical val="102884.590854936" />
+							<PlatesPerColumn_FoleyDorsey val="98584.6986277609" />
+							<TheoreticalPlates_EP val="96474.8546693858" />
+							<TheoreticalPlates_USP val="100771.343711075" />
+							<TheoreticalPlates_JP val="96474.8546693858" />
+							<Resolution_EP val="6.72020467122399" />
+							<Resolution5Sigma val="6.18951599390194" />
+							<Resolution_USP val="6.87725654669578" />
+							<Resolution_AOH val="6.69172922770185" />
+							<Resolution_JP val="6.72020467122399" />
+							<ResolutionStatistical val="6.88739698908887" />
+							<Selectivity val="1.12909764360488" />
+							<Skew val="-0.0536048098939434" />
+							<TailingFactor val="1.00598802395145" />
+							<WidthBase val="0.057167049497366" />
+							<Width5Sigma val="0.114666666666666" />
+							<Width_5Perc val="0.112" />
+							<Width_50Perc val="0.0539999999999994" />
+							<WidthTangent val="0.0897919515134857" />
+							<Asymmetry_10Perc val="1.00684931506776" />
+							<CentroidTime val="0" />
+							<BaselineModel>Undefined</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.0186014175415" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="4f5b8d76-fb7d-4424-9115-e8aabe55c0d6">
+							<RetentionTime val="10.681056022644" />
+							<Type>TangentSkimNewExpo</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="1.02164375782013" />
+							<AreaPercent val="8.02168911002101E-05" />
+							<Height val="0.898768424987793" />
+							<HeightPercent val="0.000526131910971314" />
+							<Symmetry val="1.33696055412292" />
+							<BeginTime val="10.6210021972656" />
+							<EndTime val="10.6967678070068" />
+							<BaselineCode>BV E</BaselineCode>
+							<BaselineStart val="11.2951822280884" />
+							<BaselineEnd val="11.9318017959595" />
+							<LevelStart val="7.54728546326078E-08" />
+							<LevelEnd val="-6.72719693284307E-08" />
+							<CapacityFactor val="4.63410840970332" />
+							<Plate5Sigma val="2476585.62051324" />
+							<PlatesPerColumn_FoleyDorsey val="2486872.95026753" />
+							<TheoreticalPlates_EP val="2186525.74587481" />
+							<TheoreticalPlates_JP val="2186525.74587481" />
+							<Resolution_EP val="59.0873514094832" />
+							<Resolution5Sigma val="59.8128878263288" />
+							<Resolution_AOH val="58.8369812763922" />
+							<Resolution_JP val="59.0873514094832" />
+							<Selectivity val="1.67977922349312" />
+							<TailingFactor val="0.99311001000541" />
+							<WidthBase val="0.0180616788566113" />
+							<Width5Sigma val="0.0339324070068674" />
+							<Width_5Perc val="0.0337657403402005" />
+							<Width_50Perc val="0.0169999999999995" />
+							<Asymmetry_10Perc val="1.11338074415294" />
+							<CentroidTime val="0" />
+							<BaselineModel>Exponential</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="0.879373490810394" />
+								<BaselineParameter val="1.95535445213318" />
+								<BaselineParameter val="2.07262587547302" />
+								<BaselineParameter val="-330.941314697266" />
+								<BaselineParameter val="10.7006683349609" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.3511381149292" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="db28e73f-bf7d-4043-9dc3-eb0b9073b635">
+							<RetentionTime val="10.7152652740479" />
+							<Type>ReCalcSolventPeak</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="27.8651084899902" />
+							<AreaPercent val="0.00218789803796817" />
+							<Height val="19.6757659912109" />
+							<HeightPercent val="0.0115180374309665" />
+							<Symmetry val="0.639774262905121" />
+							<BeginTime val="10.6210021972656" />
+							<EndTime val="10.8996686935425" />
+							<BaselineCode>VB R</BaselineCode>
+							<BaselineStart val="11.2951822280884" />
+							<BaselineEnd val="11.5402345657349" />
+							<LevelStart val="0" />
+							<LevelEnd val="0" />
+							<CapacityFactor val="4.65215331374794" />
+							<Excess val="9.00750216985957" />
+							<StatisticalMoment0 val="28.8867526041663" />
+							<StatisticalMoment1 val="10.723836230816" />
+							<StatisticalMoment2 val="0.000704792584234178" />
+							<StatisticalMoment3 val="4.41440720988012E-05" />
+							<StatisticalMoment4 val="5.96451761373878E-06" />
+							<Plate5Sigma val="608741.059241019" />
+							<PlatesStatistical val="163169.514092321" />
+							<PlatesPerColumn_FoleyDorsey val="1380008.15723565" />
+							<TheoreticalPlates_EP val="1892393.35098629" />
+							<TheoreticalPlates_USP val="2007687.52151375" />
+							<TheoreticalPlates_JP val="1892393.35098629" />
+							<Resolution_EP val="1.14245990537252" />
+							<Resolution5Sigma val="0.833566283275165" />
+							<Resolution_AOH val="1.13761897357009" />
+							<Resolution_JP val="1.14245990537252" />
+							<Selectivity val="1.00389393221938" />
+							<Skew val="2.35928498475877" />
+							<TailingFactor val="1.87999999999851" />
+							<WidthBase val="0.0213225036859512" />
+							<Width5Sigma val="0.0686666666666653" />
+							<Width_5Perc val="0.0626666666666669" />
+							<Width_50Perc val="0.0183333333333326" />
+							<WidthTangent val="0.0302485241981731" />
+							<Asymmetry_10Perc val="1.52272727272595" />
+							<PeakValleyRatio val="34.5193043012449" />
+							<CentroidTime val="0" />
+							<BaselineModel>Undefined</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.3780746459961" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="c8f341f2-a7fd-49cd-be44-997be779953b">
+							<RetentionTime val="11.2071571350098" />
+							<Type>NormalPeak</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="0.772825539112091" />
+							<AreaPercent val="6.06803121302194E-05" />
+							<Height val="0.513634383678436" />
+							<HeightPercent val="0.000300677496351721" />
+							<Symmetry val="1.25411319732666" />
+							<BeginTime val="11.1500024795532" />
+							<EndTime val="11.2466688156128" />
+							<BaselineCode>BB  </BaselineCode>
+							<BaselineStart val="11.6187496185303" />
+							<BaselineEnd val="11.6989583969116" />
+							<LevelStart val="0" />
+							<LevelEnd val="0" />
+							<CapacityFactor val="4.91161942502334" />
+							<Excess val="0.865426984037492" />
+							<StatisticalMoment0 val="0.772825520833214" />
+							<StatisticalMoment1 val="11.2031564745773" />
+							<StatisticalMoment2 val="0.000284964806940196" />
+							<StatisticalMoment3 val="-3.05192243959038E-06" />
+							<StatisticalMoment4 val="3.13891770930255E-07" />
+							<Plate5Sigma val="501054.491307717" />
+							<PlatesStatistical val="440442.861494138" />
+							<PlatesPerColumn_FoleyDorsey val="1330168.08798369" />
+							<TheoreticalPlates_EP val="2188140.89070677" />
+							<TheoreticalPlates_USP val="728211.321651253" />
+							<TheoreticalPlates_JP val="2188140.89070677" />
+							<Resolution_EP val="16.0488220074211" />
+							<Resolution5Sigma val="8.31834702125438" />
+							<Resolution_USP val="11.883848322988" />
+							<Resolution_AOH val="15.9808185243388" />
+							<Resolution_JP val="16.0488220074211" />
+							<ResolutionStatistical val="5.51845671597658" />
+							<Selectivity val="1.05577333629754" />
+							<Skew val="-0.634434293691345" />
+							<TailingFactor val="1.09390988242834" />
+							<WidthBase val="0.021553922444582" />
+							<Width5Sigma val="0.0791667489461574" />
+							<Width_5Perc val="0.071833415612824" />
+							<Width_50Perc val="0.0178333333333338" />
+							<WidthTangent val="0.0525347371819649" />
+							<Asymmetry_10Perc val="1.07916666666591" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="0.829741358757019" />
+								<BaselineParameter val="2.36713194847107" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="11.6661739349365" />
+						</Peak>
+						<Peak xsi:type="PeakType" id="025765fa-7d0b-4128-93b0-cdc51edea3ef">
+							<RetentionTime val="11.626669883728" />
+							<Type>NormalPeak</Type>
+							<RelativeRetentionTime val="-1" />
+							<RelativeRetentionTime_EP val="-1" />
+							<CorrExpRetTime val="0" />
+							<Area val="0.272154957056046" />
+							<AreaPercent val="2.136892080575E-05" />
+							<Height val="0.131260231137276" />
+							<HeightPercent val="7.68386987379193E-05" />
+							<Symmetry val="2.36476540565491" />
+							<BeginTime val="11.5683355331421" />
+							<EndTime val="11.6456689834595" />
+							<BaselineCode>BB  </BaselineCode>
+							<BaselineStart val="12.0303382873535" />
+							<BaselineEnd val="12.1658849716187" />
+							<LevelStart val="0" />
+							<LevelEnd val="-1.77635683940025E-15" />
+							<CapacityFactor val="5.13290656184956" />
+							<Excess val="-0.878852919145144" />
+							<StatisticalMoment0 val="0.272154947916475" />
+							<StatisticalMoment1 val="11.6124676847421" />
+							<StatisticalMoment2 val="0.000416125007388098" />
+							<StatisticalMoment3 val="-4.76701764331146E-06" />
+							<StatisticalMoment4 val="3.67297874706141E-07" />
+							<Plate5Sigma val="3232532.70699355" />
+							<PlatesStatistical val="324059.845803527" />
+							<PlatesPerColumn_FoleyDorsey val="2846021.56496809" />
+							<TheoreticalPlates_EP val="1872235.04781027" />
+							<TheoreticalPlates_USP val="1589811.02679304" />
+							<TheoreticalPlates_JP val="1872235.04781027" />
+							<Resolution_EP val="13.0843623829308" />
+							<Resolution5Sigma val="9.40608740052869" />
+							<Resolution_USP val="9.3830657702407" />
+							<Resolution_AOH val="13.0289201694438" />
+							<Resolution_JP val="13.0843623829308" />
+							<ResolutionStatistical val="5.48968264917061" />
+							<Selectivity val="1.04505380357827" />
+							<Skew val="-0.561579227995887" />
+							<TailingFactor val="1.21250937972976" />
+							<WidthBase val="0.0305896643549204" />
+							<Width5Sigma val="0.0323335834595042" />
+							<Width_5Perc val="0.0323335834595042" />
+							<Width_50Perc val="0.0199999999999996" />
+							<WidthTangent val="0.0368843842418212" />
+							<Asymmetry_10Perc val="1.23077885100478" />
+							<CentroidTime val="0" />
+							<BaselineModel>Linear</BaselineModel>
+							<BaselineParameters>
+								<BaselineParameter val="1.75276136398315" />
+								<BaselineParameter val="-8.24619197845459" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+								<BaselineParameter val="0" />
+							</BaselineParameters>
+							<BaselineRetentionHeight val="12.1325845718384" />
+						</Peak>
+					</SignalResult>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="61287ba2-5c8a-413f-80bb-1eac1bd43c18">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="b3528e08-1b70-4fbf-8482-d00d190557ea" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="be1adb0e-8e9c-4fdf-80af-1efb713834f0">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="14ea8a12-b8ef-436c-a8d8-c1d99131c52e" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="f4289091-4b83-494f-ae86-2e946bb9829f">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="d480813a-6df1-40ce-8504-41e8661d86de" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="08ec4e40-ebe1-466c-a25f-ad7ac7c480ba">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="5bf7da33-0ae2-4619-8e49-6f139470b4a2" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="b5ec61b8-6ecd-4c0d-be2f-f0cf333f578b">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="262f7cd4-d328-4684-b52d-0b7a393d881a" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="eee25cd2-eb46-428a-8424-cdecfa2c9fc8">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="baf72870-5c31-44d7-ac1d-578aca50ea4a" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="928758cf-8349-4fa0-9dd0-e558ce2a7de0">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="5cba3681-7eda-4821-94f9-767e18332808" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="15cb6612-2b89-4509-a1e5-cea11ebe6fce">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="7bdbe483-9872-413e-b771-120654d5a57c" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="ad775a8b-bd02-43e9-847d-59575777d77b">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="18b4981b-6c37-41f9-9dc1-810903ad8c99" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="9167cf0d-f1fc-4ce7-a09b-0f8bd86782bd">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="a41ef630-6706-4478-8e14-988e14b795c5" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="ddc60529-4790-40d7-8c78-3a0a6e355dab">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="5de3d091-9e88-4b87-86d2-22a7ab423af1" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="f9c89caf-46ef-410d-959f-b200165cf59d">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="503fe285-566f-42e6-b8e7-963315a4ec7c" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="a609d8c9-6f4e-40b8-ab5a-7e1d54654936">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="fb95989d-736f-4e9a-b2a1-ce5f1f6fc7d0" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="b4c4c0ac-1c73-4de0-b43b-5702cbe7fee6">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="421ea548-4915-4a5e-ba31-b7b3148ca80b" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="4bad77ad-227b-48b7-ab13-244b152ac743">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="da03e1e3-4a27-46e6-90b6-6cbf88bec4d8" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="464a2003-1be1-4cbb-bb14-0b8b19804c69">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="8bfeb830-bd50-45d8-b9fc-37264a16cd53" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="1bcf62ec-3792-4262-b5e8-4ffb0fb832c7">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="6551c54b-9dd6-47e4-8d0f-f27a8fac40b7" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="98b28145-4855-403b-ab9f-017fe063b3ac">
+						<IdentifiedCompound>
+							<Compound_ID xsi:type="CompoundRefType" id="0db43d43-6bb3-4927-87fc-d5e51bd03158" ver="0" />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="fd1b97f7-4330-4686-9677-0fe28dfb61d0" calibPeakRole="Main">
+										<CalibrationCurve_ID xsi:type="CalibrationCurveRefType" id="cc111d87-9159-4559-96dc-31837f7d0c4c" />
+									</Peak_ID>
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Expected</Type>
+						<Amount val="33.174454798343" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<ResponseFactor val="7.8933229945474" />
+						<ResponseFactorCalcMode>AmountPerResponse</ResponseFactorCalcMode>
+						<UsedInternalStandard>
+							<CompoundName>正十四烷</CompoundName>
+						</UsedInternalStandard>
+						<QuantitationType>Area</QuantitationType>
+						<ExpectedRetTime val="6.303" />
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="38de8dd2-672d-4b1e-bd55-0b55ac479ed2">
+						<IdentifiedCompound>
+							<Compound_ID xsi:type="CompoundRefType" id="ba55d1fb-82bb-4d7e-83bb-6c95ff374d1d" ver="0" />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="e2ffc10b-c929-472e-bc6e-100fb6348afc" calibPeakRole="Main">
+										<CalibrationCurve_ID xsi:type="CalibrationCurveRefType" id="670ca0e6-e717-443c-8535-214d6623dcb3" />
+									</Peak_ID>
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Expected</Type>
+						<Amount val="36.7716256550417" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<ResponseFactor val="14.3344395762228" />
+						<ResponseFactorCalcMode>AmountPerResponse</ResponseFactorCalcMode>
+						<UsedInternalStandard>
+							<CompoundName>正十四烷</CompoundName>
+						</UsedInternalStandard>
+						<QuantitationType>Area</QuantitationType>
+						<ExpectedRetTime val="6.422" />
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="a5ffa28f-fc4b-4e3a-9112-4daa017c5653">
+						<IdentifiedCompound>
+							<Compound_ID xsi:type="CompoundRefType" id="d8b1833a-1189-4d66-85b9-4d5242f53eee" ver="0" />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="3ed5dba4-3d38-4d56-a266-bcebe83f07a2" calibPeakRole="Main">
+										<CalibrationCurve_ID xsi:type="CalibrationCurveRefType" id="1b3bdaa3-e981-4b0a-a372-00c31199df9d" />
+									</Peak_ID>
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Expected</Type>
+						<Amount val="26.651594291213" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<ResponseFactor val="5.65232222855279" />
+						<ResponseFactorCalcMode>AmountPerResponse</ResponseFactorCalcMode>
+						<UsedInternalStandard>
+							<CompoundName>正十四烷</CompoundName>
+						</UsedInternalStandard>
+						<QuantitationType>Area</QuantitationType>
+						<ExpectedRetTime val="6.526" />
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="58c735c3-90ef-490b-88f4-d3ca5cbd228d">
+						<IdentifiedCompound>
+							<Compound_ID xsi:type="CompoundRefType" id="664fae04-a5c8-4cc6-a9b1-312b94a38fa4" ver="0" />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="0564f7d6-be1c-465c-9342-e7c0c570fd7a" calibPeakRole="Main">
+										<CalibrationCurve_ID xsi:type="CalibrationCurveRefType" id="93f7954f-5f45-4ece-a93b-9e4d9086636f" />
+									</Peak_ID>
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Expected</Type>
+						<Amount val="10" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<ResponseFactor val="1" />
+						<ResponseFactorCalcMode>AmountPerResponse</ResponseFactorCalcMode>
+						<UsedInternalStandard>
+							<CompoundName>正十四烷</CompoundName>
+						</UsedInternalStandard>
+						<QuantitationType>Area</QuantitationType>
+						<ExpectedRetTime val="7.126" />
+						<IsInternalStandard>true</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="8c31dbb9-d9ef-4a16-9ff9-0699ca4b4a73">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="4f5b8d76-fb7d-4424-9115-e8aabe55c0d6" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="a75411ed-d64f-4463-a4bc-6bca56f40a33">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="db28e73f-bf7d-4043-9dc3-eb0b9073b635" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="53c18c80-23fd-48ae-9a9a-26dd5c7229d1">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="c8f341f2-a7fd-49cd-be44-997be779953b" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<InjectionCompound xsi:type="InjectionCompoundType" id="ecb7354c-1dbb-4ea5-83c9-51a59ca396ba">
+						<IdentifiedCompound>
+							<CompoundName />
+						</IdentifiedCompound>
+						<Identification>
+							<Qualified>
+								<Peaks>
+									<Peak_ID xsi:type="PeakRefType" id="025765fa-7d0b-4128-93b0-cdc51edea3ef" calibPeakRole="NewMain" />
+								</Peaks>
+							</Qualified>
+						</Identification>
+						<Type>Unknown</Type>
+						<Amount val="0" unit="mg/L" />
+						<Area val="0" />
+						<Height val="0" />
+						<QuantitationType>Area</QuantitationType>
+						<IsInternalStandard>false</IsInternalStandard>
+						<IsTimeRef>false</IsTimeRef>
+					</InjectionCompound>
+					<ReferencedInjectionInfo> (未找到文件)</ReferencedInjectionInfo>
+				</Result>
+			</Injections>
+			<InjectionParams>
+				<AcqParam xsi:type="InjectionAcquisitionParamType" id="38e4dce3-1968-4354-8e1d-745c8d45918b">
+					<Method_ID xsi:type="MethodRefType" id="a61dc363-98be-46fe-be89-948a6d5c8851" ver="0" />
+					<OrderNo val="1" />
+				</AcqParam>
+				<DAParam xsi:type="InjectionDataAnalysisParamType" id="44b842e5-d3f0-4598-9a83-d9a565b88858">
+					<Method_ID xsi:type="MethodRefType" id="a4aefc89-6062-4bc0-93e3-ec4099cc95c5" ver="0" />
+					<OrderNo val="1" />
+				</DAParam>
+			</InjectionParams>
+		</Content>
+	</Doc>
+</ACAML>

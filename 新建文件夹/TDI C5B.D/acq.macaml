@@ -1,0 +1,629 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ACAML xmlns="urn:schemas-agilent-com:acaml15" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<Checksum Algorithm="MD5">
+		<Value>ts4CihkIhS2MSRlEHeP4qQ==</Value>
+	</Checksum>
+	<Doc ContentVersioned="false">
+		<DocID>ba2776cb-aac8-4570-afbd-08a0500fbf75</DocID>
+		<DocInfo>
+			<Description>Method ACAML</Description>
+			<CreatedByUser>CK-PC\Administrator</CreatedByUser>
+			<CreatedByApplication>
+				<AgilentApp>
+					<Name>ChemStation</Name>
+					<Version>2.169.0.0</Version>
+				</AgilentApp>
+			</CreatedByApplication>
+			<CreationDate>2026-02-09T18:42:42.944+08:00</CreationDate>
+			<ClientName>ck-PC</ClientName>
+		</DocInfo>
+		<Content>
+			<MethodConfiguration xsi:type="MethodConfigurationType" id="0808dcc2-61ef-4009-aef7-0caea76db07d" ver="0">
+				<MethodDescription>
+					<Name>Method Configuration</Name>
+					<ID>Method_Configuration</ID>
+					<Section>
+						<Name>样品分析方法</Name>
+						<ID>Acquisition_Method</ID>
+						<Section>
+							<Name>Agilent 7890B</Name>
+							<ID>GC</ID>
+							<Section>
+								<Name>柱箱</Name>
+								<ID>OVEN</ID>
+								<Section>
+									<Name>温度</Name>
+									<ID>TEMPERATURE</ID>
+									<Parameter>
+										<Name>设定值</Name>
+										<ID>STATE</ID>
+										<Value>开启</Value>
+									</Parameter>
+									<Parameter>
+										<Name>(Initial)</Name>
+										<ID>INITIAL</ID>
+										<Unit>°C</Unit>
+										<Value>50</Value>
+									</Parameter>
+									<Parameter>
+										<Name>保持时间</Name>
+										<ID>HOLD</ID>
+										<Unit>min</Unit>
+										<Value>0</Value>
+									</Parameter>
+									<Parameter>
+										<Name>后运行</Name>
+										<ID>POSTRUN</ID>
+										<Unit>°C</Unit>
+										<Value>50</Value>
+									</Parameter>
+									<Table>
+										<Name>程序</Name>
+										<ID>RAMP</ID>
+										<Row>
+											<Parameter>
+												<Name>速率</Name>
+												<ID>RATE</ID>
+												<Unit>°C/min</Unit>
+												<Value>20</Value>
+											</Parameter>
+											<Parameter>
+												<Name>值</Name>
+												<ID>NEXT</ID>
+												<Unit>°C</Unit>
+												<Value>130</Value>
+											</Parameter>
+											<Parameter>
+												<Name>保持时间</Name>
+												<ID>HOLD</ID>
+												<Unit>min</Unit>
+												<Value>4</Value>
+											</Parameter>
+										</Row>
+										<Row>
+											<Parameter>
+												<Name>速率</Name>
+												<ID>RATE</ID>
+												<Unit>°C/min</Unit>
+												<Value>35</Value>
+											</Parameter>
+											<Parameter>
+												<Name>值</Name>
+												<ID>NEXT</ID>
+												<Unit>°C</Unit>
+												<Value>310</Value>
+											</Parameter>
+											<Parameter>
+												<Name>保持时间</Name>
+												<ID>HOLD</ID>
+												<Unit>min</Unit>
+												<Value>0</Value>
+											</Parameter>
+										</Row>
+									</Table>
+								</Section>
+								<Parameter>
+									<Name>平衡时间</Name>
+									<ID>EQUIL_TIME</ID>
+									<Unit>min</Unit>
+									<Value>1</Value>
+								</Parameter>
+								<Parameter>
+									<Name>最高温度</Name>
+									<ID>MAX_TEMPERATURE</ID>
+									<Unit>°C</Unit>
+									<Value>320</Value>
+								</Parameter>
+								<Parameter>
+									<Name>最高温度覆盖</Name>
+									<ID>MaxTempOverride</ID>
+									<Unit />
+									<Value>禁用</Value>
+								</Parameter>
+								<Parameter>
+									<Name>低速风扇</Name>
+									<ID>CR_SlowFan</ID>
+									<Unit />
+									<Value>禁用</Value>
+								</Parameter>
+								<Parameter>
+									<Name>冷阱</Name>
+									<ID>CRYO</ID>
+									<Unit />
+									<Value>关闭</Value>
+								</Parameter>
+							</Section>
+							<Section>
+								<Name>ALS</Name>
+								<ID>ALS</ID>
+								<Section>
+									<Name>前进样器</Name>
+									<ID>FRONTINJ</ID>
+									<Parameter>
+										<Name>进样针规格</Name>
+										<ID>SYRINGE_SIZE</ID>
+										<Unit>μL</Unit>
+										<Value>10</Value>
+									</Parameter>
+									<Parameter>
+										<Name>进样量</Name>
+										<ID>INJ_VOL</ID>
+										<Unit>μL</Unit>
+										<Value>1</Value>
+									</Parameter>
+									<Parameter>
+										<Name>溶剂 A 清洗（前进样）</Name>
+										<ID>SOLV_A_WASH_PRE</ID>
+										<Unit />
+										<Value>3</Value>
+									</Parameter>
+									<Parameter>
+										<Name>溶剂 A 清洗（后进样）</Name>
+										<ID>SOLV_A_WASH_POST</ID>
+										<Unit />
+										<Value>0</Value>
+									</Parameter>
+									<Parameter>
+										<Name>溶剂 A 体积</Name>
+										<ID>SOLV_A_VOL</ID>
+										<Unit>μL</Unit>
+										<Value>8</Value>
+									</Parameter>
+									<Parameter>
+										<Name>溶剂 B 清洗（前进样）</Name>
+										<ID>SOLV_B_WASH_PRE</ID>
+										<Unit />
+										<Value>0</Value>
+									</Parameter>
+									<Parameter>
+										<Name>溶剂 B 清洗（后进样）</Name>
+										<ID>SOLV_B_WASH_POST</ID>
+										<Unit />
+										<Value>3</Value>
+									</Parameter>
+									<Parameter>
+										<Name>溶剂 B 体积</Name>
+										<ID>SOLV_B_VOL</ID>
+										<Unit>μL</Unit>
+										<Value>8</Value>
+									</Parameter>
+									<Parameter>
+										<Name>样品清洗</Name>
+										<ID>SAMP_WASH</ID>
+										<Unit />
+										<Value>3</Value>
+									</Parameter>
+									<Parameter>
+										<Name>样品清洗量</Name>
+										<ID>SAMP_WASH_VOL</ID>
+										<Unit>μL</Unit>
+										<Value>8</Value>
+									</Parameter>
+									<Parameter>
+										<Name>样品抽吸次数</Name>
+										<ID>SAMP_PUMPS</ID>
+										<Unit />
+										<Value>6</Value>
+									</Parameter>
+									<Parameter>
+										<Name>驻留时间（前进样）</Name>
+										<ID>DWELL_TIME_PRE</ID>
+										<Unit>min</Unit>
+										<Value>0</Value>
+									</Parameter>
+									<Parameter>
+										<Name>驻留时间（后进样）</Name>
+										<ID>DWELL_TIME_POST</ID>
+										<Unit>min</Unit>
+										<Value>0</Value>
+									</Parameter>
+									<Parameter>
+										<Name>溶剂清洗抽吸速度</Name>
+										<ID>SOLV_DRAW_SPEED</ID>
+										<Unit>μL/min</Unit>
+										<Value>300</Value>
+									</Parameter>
+									<Parameter>
+										<Name>溶剂清洗排出速度</Name>
+										<ID>SOLV_DISP_SPEED</ID>
+										<Unit>μL/min</Unit>
+										<Value>3000</Value>
+									</Parameter>
+									<Parameter>
+										<Name>样品清洗抽吸速度</Name>
+										<ID>SAMP_DRAW_SPEEED</ID>
+										<Unit>μL/min</Unit>
+										<Value>300</Value>
+									</Parameter>
+									<Parameter>
+										<Name>样品清洗排出速度</Name>
+										<ID>SAMP_DISP_SPEED</ID>
+										<Unit>μL/min</Unit>
+										<Value>3000</Value>
+									</Parameter>
+									<Parameter>
+										<Name>进样排出速度</Name>
+										<ID>INJ_DISP_SPEED</ID>
+										<Unit>μL/min</Unit>
+										<Value>6000</Value>
+									</Parameter>
+									<Parameter>
+										<Name>粘度延迟</Name>
+										<ID>VISCOSITY_DELAY</ID>
+										<Unit>秒</Unit>
+										<Value>0</Value>
+									</Parameter>
+									<Parameter>
+										<Name>采样深度</Name>
+										<ID>SAMP_DEPTH</ID>
+										<Unit>mm</Unit>
+										<Value>1</Value>
+									</Parameter>
+									<Parameter>
+										<Name>进样类型</Name>
+										<ID>INJ_MODE</ID>
+										<Unit />
+										<Value>标准</Value>
+									</Parameter>
+									<Parameter>
+										<Name>L1 气隙</Name>
+										<ID>L1_AIRGAP</ID>
+										<Unit>μL</Unit>
+										<Value>0.2</Value>
+									</Parameter>
+									<Parameter>
+										<Name>溶剂清洗模式</Name>
+										<ID>SOLV_WASHMODE</ID>
+										<Unit />
+										<Value>A, B</Value>
+									</Parameter>
+								</Section>
+								<Section>
+									<Name>样品重叠</Name>
+									<ID>SAMP_OVERLAP</ID>
+									<Parameter>
+										<Name>模式</Name>
+										<ID>MODE</ID>
+										<Unit />
+										<Value>未启用样品重叠</Value>
+									</Parameter>
+								</Section>
+							</Section>
+							<Section>
+								<Name>前 SS 进样口 N2</Name>
+								<ID>INLET1</ID>
+								<Parameter>
+									<Name>模式</Name>
+									<ID>MODE</ID>
+									<Unit />
+									<Value>不分流</Value>
+								</Parameter>
+								<Parameter>
+									<Name>加热器</Name>
+									<ID>HEATER</ID>
+									<Unit>°C</Unit>
+									<Value>开启    125</Value>
+								</Parameter>
+								<Parameter>
+									<Name>压力</Name>
+									<ID>PRESSURE</ID>
+									<Unit>psi</Unit>
+									<Value>开启    11.405</Value>
+								</Parameter>
+								<Parameter>
+									<Name>总流量</Name>
+									<ID>TOTAL_FLOW</ID>
+									<Unit>mL/min</Unit>
+									<Value>开启    44.017</Value>
+								</Parameter>
+								<Parameter>
+									<Name>隔垫吹扫流量</Name>
+									<ID>SEPTUM_PURGE_FLOW</ID>
+									<Unit>mL/min</Unit>
+									<Value>开启    3</Value>
+								</Parameter>
+								<Parameter>
+									<Name>载气节省</Name>
+									<ID>GAS_SAVER</ID>
+									<Unit>mL/min</Unit>
+									<Value>开启    20 后 2 min</Value>
+								</Parameter>
+								<Parameter>
+									<Name>到分流出口的吹扫流量</Name>
+									<ID>PURGE_FLOW_SPLIT_VENT</ID>
+									<Unit />
+									<Value>40 mL/min 时间 0.5 min</Value>
+								</Parameter>
+							</Section>
+							<Section>
+								<Name>色谱柱</Name>
+								<ID>COLUMN</ID>
+								<Section>
+									<Name>色谱柱 #1</Name>
+									<ID>COLUMN1</ID>
+									<Section>
+										<Name>流量</Name>
+										<ID>FLOW</ID>
+										<Parameter>
+											<Name>设定值</Name>
+											<ID>STATE</ID>
+											<Value>开启</Value>
+										</Parameter>
+										<Parameter>
+											<Name>(Initial)</Name>
+											<ID>INITIAL</ID>
+											<Unit>mL/min</Unit>
+											<Value>1.0166</Value>
+										</Parameter>
+										<Parameter>
+											<Name>后运行</Name>
+											<ID>POSTRUN</ID>
+											<Unit>mL/min</Unit>
+											<Value>2</Value>
+										</Parameter>
+									</Section>
+									<Parameter>
+										<Name>Agilent 122-5032</Name>
+										<ID>INFO</ID>
+										<Value />
+									</Parameter>
+									<Parameter>
+										<Name>DB-5</Name>
+										<ID>DESCRIPTION</ID>
+										<Value />
+									</Parameter>
+									<Parameter>
+										<Name>0 °C—325 °C (350 °C): 30 m x 250 μm x 0.25 μm</Name>
+										<ID>DIMENSIONS</ID>
+										<Value />
+									</Parameter>
+									<Parameter>
+										<Name>色谱柱锁定</Name>
+										<ID>COLUMN_LOCKED</ID>
+										<Unit />
+										<Value>解锁</Value>
+									</Parameter>
+									<Parameter>
+										<Name>进样</Name>
+										<ID>IN</ID>
+										<Unit />
+										<Value>前 SS 进样口 N2</Value>
+									</Parameter>
+									<Parameter>
+										<Name>出样</Name>
+										<ID>OUT</ID>
+										<Unit />
+										<Value>前检测器 FID</Value>
+									</Parameter>
+									<Parameter>
+										<Name>（初始值）</Name>
+										<ID>INITIAL</ID>
+										<Unit>°C</Unit>
+										<Value>50</Value>
+									</Parameter>
+									<Parameter>
+										<Name>压力</Name>
+										<ID>PRESSURE</ID>
+										<Unit>psi</Unit>
+										<Value>11.405</Value>
+									</Parameter>
+									<Parameter>
+										<Name>流量</Name>
+										<ID>FLOW</ID>
+										<Unit>mL/min</Unit>
+										<Value>1.0166</Value>
+									</Parameter>
+									<Parameter>
+										<Name>平均线速度</Name>
+										<ID>VELOCITY</ID>
+										<Unit>cm/sec</Unit>
+										<Value>26.374</Value>
+									</Parameter>
+									<Parameter>
+										<Name>滞留时间</Name>
+										<ID>HOLDUPTIME</ID>
+										<Unit>min</Unit>
+										<Value>1.8958</Value>
+									</Parameter>
+								</Section>
+								<Parameter>
+									<Name>色谱柱出口压力</Name>
+									<ID>ColumnOutletPressure</ID>
+									<Unit>psi</Unit>
+									<Value>0</Value>
+								</Parameter>
+							</Section>
+							<Section>
+								<Name>前检测器 FID</Name>
+								<ID>Detector 1</ID>
+								<Parameter>
+									<Name />
+									<ID />
+									<Value>已通过柱补偿曲线 #2 修改了信号</Value>
+								</Parameter>
+								<Parameter>
+									<Name>加热器</Name>
+									<ID>加热器</ID>
+									<Unit>°C</Unit>
+									<Value>开启    250</Value>
+								</Parameter>
+								<Parameter>
+									<Name>H2 流量:</Name>
+									<ID>H2 流量:</ID>
+									<Unit>mL/min</Unit>
+									<Value>开启    30</Value>
+								</Parameter>
+								<Parameter>
+									<Name>空气流量</Name>
+									<ID>空气流量</ID>
+									<Unit>mL/min</Unit>
+									<Value>开启    400</Value>
+								</Parameter>
+								<Parameter>
+									<Name>尾吹气流量</Name>
+									<ID>尾吹气流量</ID>
+									<Unit>mL/min</Unit>
+									<Value>开启    25</Value>
+								</Parameter>
+								<Parameter>
+									<Name>载气流量校正</Name>
+									<ID>CARRIER_GAS_CORRECTION</ID>
+									<Unit />
+									<Value>不会影响尾吹气或燃气流量</Value>
+								</Parameter>
+								<Parameter>
+									<Name>火焰</Name>
+									<ID>FLAME</ID>
+									<Unit />
+									<Value>开启</Value>
+								</Parameter>
+								<Parameter>
+									<Name>电位计</Name>
+									<ID>ELECTROMETER</ID>
+									<Unit />
+									<Value>开启</Value>
+								</Parameter>
+							</Section>
+							<Section>
+								<Name>信号</Name>
+								<ID>SIGNALS</ID>
+								<Section>
+									<Name>信号 #1:  前部信号</Name>
+									<ID>SIGNAL1</ID>
+									<Parameter>
+										<Name>说明</Name>
+										<ID>DESCRIPTION</ID>
+										<Unit />
+										<Value>前部信号</Value>
+									</Parameter>
+									<Parameter>
+										<Name>详细信息</Name>
+										<ID>DETAILS</ID>
+										<Unit />
+										<Value>前部信号 (FID)</Value>
+									</Parameter>
+									<Parameter>
+										<Name>保存</Name>
+										<ID>SAVE</ID>
+										<Unit />
+										<Value>开启</Value>
+									</Parameter>
+									<Parameter>
+										<Name>数据采集频率</Name>
+										<ID>DATA_RATE</ID>
+										<Unit>Hz</Unit>
+										<Value>50</Value>
+									</Parameter>
+									<Parameter>
+										<Name>双进样任务</Name>
+										<ID>DUAL_ASSIGNMENT</ID>
+										<Value>前样品</Value>
+									</Parameter>
+								</Section>
+								<Section>
+									<Name>信号 #2:  测试谱图</Name>
+									<ID>SIGNAL2</ID>
+									<Parameter>
+										<Name>说明</Name>
+										<ID>DESCRIPTION</ID>
+										<Unit />
+										<Value>测试谱图</Value>
+									</Parameter>
+									<Parameter>
+										<Name>详细信息</Name>
+										<ID>DETAILS</ID>
+										<Unit />
+										<Value />
+									</Parameter>
+									<Parameter>
+										<Name>保存</Name>
+										<ID>SAVE</ID>
+										<Unit />
+										<Value>关闭</Value>
+									</Parameter>
+									<Parameter>
+										<Name>数据采集频率</Name>
+										<ID>DATA_RATE</ID>
+										<Unit>Hz</Unit>
+										<Value>50</Value>
+									</Parameter>
+									<Parameter>
+										<Name>双进样任务</Name>
+										<ID>DUAL_ASSIGNMENT</ID>
+										<Value>后样品</Value>
+									</Parameter>
+								</Section>
+								<Section>
+									<Name>信号 #3:  测试谱图</Name>
+									<ID>SIGNAL3</ID>
+									<Parameter>
+										<Name>说明</Name>
+										<ID>DESCRIPTION</ID>
+										<Unit />
+										<Value>测试谱图</Value>
+									</Parameter>
+									<Parameter>
+										<Name>详细信息</Name>
+										<ID>DETAILS</ID>
+										<Unit />
+										<Value />
+									</Parameter>
+									<Parameter>
+										<Name>保存</Name>
+										<ID>SAVE</ID>
+										<Unit />
+										<Value>关闭</Value>
+									</Parameter>
+									<Parameter>
+										<Name>数据采集频率</Name>
+										<ID>DATA_RATE</ID>
+										<Unit>Hz</Unit>
+										<Value>50</Value>
+									</Parameter>
+									<Parameter>
+										<Name>双进样任务</Name>
+										<ID>DUAL_ASSIGNMENT</ID>
+										<Value>后样品</Value>
+									</Parameter>
+								</Section>
+								<Section>
+									<Name>信号 #4:  测试谱图</Name>
+									<ID>SIGNAL4</ID>
+									<Parameter>
+										<Name>说明</Name>
+										<ID>DESCRIPTION</ID>
+										<Unit />
+										<Value>测试谱图</Value>
+									</Parameter>
+									<Parameter>
+										<Name>详细信息</Name>
+										<ID>DETAILS</ID>
+										<Unit />
+										<Value />
+									</Parameter>
+									<Parameter>
+										<Name>保存</Name>
+										<ID>SAVE</ID>
+										<Unit />
+										<Value>关闭</Value>
+									</Parameter>
+									<Parameter>
+										<Name>数据采集频率</Name>
+										<ID>DATA_RATE</ID>
+										<Unit>Hz</Unit>
+										<Value>50</Value>
+									</Parameter>
+									<Parameter>
+										<Name>双进样任务</Name>
+										<ID>DUAL_ASSIGNMENT</ID>
+										<Value>后样品</Value>
+									</Parameter>
+								</Section>
+							</Section>
+						</Section>
+					</Section>
+				</MethodDescription>
+			</MethodConfiguration>
+		</Content>
+	</Doc>
+</ACAML>

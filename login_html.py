@@ -399,14 +399,14 @@ def query():
     if system.current_user != username:
         system.current_user = username
         system.load_session()
-    pageNo = request.args.get('pageNo', 1)
-    pageSize = request.args.get('pageSize', 30)
+    pageNo = int(request.args.get('pageNo', 1))
+    pageSize = int(request.args.get('pageSize', 30))
     keyword = request.args.get('keyword', '').strip()
     casNo = request.args.get('casNo', '').strip()
+    org_name = request.args.get('org_name', '').strip()
     params = {
         "_search": "false", "nd": str(int(time.time()*1000)), "pageSize": pageSize, "pageNo": pageNo, "sidx": "", "sord": "asc",
-        "type": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE", "casNo": "",
-        "orgName": request.args.get('org_name', ''),
+        "type": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE",
         "receiveUserName": "", "receiveStartDate": "", "receiveEndDate": "",
         "confirmUserName": "", "confirmStartDate": "", "confirmEndDate": "",
         "invoiceNo": "", "groupId": "",
@@ -417,6 +417,8 @@ def query():
         params["keyword"] = keyword
     if casNo:
         params["casNo"] = casNo
+    if org_name:
+        params["orgName"] = org_name
     try:
         resp = system.session.get(f"{system.base_url}/detectionManager/manager/consumableBill/pageObj", params=params)
         if resp.status_code != 200:
@@ -425,7 +427,19 @@ def query():
         result = resp.json()
         rd = result.get("resultData") or {}
         if result.get("success"):
-            return jsonify({"success": True, "data": rd.get("voList", []), "records": rd.get("records", 0), "page": rd.get("page", 1), "total": rd.get("total", 0)})
+            vo_list = rd.get("voList", [])
+            records = rd.get("records", 0)
+            page = rd.get("page", 1)
+            total = rd.get("total")
+            if total is None or total <= 0:
+                total_page = rd.get("totalPage") or rd.get("totalPages")
+                if total_page:
+                    total = total_page
+                elif records > 0:
+                    total = math.ceil(records / pageSize)
+                else:
+                    total = 1
+            return jsonify({"success": True, "data": vo_list, "records": records, "page": page, "total": total})
         error_msg = (result.get("errorCtx") or {}).get("errorMsg", "查询失败")
         if "未登录" in error_msg or "login" in error_msg.lower(): session.pop('logged_in', None); system.logout(); return jsonify({"success": False, "message": "远程会话已失效"})
         return jsonify({"success": False, "message": error_msg})
@@ -821,12 +835,12 @@ def lims_save_solution():
         "concentrationCount": f"{original_name}:{conc_display}(μg/mL)",
         "concentrationUnitName": None, "uncertainty": None, "configureOrder": None,
         "originalCode": f"A-{original_id}",
-        "controlledNo": p.get('batch_no', ''),
+        "controlledNo": p.get('controlled_no', p.get('batch_no', '')),
         "medium": None, "configuratorId": None,
         "solutionType": p.get('solution_type', 'SOLUTION_TYPE_B'),
         "configuratorName": None, "constantVolume": 0, "totalConstantVolume": 0,
         "usedConstantVolume": 0, "remark": None, "diluteStatus": False,
-        "consumableReceive": None, "customType": None, "auditUserName": None,
+        "consumableReceive": None, "customType": p.get('customType'), "auditUserName": None,
         "auditTime": None, "diluteConcentrationControl": "[]",
         "pageType": p.get('page_type', 'SOLUTION_TYPE_A'),
         "saveDetailList": json.dumps([save_detail_item], ensure_ascii=False),
@@ -1168,10 +1182,11 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
         rec_person = str(record.get('configuratorName') or record.get('creatorName') or '').strip()
         rec_date = str(record.get('configureDate') or '').strip()[:10]
 
-        # Check same configurator + date
-        if rec_person != target_person or not rec_date.startswith(target_date):
-            visiting.discard(key)
-            return record  # stopping point (different person/date)
+        # Check same configurator + date (only when filter is specified)
+        if target_person and target_date:
+            if rec_person != target_person or not rec_date.startswith(target_date):
+                visiting.discard(key)
+                return record  # stopping point (different person/date)
 
         prefix = rec_order.split('-')[0].upper() if '-' in rec_order else ''
         original_code = str(record.get('originalCode') or '').strip()
@@ -1259,6 +1274,7 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
             'configure_date': rec_date,
             'validity_date': str(record.get('validityDate') or '').strip(),
             'controlled_no': str(record.get('controlledNo') or '').strip(),
+            'storage_condition': str(record.get('storageCondition') or '').strip(),
             'received_quantity': received_qty,
             'received_unit': received_unit,
             'parent_name': parent_name,
@@ -1906,6 +1922,71 @@ def lims_delete_solution():
         return jsonify({"success": False, "message": f"删除异常: {str(e)}"}), 500
 
 
+@app.route('/api/lims/delete_receive', methods=['POST'])
+def lims_delete_receive():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    p = request.get_json() or {}
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+    pid = session.get('pid') or system.current_pid or ''
+    pname = session.get('display_name') or system.current_real_name or username
+    try:
+        # 如果传了 consumable_ids，先查询对应的领用记录ID
+        consumable_ids = p.get('consumable_ids')
+        receive_ids = p.get('ids')
+        if consumable_ids and not receive_ids:
+            if not isinstance(consumable_ids, list):
+                consumable_ids = [consumable_ids]
+            found_ids = []
+            for cid in consumable_ids:
+                cid = str(cid).strip()
+                if not cid:
+                    continue
+                url = f"{system.base_url}/detectionManager/manager/consumableReceive/record/{cid}"
+                resp = system.session.get(url, params={
+                    '_search': 'false', 'pageSize': 9999, 'pageNo': 1,
+                    'sidx': '', 'sord': 'asc',
+                    'pid': str(pid), 'pname': pname, 'loginId': str(pid),
+                })
+                if resp.ok:
+                    data = resp.json()
+                    for rec in (data.get('resultData') or []):
+                        rid = rec.get('id')
+                        if rid:
+                            found_ids.append(str(rid))
+            if not found_ids:
+                return jsonify({"success": True, "message": "无关联领用记录"})
+            receive_ids = found_ids
+        if not receive_ids:
+            return jsonify({"success": True, "message": "无领用记录需要删除"})
+        if isinstance(receive_ids, list):
+            receive_ids = ','.join(str(i) for i in receive_ids)
+        url = f"{system.base_url}/detectionManager/manager/consumableReceive"
+        form_data = {
+            'ids': str(receive_ids),
+            'pid': str(pid),
+            'pname': pname,
+            'loginId': str(pid),
+            '_method': 'DELETE',
+        }
+        resp = system.session.post(url, data=form_data)
+        if not resp.ok:
+            print(f"[deleteReceive] status={resp.status_code} body={resp.text[:500]}")
+        result = resp.json()
+        if not result.get("success"):
+            err_ctx = result.get('errorCtx') or {}
+            err_msg = result.get('errorDesc') or (err_ctx.get('errorMsg') if isinstance(err_ctx, dict) else '') or '删除领用记录失败'
+            return jsonify({"success": False, "message": err_msg})
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"[deleteReceive] exception: {e}")
+        return jsonify({"success": False, "message": f"删除领用异常: {str(e)}"}), 500
+
+
 @app.route('/api/lims/get_solution_detail', methods=['POST'])
 def lims_get_solution_detail():
     if not session.get('logged_in'):
@@ -2536,10 +2617,10 @@ def lims_export_bbcd_docx():
             item_result_conc = _extract_conc_from_code(solution_code)
         item_result_code = item.get('resultCode', '')
         if not item_result_code:
+            item_result_code = solution_code
+        if not item_result_code:
             original_no = item.get('originalNo', '')
             item_result_code = original_no.split('\n')[-1].strip() if original_no else ''
-        if not item_result_code:
-            item_result_code = solution_code
         row_values.append({
             'name':          item.get('originalName', ''),
             'conc_val':      _parse_conc_val(item.get('originalConcentration', '')),
@@ -2769,83 +2850,67 @@ def update_excel_usage():
 # ── 标液核查端点 ──
 
 def _extract_d_concentration_points(record):
-    """从 D 型工作液记录的 detailList 中提取各浓度点。
+    """从 D 型工作液记录的 concentration 字段提取各浓度点。
 
-    detailList 分类：
-      - groupName='移取体积' → takeRow (每列=稀释点的取量)
-      - groupName='定容体积' → volRow (每列=稀释点的定容)
-      - 其余 → concRows (每个代表一个源组分的浓度信息)
-
-    返回 [{index, concentration, unit, name, source_name}]，浓度已计算。
+    concentration 格式示例:
+      单组分: '10.40mg/L,5.20mg/L,1.04mg/L,0.52mg/L,0.10mg/L,0.052mg/L'
+      多组分: '甲苯:10.40(mg/L),5.20(mg/L),...;乙酸丁酯:...'
+    返回 [{index, concentration, unit, name, code, conc_str}]，conc_str 保留原始精度字符串。
     """
-    detail_list = record.get('detailList') or []
-    dil_names = [
-        'dilutionOne', 'dilutionTwo', 'dilutionThree', 'dilutionFour',
-        'dilutionFive', 'dilutionSix', 'dilutionSeven', 'dilutionEight',
-        'dilutionNine', 'dilutionTen', 'dilutionEleven', 'dilutionTwelve',
-    ]
-
-    # 分类
-    take_row = vol_row = None
-    conc_rows = []
-    for dl in detail_list:
-        gn = str(dl.get('groupName', '')).strip()
-        if gn == '移取体积':
-            take_row = dl
-        elif gn == '定容体积':
-            vol_row = dl
-        else:
-            conc_rows.append(dl)
-
-    if not conc_rows:
+    conc_str = str(record.get('concentration') or '').strip()
+    if not conc_str:
         return []
-
-    # 最大稀释点数
-    max_pts = 0
-    for dl in detail_list:
-        for n in range(12):
-            if dl.get(dil_names[n]) is not None:
-                max_pts = max(max_pts, n + 1)
-    if max_pts == 0:
-        return []
-
-    # 解析源液浓度
-    def _parse_conc(val_str, unit_str=''):
-        val_str = str(val_str).strip() if val_str else ''
-        unit_str = str(unit_str).strip() if unit_str else ''
-        if not val_str:
-            return 0.0, unit_str or 'mg/L'
-        m = re.match(r'^([\d.]+)', val_str)
-        if m:
-            return float(m.group(1)), unit_str or 'mg/L'
-        return 0.0, unit_str or 'mg/L'
 
     points = []
-    for i in range(max_pts):
-        # 定容体积
-        const_vol = float(vol_row.get(dil_names[i]) or 0) if vol_row else 0
-        if const_vol <= 0:
-            continue
-        # 取量
-        take_vol = float(take_row.get(dil_names[i]) or 0) if take_row else 0
-        if take_vol <= 0:
-            continue
-        # 对每个源组分计算稀释后浓度
-        for dl in conc_rows:
-            src_conc, src_unit = _parse_conc(
-                dl.get('originalConcentration'),
-                dl.get('originalUnit'),
-            )
-            calc_conc = src_conc * (take_vol / const_vol)
-            # 修约：与配置记录一致（保留2位小数）
-            calc_conc = round(calc_conc, 2)
-            group_name = str(dl.get('groupName', '')).strip()
+    # 多组分格式: '甲苯:10.40(mg/L),5.20(mg/L);乙酸丁酯:...'
+    if ':' in conc_str and ';' in conc_str:
+        groups = conc_str.split(';')
+        all_names = []
+        all_conc_maps = {}
+        for gi, group in enumerate(groups):
+            group = group.strip()
+            if not group:
+                continue
+            ci = group.rfind(':')
+            if ci < 0:
+                continue
+            name = group[:ci].strip()
+            all_names.append(name)
+            cstr = group[ci+1:].strip()
+            conc_parts = re.findall(r'([\d.]+)\s*\(([^)]+)\)', cstr)
+            if not conc_parts:
+                conc_parts = re.findall(r'([\d.]+)\s*(mg/L|μg/mL|ng/ml|ppm)', cstr)
+            for pi, (cv, cu) in enumerate(conc_parts):
+                key = (float(cv), cu)
+                if key not in all_conc_maps:
+                    all_conc_maps[key] = {'cv': cv, 'cu': cu, 'names': []}
+                all_conc_maps[key]['names'].append(name)
+        # 按浓度值排序，生成去重点位
+        sorted_keys = sorted(all_conc_maps.keys(), key=lambda x: x[0])
+        for pi, key in enumerate(sorted_keys):
+            m = all_conc_maps[key]
             points.append({
-                'index': i,
-                'concentration': calc_conc,
-                'unit': src_unit,
-                'name': group_name or record.get('solutionName', ''),
-                'source_name': str(dl.get('originalName', '')).strip(),
+                'index': pi,
+                'concentration': key[0],
+                'unit': m['cu'],
+                'name': ','.join(m['names']),
+                'source_name': ','.join(m['names']),
+                'conc_str': m['cv'],
+            })
+    else:
+        # 单组分格式: '10.40mg/L,5.20mg/L,...' 或 '10.40(mg/L),5.20(mg/L),...'
+        name = str(record.get('solutionName') or '').strip()
+        conc_parts = re.findall(r'([\d.]+)\s*\(([^)]+)\)', conc_str)
+        if not conc_parts:
+            conc_parts = re.findall(r'([\d.]+)\s*(mg/L|μg/mL|ng/ml|ppm)', conc_str)
+        for pi, (cv, cu) in enumerate(conc_parts):
+            points.append({
+                'index': pi,
+                'concentration': float(cv),
+                'unit': cu,
+                'name': name,
+                'source_name': name,
+                'conc_str': cv,
             })
 
     return points
@@ -2855,13 +2920,7 @@ def _build_concentration_point_code(record, point):
     """构建浓度点编号: CK-CG-{num}-{concentration}-{date}"""
     code = str(record.get('solutionCode', '')).strip()
     date = str(record.get('configureDate', ''))[:10].replace('-', '')
-    conc = point['concentration']
-    # 如果 concentration 是整数则不补零
-    if conc == int(conc):
-        conc_str = str(int(conc))
-    else:
-        conc_str = str(conc)
-    # 从 solutionCode 中提取编号部分 (CK-CG-{num})
+    conc_str = point.get('conc_str', f"{point['concentration']:g}")
     parts = code.split('-')
     if len(parts) >= 3:
         base = '-'.join(parts[:3])
@@ -2910,11 +2969,79 @@ def lims_get_verification_info():
             new_rec, old_rec = records[1], records[0]
 
         def _build_solution_info(rec):
-            points = _extract_d_concentration_points(rec)
-            point_codes = []
-            for pt in points:
-                pt['code'] = _build_concentration_point_code(rec, pt)
-                point_codes.append(pt['code'])
+            detail_list = rec.get('detailList') or []
+            conc_str = str(rec.get('concentration', '')).strip()
+
+            # 解析concentration字段: 物质名 -> [conc0, conc1, ...] (降序)
+            substance_concs = {}
+            all_unit = ''
+            if ':' in conc_str and ';' in conc_str:
+                for group in conc_str.split(';'):
+                    group = group.strip()
+                    if not group: continue
+                    ci = group.rfind(':')
+                    if ci < 0: continue
+                    sname = group[:ci].strip()
+                    cstr = group[ci+1:].strip()
+                    cparts = re.findall(r'([\d.]+)\s*\(([^)]+)\)', cstr)
+                    if not cparts:
+                        cparts = re.findall(r'([\d.]+)\s*(mg/L|μg/mL|ug/mL|ng/ml|ppm)', cstr)
+                    if cparts and not all_unit: all_unit = cparts[0][1]
+                    substance_concs[sname] = [float(cv) for cv, cu in cparts]
+            elif conc_str:
+                sname = str(rec.get('solutionName', '')).strip()
+                cparts = re.findall(r'([\d.]+)\s*\(([^)]+)\)', conc_str)
+                if not cparts:
+                    cparts = re.findall(r'([\d.]+)\s*(mg/L|μg/mL|ug/mL|ng/ml|ppm)', conc_str)
+                if cparts:
+                    all_unit = cparts[0][1]
+                    substance_concs[sname] = [float(cv) for cv, cu in cparts]
+            all_sub_names = list(substance_concs.keys())
+
+            # 从detailList提取resultCode
+            code_map = {}
+            for dl in detail_list:
+                rc = str(dl.get('resultCode', '')).strip()
+                if not rc:
+                    orig_no = str(dl.get('originalNo', '')).strip()
+                    rc = orig_no.split('\n')[-1].strip() if orig_no else ''
+                if not rc:
+                    rc = str(rec.get('solutionCode', '')).strip()
+                name = str(dl.get('originalName', '')).strip()
+                if rc not in code_map:
+                    code_map[rc] = {'names': [], 'dilutionIdx': dl.get('dilutionIdx', 0)}
+                if name:
+                    code_map[rc]['names'].append(name)
+
+            points = []
+            unique_rcs = list(code_map.keys())
+            is_range_format = len(unique_rcs) == 1 and '[' in unique_rcs[0]
+
+            if is_range_format:
+                first_concs = substance_concs.get(all_sub_names[0], []) if all_sub_names else []
+                for pi, cv in enumerate(first_concs):
+                    sub_concs = {sn: substance_concs[sn][pi] for sn in all_sub_names if pi < len(substance_concs[sn])}
+                    pt = {'index': pi, 'concentration': cv, 'unit': all_unit, 'conc_str': f"{cv:g}",
+                          'name': ','.join(all_sub_names), 'sub_concs': sub_concs}
+                    pt['code'] = _build_concentration_point_code(rec, pt)
+                    points.append(pt)
+            else:
+                sorted_codes = sorted(code_map.items(), key=lambda x: x[1].get('dilutionIdx', 0))
+                for pi, (rc, info) in enumerate(sorted_codes):
+                    sub_concs = {sn: substance_concs[sn][pi] for sn in all_sub_names if pi < len(substance_concs.get(sn, []))}
+                    conc_from_code = ''
+                    parts = rc.split('-')
+                    if len(parts) >= 2 and re.match(r'^[\d.]+$', parts[-2]):
+                        conc_from_code = parts[-2]
+                    elif re.search(r'\[([\d.]+)', rc):
+                        conc_from_code = re.search(r'\[([\d.]+)', rc).group(1)
+                    conc_val = float(conc_from_code) if conc_from_code else 0
+                    points.append({
+                        'code': rc, 'concentration': conc_val, 'unit': all_unit,
+                        'name': ','.join(info['names']), 'sub_concs': sub_concs,
+                        'conc_str': conc_from_code or '',
+                    })
+            point_codes = [pt['code'] for pt in points]
             return {
                 'id': rec.get('id'),
                 'configureOrder': rec.get('configureOrder', ''),
@@ -2937,37 +3064,75 @@ def lims_get_verification_info():
             if not rec_id:
                 return []
             try:
-                matched, top = _trace_export_chain(
-                    system, [(rec_id, rec_order)],
-                    str(rec.get('configureDate', ''))[:10],
-                    rec.get('configuratorName') or rec.get('creatorName') or '',
-                )
                 ancestors = []
                 seen = set()
+                matched, top = _trace_export_chain(
+                    system, [(rec_id, rec_order)],
+                    '',  # 不限制日期，溯源需追溯到任意日期的A
+                    '',  # 不限制配置人，溯源需跨配置人追溯
+                )
+                # 从matched中找到父级为A型的B/C级记录，从其detailList提取A级标准物质信息
                 for r in matched:
-                    a_name = r.get('solution_name', '')
-                    a_order = r.get('configure_order', '')
-                    key = a_order
-                    if key in seen:
+                    if r.get('level') == 'D':
                         continue
-                    seen.add(key)
-                    ancestors.append({
-                        'level': r.get('level', ''),
-                        'configureOrder': a_order,
-                        'solutionName': a_name,
-                        'controlledNo': r.get('controlled_no', ''),
-                        'storageCondition': r.get('storage_condition', ''),
-                        'concentration': r.get('concentration', ''),
-                    })
-                if top and top.get('configure_order') and top.get('configure_order') not in seen:
-                    ancestors.append({
-                        'level': top.get('level', 'A'),
-                        'configureOrder': top.get('configure_order', ''),
-                        'solutionName': top.get('solution_name', ''),
-                        'controlledNo': top.get('controlled_no', ''),
-                        'storageCondition': top.get('storage_condition', ''),
-                        'concentration': top.get('concentration', ''),
-                    })
+                    original_code = str(r.get('original_code') or '').strip()
+                    if not original_code.startswith('A-'):
+                        continue
+                    a_name = r.get('parent_name', '')
+                    # 从detailList的originalNo提取A级的controlledNo
+                    a_controlled_no = ''
+                    a_concentration = ''
+                    for dl in (r.get('_detail_list') or []):
+                        dl_name = str(dl.get('originalName', '')).strip()
+                        if dl_name and dl_name == a_name:
+                            dl_no = str(dl.get('originalNo', '')).strip()
+                            # originalNo格式如 'A-24092\nCIRS400484-3\nCK-CG-2025214'
+                            # 取最后一段（CK-CG-xxx）作为controlledNo
+                            lines = [l.strip() for l in dl_no.split('\n') if l.strip()]
+                            a_controlled_no = lines[-1] if lines else ''
+                            a_concentration = str(dl.get('originalConcentration', '')).strip()
+                            break
+                    # 通过consumableBill API用controlledNo查询保存条件
+                    a_storage_condition = ''
+                    if a_controlled_no:
+                        try:
+                            import time as _time
+                            cb_params = {
+                                "_search": "false", "nd": str(int(_time.time()*1000)),
+                                "pageSize": 30, "pageNo": 1, "sidx": "", "sord": "asc",
+                                "type": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE", "casNo": "",
+                                "orgName": "", "groupId": "", "status": "",
+                                "keyword": a_controlled_no,
+                                "pid": session.get('user_id', ''), "pname": session.get('username', ''),
+                                "loginId": session.get('user_id', ''),
+                            }
+                            cb_resp = system.session.get(f"{system.base_url}/detectionManager/manager/consumableBill/pageObj", params=cb_params)
+                            cb_data = cb_resp.json() if cb_resp.status_code == 200 else {}
+                            vo_list = (cb_data.get('resultData') or {}).get('voList') or []
+                            if vo_list:
+                                a_storage_condition = str(vo_list[0].get('storageCondition') or '').strip()
+                        except Exception as e:
+                            print(f"[VerificationTrace] 查询consumableBill失败: {e}")
+                    if a_controlled_no and a_controlled_no not in seen:
+                        seen.add(a_controlled_no)
+                        ancestors.append({
+                            'level': 'A',
+                            'configureOrder': a_controlled_no,
+                            'solutionName': a_name,
+                            'controlledNo': a_controlled_no,
+                            'storageCondition': a_storage_condition,
+                            'concentration': a_concentration,
+                        })
+                    elif a_name and a_name not in seen:
+                        seen.add(a_name)
+                        ancestors.append({
+                            'level': 'A',
+                            'configureOrder': a_name,
+                            'solutionName': a_name,
+                            'controlledNo': a_controlled_no,
+                            'storageCondition': a_storage_condition,
+                            'concentration': a_concentration,
+                        })
                 return ancestors
             except Exception as e:
                 print(f"[VerificationTrace] 溯源失败: {e}")
@@ -3029,6 +3194,55 @@ def lims_parse_verification_pdf():
     return jsonify({"success": True, "compounds": compounds})
 
 
+@app.route('/api/lims/parse_epatemp_content', methods=['POST'])
+def lims_parse_epatemp_content():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    from report_parser import parse_epatemp_txt
+    import tempfile
+
+    p = request.get_json() or {}
+    d_folders = p.get('d_folders', [])
+    if not d_folders:
+        return jsonify({"success": False, "message": "请选择.D文件夹"})
+
+    all_compounds = []
+    skipped = []
+    for folder in d_folders:
+        name = folder.get('name', '')
+        content_b64 = folder.get('content_b64', '')
+        if not content_b64:
+            skipped.append(name)
+            continue
+        tmp = None
+        try:
+            import base64 as _base64
+            raw_bytes = _base64.b64decode(content_b64)
+            tmp = tempfile.NamedTemporaryFile(suffix='.txt', delete=False, mode='wb')
+            tmp.write(raw_bytes)
+            tmp.close()
+            parsed = parse_epatemp_txt(tmp.name)
+            for compound_name, (val, unit) in parsed.items():
+                all_compounds.append({
+                    'name': compound_name,
+                    'measured_value': val,
+                    'unit': unit,
+                    'source_file': name,
+                })
+        except Exception as e:
+            print(f"[ParseEpatemp] 解析 {name} 失败: {e}")
+            skipped.append(name)
+        finally:
+            if tmp:
+                try: os.unlink(tmp.name)
+                except OSError: pass
+
+    msg = '解析成功，提取到 ' + str(len(all_compounds)) + ' 个化合物'
+    if skipped:
+        msg += '（以下文件夹无epatemp.txt已跳过: ' + ', '.join(skipped) + '）'
+    return jsonify({"success": True, "compounds": all_compounds, "message": msg})
+
+
 @app.route('/api/lims/export_verification_docx', methods=['POST'])
 def lims_export_verification_docx():
     if not session.get('logged_in'):
@@ -3058,14 +3272,6 @@ def lims_export_verification_docx():
             row.cells[1].text = str(item.get('标准物质名称', ''))
             row.cells[2].text = str(item.get('标准物质编号', ''))
             row.cells[3].text = str(item.get('保存条件', ''))
-            # checkbox 列
-            chk_val = '☐是；☐否'
-            chk_ok = '☑是；☐否'
-            row.cells[4].text = chk_ok if item.get('是否在有效期') else chk_val
-            row.cells[5].text = chk_ok if item.get('标志是否齐全') else chk_val
-            row.cells[6].text = chk_ok if item.get('容器是否损伤') else chk_val
-            row.cells[7].text = str(item.get('处理方法', ''))
-            row.cells[8].text = str(item.get('备注', ''))
 
         # ── Table1: 核查结果 ──
         # R0: 被核查对象编号 (合并单元格)

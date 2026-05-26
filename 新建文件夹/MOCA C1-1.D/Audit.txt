@@ -1,0 +1,80 @@
+D:\MassHunter\GCMS\1\data\2026\05\0515\MOCA C1.D\Audit.txt 
+Created Mon May 18 09:29:02 2026
+
+
+ Modified : Mon May 18 09:29:02 2026
+ Event    : Quantitation 
+ Message  : Calculation using initial calibration
+ QuantFile: MOCA-CAL.RES
+ Severity : 0
+
+
+ Modified : Mon May 18 09:29:03 2026
+ Event    : Report Generation 
+ Message  : Generated Report using option: s
+ QuantFile: MOCA-CAL.RES
+ Severity : 0
+
+
+ Modified : Mon May 18 09:29:04 2026
+ Event    : ISTD Area 
+ Message  : 426109 Ýìd10
+ QuantFile: MOCA-CAL.RES
+ Severity : 1
+
+
+ Modified : Mon May 18 09:29:30 2026
+ Event    : Quantitation 
+ Message  : Calculation using initial calibration
+ QuantFile: MOCA-CAL.RES
+ Severity : 0
+
+
+ Modified : Mon May 18 09:29:30 2026
+ Event    : Report Generation 
+ Message  : Generated Report using option: s
+ QuantFile: MOCA-CAL.RES
+ Severity : 0
+
+
+ Modified : Mon May 18 09:29:30 2026
+ Event    : ISTD Area 
+ Message  : 426109 Ýìd10
+ QuantFile: MOCA-CAL.RES
+ Severity : 1
+
+
+ Modified : Mon May 18 09:29:34 2026
+ Event    : Manual Integration
+ Message  : Changed peak amount for MOCA from 0.739162mg/L to 0.533067mg/L
+ QuantFile: MOCA-CAL.RES
+ Severity : 1
+
+
+ Modified : Mon May 18 09:29:37 2026
+ Event    : Report Generation 
+ Message  : Generated Report using option: 
+ QuantFile: MOCA-CAL.RES
+ Severity : 0
+
+
+ Modified : Mon May 18 09:29:37 2026
+ Event    : ISTD Area 
+ Message  : 426109 Ýìd10
+ QuantFile: MOCA-CAL.RES
+ Severity : 1
+
+
+ Modified : Mon May 25 13:08:25 2026
+ Event    : Header Update
+ Message  : Changed sample name from MOCA C1 to MOCA C1-1
+ QuantFile: MOCA-CAL.RES
+ Severity : 1
+
+
+ Modified : Mon May 25 13:08:25 2026
+ Event    : Header Update
+ Message  : Changed misc info from  to 
+ QuantFile: MOCA-CAL.RES
+ Severity : 1
+

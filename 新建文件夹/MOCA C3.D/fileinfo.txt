@@ -1,0 +1,22 @@
+
+           Data File Information
+
+     Data File     : D:\MassHunter\GCMS\1\data\2026\05\0506\MOCA C3.D\data.ms
+     Operator:     :   
+     Acquired On   :  07 May 2026  01:20    
+     Instrument    :  GCMS
+     Method File   :  MOCA-SCAN-20190110.M
+     Sample Name   :  MOCA C3
+     Misc Info     :   
+     Vial Number   :  23
+     Sample Mult.  :  1.00
+     Sample Amount :  0.00
+     Exp. Barcode  :   
+     Act.  Barcode :   
+
+
+
+     Files in Data Directory
+
+
+     * = File time stamp is before latest quant update

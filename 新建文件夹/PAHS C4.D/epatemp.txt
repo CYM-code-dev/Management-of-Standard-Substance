@@ -1,0 +1,47 @@
+                                        定量报告    (QT 复核)
+
+  数据路径  : D:\MassHunter\GCMS\1\data\2026\04\0417\
+  数据文件  : PAHS C4.D                                           
+  采集      : 17 Apr 2026  18:48
+  操作者    :  
+  样品      : PAHS C4
+  其他      :  
+  ALS 样品瓶: 25   样品乘积因子: 1
+
+  定量时间  : Apr 20 08:52:18 2026
+  定量方法 : D:\MassHunter\GCMS\1\methods\PAHS内标-日常.M
+  定量方法标题: PAE17
+  上一次定量更新: Mon Apr 20 08:52:15 2026
+  响应方式  : 初始校正
+
+          化合物                  保留时间 定量离子 响应值  浓度 单位 偏差(分钟)
+   --------------------------------------------------------------------------
+   内标
+     1) Naphthalene-d8              2.467  136    29333     0.20 mg/L     0.00
+     3) Phenanthrene-d10            4.942  188    75995     1.00 mg/L     0.00
+    13) Perylene-d12                8.199  264    78804     1.00 mg/L     0.00
+
+      目标化合物                                                          定性离子
+     2) Naphthalene                 2.479  128    41606     0.503 mg/L      97
+     4) Acenaphthylene              3.650  152    42913     0.490 mg/L      98
+     5) Acenaphthene                3.793  153    26783     0.519 mg/L      95
+     6) Fluorene                    4.203  166    29810     0.516 mg/L      95
+     7) Phenanthrene                4.962  178    36050     0.502 mg/L      98
+     8) Anthracene                  5.003  178    39598m    0.511 mg/L        
+     9) Fluoranthene                5.927  202    42727     0.494 mg/L      98
+    10) Pyrene                      6.103  202    42472     0.509 mg/L      98
+    11) Benzo[a]anthracene          7.090  228    42796m    0.509 mg/L        
+    12) Chrysene                    7.127  228    43919m    0.506 mg/L        
+    14) Benzo[b]fluoranthene        7.935  252   138995     0.508 mg/L      97
+    15) Benzo[j]fluoranthene        7.935  252   138995     0.508 mg/L      97
+    16) Benzo[k]fluoranthene        7.935  252   138995     0.508 mg/L      97
+    17) Benzo[e]pyrene              8.117  252    42769m    0.496 mg/L        
+    18) Benzo[a]pyrene              8.155  252    45516     0.500 mg/L      98
+    19) Indeno[1,2,3-cd]pyrene      9.168  276    61274m    0.500 mg/L        
+    20) dibenzo[a,h]anthracene      9.193  278    50019m    0.510 mg/L        
+    21) benzo[g,h,i]perylene        9.441  276    46343m    0.505 mg/L        
+   --------------------------------------------------------------------------
+
+   (#) = 定性峰超出范围 (m) = 手动积分 (+) = 已求和的信号
+
+PAHS内标-日常.M 2026-05-25 周一 13:05:26   

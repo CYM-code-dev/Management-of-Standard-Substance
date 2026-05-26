@@ -1,0 +1,22 @@
+
+           Data File Information
+
+     Data File     : D:\MassHunter\GCMS\1\data\2026\04\0417\PAHS C4.D\data.ms
+     Operator:     :   
+     Acquired On   :  17 Apr 2026  18:48    
+     Instrument    :  GCMSD_19
+     Method File   :  PAHS-SIM-24.M
+     Sample Name   :  PAHS C4
+     Misc Info     :   
+     Vial Number   :  25
+     Sample Mult.  :  1.00
+     Sample Amount :  0.00
+     Exp. Barcode  :   
+     Act.  Barcode :   
+
+
+
+     Files in Data Directory
+
+
+     * = File time stamp is before latest quant update

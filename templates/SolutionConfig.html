@@ -584,7 +584,7 @@
                       <th>配置日期</th>
                       <th>有效期</th>
                       <th>审核</th>
-                      <th style="width:40px;">操作</th>
+                      <th style="width:60px;">操作</th>
                     </tr>
                   </thead>
                   <tbody><tr><td colspan="11" class="text-center text-muted small py-3">请先查询</td></tr>
@@ -685,7 +685,7 @@
                       <th>配置日期</th>
                       <th>有效期</th>
                       <th>审核</th>
-                      <th style="width:40px;">操作</th>
+                      <th style="width:60px;">操作</th>
                     </tr>
                   </thead>
                   <tbody><tr><td colspan="10" class="text-center text-muted small py-3">请先查询</td></tr>
@@ -749,6 +749,10 @@
               <option value="CK-SB294-CG"></option>
             </datalist>
             <div class="invalid-feedback" id="solDeviceError" style="display:none;"></div>
+          </div>
+          <div>
+            <label class="form-label mb-1 small fw-bold">类型</label>
+            <input type="text" id="solCustomType" class="form-control form-control-sm" placeholder="如 TSCA">
           </div>
         </div>
         <div class="d-flex flex-wrap gap-2 align-items-end mb-2 small">
@@ -995,11 +999,11 @@
         <div class="row g-2 mb-3">
           <div class="col-6">
             <label class="form-label mb-1 small fw-bold">被核查对象编号</label>
-            <textarea id="verifyTargetCode" class="form-control form-control-sm" rows="2" readonly style="font-size:0.75rem;"></textarea>
+            <div id="verifyTargetCodeArea" style="max-height:100px;overflow-y:auto;border:1px solid #dee2e6;border-radius:4px;padding:4px 6px;font-size:0.75rem;background:#f8f9fa;"></div>
           </div>
           <div class="col-6">
             <label class="form-label mb-1 small fw-bold">核查对象编号</label>
-            <textarea id="verifySourceCode" class="form-control form-control-sm" rows="2" readonly style="font-size:0.75rem;"></textarea>
+            <div id="verifySourceCodeArea" style="max-height:100px;overflow-y:auto;border:1px solid #dee2e6;border-radius:4px;padding:4px 6px;font-size:0.75rem;background:#f8f9fa;"></div>
           </div>
         </div>
 
@@ -1014,43 +1018,36 @@
         <div class="table-responsive mb-3">
           <table class="table table-sm table-bordered mb-0" id="verifyTable0">
             <thead class="table-light">
-              <tr><th>序号</th><th>标准物质名称</th><th>标准物质编号</th><th>保存条件</th><th>有效期</th><th>标志</th><th>容器</th><th>处理方法</th><th>备注</th></tr>
+              <tr><th>序号</th><th>标准物质名称</th><th>标准物质编号</th><th>保存条件</th></tr>
             </thead>
-            <tbody><tr><td colspan="9" class="text-center text-muted small">加载数据中...</td></tr></tbody>
+            <tbody><tr><td colspan="4" class="text-center text-muted small">加载数据中...</td></tr></tbody>
           </table>
         </div>
 
-        <!-- 5. 上传PDF -->
-        <h6 class="fw-bold mb-2 small"><i class="fas fa-file-pdf me-1"></i>上传定量报告</h6>
+        <!-- 5. 选择.D数据文件夹 -->
+        <h6 class="fw-bold mb-2 small"><i class="fas fa-folder-open me-1"></i>选择定量报告数据目录</h6>
         <div class="mb-3">
-          <div class="d-flex align-items-center gap-2 flex-wrap">
-            <input type="file" id="verifyPdfInput" accept=".pdf" multiple class="form-control form-control-sm" style="max-width:300px;">
-            <button id="verifyParseBtn" class="btn btn-sm btn-outline-primary"><i class="fas fa-search me-1"></i>解析PDF</button>
+          <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+            <button id="verifySelectDFoldersBtn" class="btn btn-sm btn-outline-info"><i class="fas fa-folder-plus me-1"></i>选择.D数据文件夹</button>
+            <span id="verifyScanStatus" class="small text-muted"></span>
+          </div>
+          <div id="verifyDFolderList" class="mb-2" style="display:none;"></div>
+          <div class="d-flex align-items-center gap-2">
+            <button id="verifyParseEpatempBtn" class="btn btn-sm btn-outline-primary"><i class="fas fa-file-import me-1"></i>解析选中数据</button>
             <span id="verifyParseStatus" class="small text-muted"></span>
           </div>
         </div>
 
-        <!-- 6. 待选物质列表 -->
-        <div id="verifyCompoundSelector" class="mb-3" style="display:none;">
-          <h6 class="fw-bold mb-2 small"><i class="fas fa-check-double me-1"></i>选择比对物质</h6>
-          <div class="table-responsive">
-            <table class="table table-sm table-bordered mb-0" id="verifyCompoundTable">
-              <thead class="table-light">
-                <tr><th style="width:40px;">选择</th><th>物质名称</th><th>实测值</th><th>理论浓度点</th></tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- 7. 核查结果 (Table1) -->
+        <!-- 6. 核查结果 -->
         <h6 class="fw-bold mb-2 small"><i class="fas fa-chart-bar me-1"></i>核查结果</h6>
-        <div class="table-responsive mb-3">
+        <ul class="nav nav-tabs mb-2" id="verifyResultTabs" style="display:none;"></ul>
+        <div class="tab-content" id="verifyResultTabPanes" style="display:none;"></div>
+        <div id="verifySingleTable" class="table-responsive mb-3">
           <table class="table table-sm table-bordered mb-0" id="verifyTable1">
             <thead class="table-light">
-              <tr><th>各组分名称</th><th>理论值</th><th>实测值</th><th>相对偏差(%)</th></tr>
+              <tr><th style="width:40px;">选择</th><th>物质名称</th><th style="width:120px;">理论值</th><th>实测值</th><th style="width:100px;">相对偏差(%)</th></tr>
             </thead>
-            <tbody><tr><td colspan="4" class="text-center text-muted small">请先解析PDF并选择比对物质</td></tr></tbody>
+            <tbody><tr><td colspan="5" class="text-center text-muted small">请先选择.D数据文件夹并解析</td></tr></tbody>
           </table>
         </div>
 
@@ -2066,6 +2063,7 @@
             purity_str: String(item.concentration || '99.5'),
             original_unit: concUnit,
             received_unit: unit,
+            controlled_no: item.controlledNo || '',
             batch_no: item.batchNo || '',
             expiry_date: item.validDate || '',
             base_custom_num: baseNum,
@@ -2083,6 +2081,7 @@
             temperature: document.getElementById('solTemp').value.trim() || null,
             humidity: document.getElementById('solHumid').value.trim() || null,
             device_names: document.getElementById('solDevice').value.trim() || null,
+            customType: document.getElementById('solCustomType').value.trim() || null,
             original_no: `A-${item.id}\n${item.batchNo||''}\n${rowCode}`,
             config_conc: parseFloat(concVal) || 0
         };
@@ -2612,7 +2611,7 @@
             return `
             <tr>
                 <td><input type="checkbox" class="bbcd-row-check" data-idx="${realIdx}" ${checked}></td>
-                <td><div class="d-flex justify-content-between align-items-center">${bbcdEsc(item.configureOrder)}<i class="fas fa-eye solution-config-icon" data-idx="${realIdx}" title="查看详情" style="cursor:pointer;color:#14b8a6;"></i></div></td>
+                <td>${bbcdEsc(item.configureOrder)}</td>
                 <td class="text-truncate" style="max-width:180px;" title="${bbcdEsc(item.solutionCode)}">${bbcdEsc(item.solutionCode)}</td>
                 <td class="text-truncate" style="max-width:200px;" title="${bbcdEsc(item.solutionName)}">${bbcdEsc(item.solutionName)}</td>
                 <td class="text-truncate" style="max-width:240px;" title="${bbcdEsc(item.concentrationCount || item.concentration)}">${bbcdEsc(item.concentration)}</td>
@@ -2621,7 +2620,7 @@
                 <td>${bbcdEsc(item.configureDate || '—')}</td>
                 <td>${bbcdEsc(item.validityDate || '—')}</td>
                 <td>${item.auditUserName ? '<span class="badge bg-success">已审核</span>' : '<span class="badge bg-secondary">未审核</span>'}</td>
-                <td><i class="fas fa-trash-alt solution-config-icon bbcd-delete-btn" data-idx="${realIdx}" title="删除" style="cursor:pointer;color:#ef4444;"></i></td>
+                <td><i class="fas fa-eye solution-config-icon me-1" data-idx="${realIdx}" title="查看详情" style="cursor:pointer;color:#14b8a6;"></i><i class="fas fa-trash-alt solution-config-icon bbcd-delete-btn" data-idx="${realIdx}" title="删除" style="cursor:pointer;color:#ef4444;"></i></td>
             </tr>`;
         }).join('');
 
@@ -3117,7 +3116,7 @@
                 });
                 rowIdx += compCount;
             } else {
-                const concMatch = String(dl.originalConcentration || '').match(/^([\d.]+)\s*\(([^)]+)\)/);
+                const concMatch = String(dl.originalConcentration || '').match(/^[><≥≤~]*\s*([\d.]+)\s*\(([^)]+)\)/);
                 const concVal = concMatch ? parseFloat(concMatch[1]) : parseFloat(dl.originalConcentration) || 0;
                 const concUnit = concMatch ? concMatch[2] : (dl.originalUnit || '');
 
@@ -4524,7 +4523,7 @@
         if (!rec || !rec.detailList || !rec.detailList.length) return null;
         const dl = rec.detailList[0];
         const concStr = String(dl.originalConcentration || '');
-        const concMatch = concStr.match(/^([\d.]+)\s*\(([^)]+)\)/);
+        const concMatch = concStr.match(/^[><≥≤~]*\s*([\d.]+)\s*\(([^)]+)\)/);
         if (!concMatch || !concMatch[2].includes('%')) return null;
         const purity = concMatch[1];
         const unit = concMatch[2];
@@ -5143,7 +5142,7 @@
             return `
             <tr>
                 <td><input type="checkbox" class="dtab-row-check" data-idx="${realIdx}" ${checked}></td>
-                <td><div class="d-flex justify-content-between align-items-center">${bbcdEsc(item.configureOrder)}<i class="fas fa-eye solution-config-icon" data-idx="${realIdx}" data-tab="d" title="查看详情" style="cursor:pointer;color:#14b8a6;"></i></div></td>
+                <td>${bbcdEsc(item.configureOrder)}</td>
                 <td class="text-truncate" style="max-width:180px;" title="${bbcdEsc(item.solutionCode)}">${bbcdEsc(item.solutionCode)}</td>
                 <td class="text-truncate" style="max-width:200px;" title="${bbcdEsc(item.solutionName)}">${bbcdEsc(item.solutionName)}</td>
                 <td class="text-truncate" style="max-width:240px;" title="${bbcdEsc(item.concentrationCount || item.concentration)}">${bbcdEsc(item.concentration)}</td>
@@ -5151,7 +5150,7 @@
                 <td>${bbcdEsc(item.configureDate || '—')}</td>
                 <td>${bbcdEsc(item.validityDate || '—')}</td>
                 <td>${item.auditUserName ? '<span class="badge bg-success">已审核</span>' : '<span class="badge bg-secondary">未审核</span>'}</td>
-                <td><i class="fas fa-trash-alt solution-config-icon dtab-delete-btn" data-idx="${realIdx}" title="删除" style="cursor:pointer;color:#ef4444;"></i></td>
+                <td><i class="fas fa-eye solution-config-icon me-1" data-idx="${realIdx}" data-tab="d" title="查看详情" style="cursor:pointer;color:#14b8a6;"></i><i class="fas fa-trash-alt solution-config-icon dtab-delete-btn" data-idx="${realIdx}" title="删除" style="cursor:pointer;color:#ef4444;"></i></td>
             </tr>`;
         }).join('');
 
@@ -5231,12 +5230,41 @@
         const label = item.configureOrder || item.solutionName || item.id;
         if (!confirm(`确定要删除记录 [${label}] 吗？此操作不可恢复。`)) return;
         try {
+            // B类储备液：先查询详情获取领用ID，再先删储备液，最后删领用
+            let receiveIds = [];
+            if (solType === 'SOLUTION_TYPE_B') {
+                try {
+                    const detailResp = await fetch('/api/lims/get_solution_detail', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ id: item.id, configure_order: item.configureOrder })
+                    });
+                    const detailData = await detailResp.json();
+                    if (detailData.success && detailData.data) {
+                        receiveIds = (detailData.data.detailList || [])
+                            .map(dl => String(dl.originalId || '').trim())
+                            .filter(Boolean);
+                    }
+                } catch (e) { console.warn('查询详情异常:', e); }
+            }
             const resp = await fetch('/api/lims/delete_solution', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ id: item.id, type: solType })
             });
             const data = await resp.json();
             if (!data.success) { alert('删除失败: ' + (data.message || '未知错误')); return; }
+            // 储备液已删除，现在删除关联的领用记录
+            if (receiveIds.length > 0) {
+                try {
+                    const delRecvResp = await fetch('/api/lims/delete_receive', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ ids: receiveIds })
+                    });
+                    const delRecvData = await delRecvResp.json();
+                    if (!delRecvData.success) {
+                        alert('删除领用记录失败: ' + (delRecvData.message || '未知错误'));
+                    }
+                } catch (e) { alert('删除领用记录异常: ' + e.message); }
+            }
             bbcdLastResults.splice(idx, 1);
             bbcdFilteredResults = bbcdLastResults.filter(it => {
                 const typeFilter = document.getElementById('bbcdFilterSolType').value;
@@ -5263,10 +5291,17 @@
         if (dTabSelectedIds.size !== 2) { alert('请选择恰好2条D型工作液记录进行核查'); return; }
         const [idx1, idx2] = [...dTabSelectedIds];
         const item1 = dTabLastResults[idx1], item2 = dTabLastResults[idx2];
-        _verifyData = null; _verifyMeasured = [];
-        document.getElementById('verifyCompoundSelector').style.display = 'none';
-        document.querySelector('#verifyCompoundTable tbody').innerHTML = '';
-        document.querySelector('#verifyTable1 tbody').innerHTML = '<tr><td colspan="4" class="text-center text-muted small">请先解析PDF并选择比对物质</td></tr>';
+        _verifyData = null; _verifyMeasured = []; _verifySelectedDFolders = [];
+        document.getElementById('verifyDFolderList').style.display = 'none';
+        document.getElementById('verifyDFolderList').innerHTML = '';
+        document.getElementById('verifyScanStatus').textContent = '';
+        document.getElementById('verifyParseStatus').textContent = '';
+        document.querySelector('#verifyTable1 tbody').innerHTML = '<tr><td colspan="5" class="text-center text-muted small">请先选择.D数据文件夹并解析</td></tr>';
+        document.getElementById('verifyResultTabs').style.display = 'none';
+        document.getElementById('verifyResultTabs').innerHTML = '';
+        document.getElementById('verifyResultTabPanes').style.display = 'none';
+        document.getElementById('verifyResultTabPanes').innerHTML = '';
+        document.getElementById('verifySingleTable').style.display = '';
         bootstrap.Modal.getOrCreateInstance(document.getElementById('verifyModal')).show();
         try {
             const resp = await fetch('/api/lims/get_verification_info', { method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -5287,10 +5322,33 @@
             (sol.ancestors || []).forEach(a => { if (a.level === 'A' && !seen.has(a.configureOrder)) { seen.add(a.configureOrder); aItems.push(a); } });
         });
         if (aItems.length) {
-            tbody0.innerHTML = aItems.map((a, i) => '<tr><td>'+(i+1)+'</td><td>'+bbcdEsc(a.solutionName)+'</td><td>'+bbcdEsc(a.controlledNo||a.configureOrder)+'</td><td>'+bbcdEsc(a.storageCondition||'')+'</td><td><input type="checkbox" checked></td><td><input type="checkbox" checked></td><td><input type="checkbox"></td><td><input type="text" class="form-control form-control-sm py-0" style="font-size:0.75rem;"></td><td><input type="text" class="form-control form-control-sm py-0" style="font-size:0.75rem;"></td></tr>').join('');
-        } else { tbody0.innerHTML = '<tr><td colspan="9" class="text-center text-muted small">无溯源数据</td></tr>'; }
+            tbody0.innerHTML = aItems.map((a, i) => '<tr><td>'+(i+1)+'</td><td>'+bbcdEsc(a.solutionName)+'</td><td>'+bbcdEsc(a.controlledNo||a.configureOrder)+'</td><td>'+bbcdEsc(a.storageCondition||'')+'</td></tr>').join('');
+        } else { tbody0.innerHTML = '<tr><td colspan="4" class="text-center text-muted small">无溯源数据</td></tr>'; }
         document.getElementById('verifyConclusion').value = '合格';
         document.getElementById('verifyNotes').value = '';
+    }
+
+    function _renderCodeCheckboxes(containerId, points) {
+        // 按浓度值从小到大排序去重
+        const seen = new Set();
+        const unique = [];
+        for (const p of points) {
+            const key = p.code;
+            if (!seen.has(key)) { seen.add(key); unique.push(p); }
+        }
+        unique.sort((a, b) => a.concentration - b.concentration);
+        const container = document.getElementById(containerId);
+        if (!unique.length) {
+            container.innerHTML = '<span class="text-muted">无</span>';
+            return;
+        }
+        container.innerHTML = unique.map((p, i) => {
+            var subConcsAttr = p.sub_concs ? ' data-sub-concs=\''+JSON.stringify(p.sub_concs).replace(/'/g,'&#39;')+'\'' : '';
+            return '<label class="d-flex align-items-center gap-1" style="line-height:1.2;margin:0;"><input type="checkbox" class="verify-code-check" data-code="'+bbcdEsc(p.code)+'" data-concentration="'+p.concentration+'" data-unit="'+bbcdEsc(p.unit||'')+'" data-name="'+bbcdEsc(p.name||'')+'"'+subConcsAttr+'>'+bbcdEsc(p.code)+'</label>';
+        }).join('');
+        container.querySelectorAll('.verify-code-check').forEach(c => {
+            c.addEventListener('change', () => { if (_verifyMeasured.length) verifyBuildResultTable(); });
+        });
     }
 
     function verifyUpdateCodes() {
@@ -5298,87 +5356,259 @@
         const mode = document.getElementById('verifyMode').value;
         const newSol = _verifyData.new_solution, oldSol = _verifyData.old_solution;
         const threshold = document.getElementById('verifyThreshold').value;
-        let targetCode = '', sourceCode = '', methodDesc = '';
+        let methodDesc = '';
         if (mode === 'new_verifies_old') {
-            targetCode = newSol.solutionCode || '';
-            sourceCode = (oldSol.concentrationPoints || []).map(p => p.code).join(', ');
+            document.getElementById('verifyTargetCodeArea').innerHTML = '<span>'+bbcdEsc(newSol.solutionCode || '')+'</span>';
+            _renderCodeCheckboxes('verifySourceCodeArea', oldSol.concentrationPoints || []);
             methodDesc = '用新配制的标液作标准曲线，测定原来配制的标液点的浓度，比较其浓度值相对偏差在' + threshold + '%以内';
         } else {
-            targetCode = (newSol.concentrationPoints || []).map(p => p.code).join(', ');
-            sourceCode = oldSol.solutionCode || '';
+            _renderCodeCheckboxes('verifyTargetCodeArea', newSol.concentrationPoints || []);
+            document.getElementById('verifySourceCodeArea').innerHTML = '<span>'+bbcdEsc(oldSol.solutionCode || '')+'</span>';
             methodDesc = '用原来配制的标液作标准曲线，测定新配制的标液点的浓度，比较其浓度值相对偏差在' + threshold + '%以内';
         }
-        document.getElementById('verifyTargetCode').value = targetCode;
-        document.getElementById('verifySourceCode').value = sourceCode;
         document.getElementById('verifyMethodDesc').value = methodDesc;
     }
 
-    function verifyBuildTheoryOptions() {
-        if (!_verifyData) return [];
-        const mode = document.getElementById('verifyMode').value;
-        const theorySol = mode === 'new_verifies_old' ? _verifyData.old_solution : _verifyData.new_solution;
-        const points = theorySol.concentrationPoints || [];
-        const seen = new Set(); const opts = [];
-        points.forEach(p => { const key = p.concentration + '_' + p.unit; if (!seen.has(key)) { seen.add(key); opts.push({value: p.concentration, unit: p.unit, name: p.name, code: p.code}); } });
-        return opts;
+    function _getCheckedConcPoints() {
+        const checkedPoints = [];
+        document.querySelectorAll('.verify-code-check:checked').forEach(c => {
+            const code = c.dataset.code;
+            const conc = parseFloat(c.dataset.concentration);
+            const unit = c.dataset.unit || '';
+            let subConcs = null;
+            var subConcsStr = c.getAttribute('data-sub-concs');
+            if (subConcsStr) {
+                try { subConcs = JSON.parse(subConcsStr); } catch(e) {}
+            }
+            if (!subConcs) {
+                var nameStr = (c.dataset.name || '').trim();
+                subConcs = {};
+                nameStr.split(',').forEach(function(n) { var nm = n.trim(); if (nm) subConcs[nm] = conc; });
+            }
+            checkedPoints.push({ concentration: conc, unit, code, sub_concs: subConcs });
+        });
+        return checkedPoints;
     }
 
-    async function verifyParsePdf() {
-        const input = document.getElementById('verifyPdfInput');
-        if (!input.files.length) { alert('请选择PDF文件'); return; }
-        const formData = new FormData();
-        for (const f of input.files) formData.append('pdf_files', f);
+    function _buildResultRow(c, i, checkedPoints, fidx) {
+        let theoryVal = '', theoryUnit = '', use = null;
+        if (fidx !== undefined && fidx < checkedPoints.length) {
+            const pt = checkedPoints[fidx];
+            if (pt.sub_concs && pt.sub_concs[c.name] !== undefined) {
+                theoryVal = pt.sub_concs[c.name];
+                theoryUnit = pt.unit;
+                use = pt;
+            }
+        }
+        if (!use && checkedPoints.length === 1) {
+            const pt = checkedPoints[0];
+            if (pt.sub_concs && pt.sub_concs[c.name] !== undefined) {
+                theoryVal = pt.sub_concs[c.name];
+                theoryUnit = pt.unit;
+                use = pt;
+            }
+        }
+        const checked = !!use;
+        return '<tr><td><input type="checkbox" class="verify-comp-check" data-idx="'+i+'" '+(checked?'checked':'')+'></td>'+
+            '<td>'+bbcdEsc(c.name)+'</td>'+
+            '<td><input type="number" class="form-control form-control-sm py-0 verify-theory-input" data-idx="'+i+'" step="0.0001" value="'+theoryVal+'" data-unit="'+bbcdEsc(theoryUnit)+'" style="font-size:0.75rem;width:100px;"></td>'+
+            '<td>'+c.measured_value+' '+bbcdEsc(c.unit)+'</td>'+
+            '<td class="verify-deviation">--</td></tr>';
+    }
+
+    function verifyBuildResultTable() {
+        if (!_verifyMeasured.length) return;
+        const checkedPoints = _getCheckedConcPoints();
+        const files = _verifySelectedDFolders || [];
+        const fileOrder = {};
+        files.forEach((f, i) => { fileOrder[f.name] = i; });
+
+        if (checkedPoints.length >= 2 && files.length >= 2) {
+            // 多标签页模式
+            document.getElementById('verifySingleTable').style.display = 'none';
+            var tabsEl = document.getElementById('verifyResultTabs');
+            var panesEl = document.getElementById('verifyResultTabPanes');
+            tabsEl.style.display = '';
+            panesEl.style.display = '';
+            var tabsHtml = '', panesHtml = '';
+            var groups = {};
+            _verifyMeasured.forEach(function(c, i) {
+                var sf = c.source_file || '';
+                var fidx = fileOrder[sf];
+                if (fidx === undefined) fidx = 0;
+                if (!groups[fidx]) groups[fidx] = [];
+                groups[fidx].push({c: c, i: i, fidx: Math.min(fidx, checkedPoints.length - 1)});
+            });
+            var tabIdx = 0;
+            for (var gi = 0; gi < files.length && gi < checkedPoints.length; gi++) {
+                if (!groups[gi] || !groups[gi].length) continue;
+                var tabLabel = files[gi].name + ' / ' + checkedPoints[gi].code;
+                var active = tabIdx === 0 ? ' active' : '';
+                tabsHtml += '<li class="nav-item"><a class="nav-link small' + active + '" data-bs-toggle="tab" href="#verifyTabPane' + tabIdx + '">' + bbcdEsc(tabLabel) + '</a></li>';
+                var rowsHtml = groups[gi].map(function(item) { return _buildResultRow(item.c, item.i, checkedPoints, item.fidx); }).join('');
+                panesHtml += '<div class="tab-pane' + active + '" id="verifyTabPane' + tabIdx + '"><div class="table-responsive mb-3"><table class="table table-sm table-bordered mb-0" id="verifyTable1_' + tabIdx + '"><thead class="table-light"><tr><th style="width:40px;">选择</th><th>物质名称</th><th style="width:120px;">理论值</th><th>实测值</th><th style="width:100px;">相对偏差(%)</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>';
+                tabIdx++;
+            }
+            tabsEl.innerHTML = tabsHtml;
+            panesEl.innerHTML = panesHtml;
+            // 绑定事件
+            for (var ti = 0; ti < tabIdx; ti++) {
+                var tbl = document.getElementById('verifyTable1_' + ti);
+                if (!tbl) continue;
+                tbl.querySelectorAll('.verify-comp-check').forEach(function(c) { c.addEventListener('change', verifyRecalcResults); });
+                tbl.querySelectorAll('.verify-theory-input').forEach(function(inp) { inp.addEventListener('input', verifyRecalcResults); });
+            }
+        } else {
+            // 单表模式
+            document.getElementById('verifyResultTabs').style.display = 'none';
+            document.getElementById('verifyResultTabs').innerHTML = '';
+            document.getElementById('verifyResultTabPanes').style.display = 'none';
+            document.getElementById('verifyResultTabPanes').innerHTML = '';
+            document.getElementById('verifySingleTable').style.display = '';
+            var tbody1 = document.querySelector('#verifyTable1 tbody');
+            tbody1.innerHTML = _verifyMeasured.map(function(c, i) {
+                var sf = c.source_file || '';
+                var fidx = fileOrder[sf];
+                return _buildResultRow(c, i, checkedPoints, fidx);
+            }).join('');
+            tbody1.querySelectorAll('.verify-comp-check').forEach(function(c) { c.addEventListener('change', verifyRecalcResults); });
+            tbody1.querySelectorAll('.verify-theory-input').forEach(function(inp) { inp.addEventListener('input', verifyRecalcResults); });
+        }
+        verifyRecalcResults();
+    }
+
+    let _verifySelectedDFolders = [];
+
+    async function verifySelectDFolders() {
+        if (!window.showDirectoryPicker) {
+            alert('当前浏览器不支持文件夹选择，请使用 Chrome 或 Edge'); return;
+        }
+        try {
+            const dirHandle = await window.showDirectoryPicker();
+            const listDiv = document.getElementById('verifyDFolderList');
+            const status = document.getElementById('verifyScanStatus');
+            listDiv.innerHTML = ''; listDiv.style.display = 'none';
+            status.textContent = '扫描中...'; status.className = 'small text-warning';
+            const dFolders = [];
+            for await (const entry of dirHandle.values()) {
+                if (entry.kind === 'directory' && entry.name.toUpperCase().endsWith('.D')) {
+                    dFolders.push({ name: entry.name, handle: entry });
+                }
+            }
+            if (!dFolders.length) { status.textContent = '未找到.D文件夹'; status.className = 'small text-muted'; return; }
+            // 显示复选框列表
+            listDiv.innerHTML = '<div class="border rounded p-2 bg-light mb-1">' +
+                '<div class="d-flex justify-content-end mb-1"><button class="btn btn-sm btn-outline-secondary" id="verifyConfirmDFolders">确认选择</button></div>' +
+                '<div class="d-flex flex-column gap-1">' +
+                dFolders.map((f, i) => '<label class="d-flex align-items-center gap-1 small mb-0"><input type="checkbox" class="verify-d-check" data-idx="'+i+'"><span>'+f.name+'</span></label>').join('') +
+                '</div></div>';
+            listDiv.style.display = 'block';
+            status.textContent = '找到 '+dFolders.length+' 个.D文件夹，请勾选后点确认';
+            status.className = 'small text-success';
+            // 存储句柄供确认时使用
+            window._verifyPendingDFolders = dFolders;
+            document.getElementById('verifyConfirmDFolders').addEventListener('click', function() {
+                const checks = listDiv.querySelectorAll('.verify-d-check:checked');
+                if (!checks.length) { alert('请至少选择一个.D文件夹'); return; }
+                _verifySelectedDFolders = [];
+                checks.forEach(c => { const idx = parseInt(c.dataset.idx, 10); _verifySelectedDFolders.push(window._verifyPendingDFolders[idx]); });
+                verifyRenderSelectedDFolders();
+            });
+        } catch (e) { if (e.name !== 'AbortError') { alert('选择文件夹失败: '+e.message); } }
+    }
+
+    function verifyRenderSelectedDFolders() {
+        const listDiv = document.getElementById('verifyDFolderList');
+        const status = document.getElementById('verifyScanStatus');
+        if (!_verifySelectedDFolders.length) {
+            listDiv.style.display = 'none'; status.textContent = ''; return;
+        }
+        listDiv.innerHTML = '<div class="d-flex flex-column gap-1 border rounded p-2 bg-light">' +
+            _verifySelectedDFolders.map((f, i) => '<div class="d-flex align-items-center gap-2 small"><i class="fas fa-folder"></i><span>'+f.name+'</span>' +
+            '<button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="verifyRemoveDFolder('+i+')" title="移除"><i class="fas fa-times"></i></button></div>').join('') +
+            '</div>';
+        listDiv.style.display = 'block';
+        status.textContent = '已选择 '+_verifySelectedDFolders.length+' 个.D文件夹';
+        status.className = 'small text-success';
+    }
+
+    function verifyRemoveDFolder(index) {
+        _verifySelectedDFolders.splice(index, 1);
+        verifyRenderSelectedDFolders();
+    }
+
+    async function verifyParseEpatemp() {
+        if (!_verifySelectedDFolders.length) { alert('请先选择.D文件夹'); return; }
         const status = document.getElementById('verifyParseStatus');
         status.textContent = '解析中...'; status.className = 'small text-warning';
         try {
-            const resp = await fetch('/api/lims/parse_verification_pdf', { method: 'POST', body: formData });
+            // 以二进制方式读取，避免浏览器 UTF-8 解码导致 GBK 中文乱码
+            const dFoldersData = [];
+            for (const f of _verifySelectedDFolders) {
+                try {
+                    const fileHandle = await f.handle.getFileHandle('epatemp.txt');
+                    const file = await fileHandle.getFile();
+                    const buf = await file.arrayBuffer();
+                    const bytes = new Uint8Array(buf);
+                    let binary = '';
+                    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+                    dFoldersData.push({ name: f.name, content_b64: btoa(binary) });
+                } catch (e) {
+                    dFoldersData.push({ name: f.name, error: '无epatemp.txt' });
+                }
+            }
+            const resp = await fetch('/api/lims/parse_epatemp_content', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ d_folders: dFoldersData })
+            });
             const data = await resp.json();
             if (!data.success) { status.textContent = '解析失败: '+(data.message||''); status.className = 'small text-danger'; return; }
             _verifyMeasured = data.compounds || [];
-            status.textContent = '解析成功，提取到 ' + _verifyMeasured.length + ' 个化合物';
+            status.textContent = data.message || ('解析成功，提取到 ' + _verifyMeasured.length + ' 个化合物');
             status.className = 'small text-success';
             verifyShowCompoundSelector();
         } catch (e) { status.textContent = '解析异常: '+e.message; status.className = 'small text-danger'; }
     }
 
     function verifyShowCompoundSelector() {
-        if (!_verifyMeasured.length) { document.getElementById('verifyCompoundSelector').style.display = 'none'; return; }
-        const theoryOpts = verifyBuildTheoryOptions();
-        const tbody = document.querySelector('#verifyCompoundTable tbody');
-        tbody.innerHTML = _verifyMeasured.map((c, i) => {
-            const optHtml = theoryOpts.length
-                ? '<select class="form-select form-select-sm py-0 verify-theory-select" data-idx="'+i+'" style="font-size:0.75rem;"><option value="">-- 选择理论浓度点 --</option>'+theoryOpts.map((o,j)=>'<option value="'+j+'">'+bbcdEsc(o.name)+': '+o.value+' '+o.unit+'</option>').join('')+'</select>'
-                : '<input type="number" class="form-control form-control-sm py-0 verify-theory-input" data-idx="'+i+'" step="0.01" placeholder="手动输入" style="font-size:0.75rem;">';
-            return '<tr><td><input type="checkbox" class="verify-comp-check" data-idx="'+i+'" checked></td><td>'+bbcdEsc(c.name)+'</td><td>'+c.measured_value+' '+bbcdEsc(c.unit)+'</td><td>'+optHtml+'</td></tr>';
-        }).join('');
-        document.getElementById('verifyCompoundSelector').style.display = 'block';
-        verifyRecalcResults();
+        if (!_verifyMeasured.length) return;
+        verifyBuildResultTable();
     }
 
     function verifyRecalcResults() {
-        if (!_verifyData || !_verifyMeasured.length) return;
+        if (!_verifyMeasured.length) return;
         const threshold = parseFloat(document.getElementById('verifyThreshold').value);
-        const theoryOpts = verifyBuildTheoryOptions();
-        const rows = document.querySelectorAll('#verifyCompoundTable tbody tr');
-        const results = []; let allPass = true;
-        rows.forEach(tr => {
-            const chk = tr.querySelector('.verify-comp-check');
-            if (!chk || !chk.checked) return;
-            const idx = parseInt(chk.dataset.idx, 10);
-            const compound = _verifyMeasured[idx]; if (!compound) return;
-            let theoretical = null, theoreticalUnit = '';
-            const sel = tr.querySelector('.verify-theory-select');
-            if (sel && sel.value !== '') { const opt = theoryOpts[parseInt(sel.value,10)]; if (opt) { theoretical = opt.value; theoreticalUnit = opt.unit; } }
-            else { const inp = tr.querySelector('.verify-theory-input'); if (inp && inp.value) theoretical = parseFloat(inp.value); }
-            const measured = compound.measured_value;
-            let deviation = null, pass = true;
-            if (theoretical !== null && measured !== null && (theoretical + measured) !== 0) { deviation = Math.abs((theoretical - measured) / (theoretical + measured)) * 100; if (deviation > threshold) { pass = false; allPass = false; } }
-            results.push({ name: compound.name, theoretical, theoreticalUnit, measured, measuredUnit: compound.unit||'', deviation, pass });
+        let allPass = true;
+        // 收集所有结果表（单表或多标签页）
+        var tables = [];
+        if (document.getElementById('verifySingleTable').style.display !== 'none') {
+            tables.push(document.querySelector('#verifyTable1'));
+        }
+        document.querySelectorAll('#verifyResultTabPanes .tab-pane').forEach(function(pane) {
+            var tbl = pane.querySelector('table');
+            if (tbl) tables.push(tbl);
         });
-        const tbody1 = document.querySelector('#verifyTable1 tbody');
-        if (results.length) {
-            tbody1.innerHTML = results.map(r => '<tr class="'+(r.pass?'':'table-danger')+'"><td>'+bbcdEsc(r.name)+'</td><td>'+(r.theoretical!==null?r.theoretical.toFixed(2)+' '+r.theoreticalUnit:'--')+'</td><td>'+r.measured.toFixed(2)+' '+bbcdEsc(r.measuredUnit)+'</td><td>'+(r.deviation!==null?r.deviation.toFixed(2):'--')+'</td></tr>').join('');
-        } else { tbody1.innerHTML = '<tr><td colspan="4" class="text-center text-muted small">未选择比对物质</td></tr>'; }
+        tables.forEach(function(table) {
+            if (!table) return;
+            table.querySelectorAll('tbody tr').forEach(function(tr) {
+                var chk = tr.querySelector('.verify-comp-check');
+                if (!chk || !chk.checked) { tr.querySelector('.verify-deviation').textContent = '--'; return; }
+                var inp = tr.querySelector('.verify-theory-input');
+                var measuredText = tr.querySelectorAll('td')[3]?.textContent?.trim() || '';
+                var measuredMatch = measuredText.match(/([\d.]+)/);
+                var measured = measuredMatch ? parseFloat(measuredMatch[1]) : null;
+                var theoretical = inp && inp.value ? parseFloat(inp.value) : null;
+                var deviation = '--';
+                var pass = true;
+                if (theoretical !== null && measured !== null && (theoretical + measured) !== 0) {
+                    var dev = Math.abs((theoretical - measured) / (theoretical + measured)) * 100;
+                    deviation = dev.toFixed(2);
+                    if (dev > threshold) { pass = false; allPass = false; }
+                }
+                tr.querySelector('.verify-deviation').textContent = deviation;
+                tr.className = pass ? '' : 'table-danger';
+            });
+        });
         document.getElementById('verifyConclusion').value = allPass ? '合格' : '不合格';
     }
 
@@ -5386,18 +5616,40 @@
         if (!_verifyData) { alert('请先获取核查信息'); return; }
         const table0Data = [];
         document.querySelectorAll('#verifyTable0 tbody tr').forEach((tr, i) => {
-            const cells = tr.querySelectorAll('td'), checks = tr.querySelectorAll('input[type="checkbox"]'), texts = tr.querySelectorAll('input[type="text"]');
-            if (cells.length < 9) return;
-            table0Data.push({'序号':i+1,'标准物质名称':cells[1]?.textContent?.trim()||'','标准物质编号':cells[2]?.textContent?.trim()||'','保存条件':cells[3]?.textContent?.trim()||'','是否在有效期':checks[0]?.checked||false,'标志是否齐全':checks[1]?.checked||false,'容器是否损伤':checks[2]?.checked||false,'处理方法':texts[0]?.value||'','备注':texts[1]?.value||''});
+            const cells = tr.querySelectorAll('td');
+            if (cells.length < 4) return;
+            table0Data.push({'序号':i+1,'标准物质名称':cells[1]?.textContent?.trim()||'','标准物质编号':cells[2]?.textContent?.trim()||'','保存条件':cells[3]?.textContent?.trim()||''});
         });
         const table1Data = [];
-        document.querySelectorAll('#verifyTable1 tbody tr').forEach(tr => {
-            const cells = tr.querySelectorAll('td');
-            if (cells.length===4 && !tr.classList.contains('text-muted') && cells[0].textContent.trim()) {
-                table1Data.push({'各组分名称':cells[0]?.textContent?.trim()||'','理论值':cells[1]?.textContent?.trim()||'','实测值':cells[2]?.textContent?.trim()||'','相对偏差':cells[3]?.textContent?.trim()||''});
-            }
+        // 从单表或所有标签页表收集数据
+        var allTables = [];
+        if (document.getElementById('verifySingleTable').style.display !== 'none') {
+            allTables.push(document.querySelector('#verifyTable1'));
+        }
+        document.querySelectorAll('#verifyResultTabPanes .tab-pane').forEach(function(pane) {
+            var tbl = pane.querySelector('table');
+            if (tbl) allTables.push(tbl);
         });
-        const payload = {'被核查对象编号':document.getElementById('verifyTargetCode').value,'核查对象编号':document.getElementById('verifySourceCode').value,'核查方法':'新旧标准品对比','核查时间':document.getElementById('verifyDate').value,'核查方法描述':document.getElementById('verifyMethodDesc').value,'核查结论':document.getElementById('verifyConclusion').value,'备注':document.getElementById('verifyNotes').value,'table0_data':table0Data,'table1_data':table1Data};
+        allTables.forEach(function(table) {
+            if (!table) return;
+            table.querySelectorAll('tbody tr').forEach(function(tr) {
+                var chk = tr.querySelector('.verify-comp-check');
+                if (!chk || !chk.checked) return;
+                var cells = tr.querySelectorAll('td');
+                if (cells.length < 5) return;
+                var inp = tr.querySelector('.verify-theory-input');
+                var theoryText = inp ? inp.value : '';
+                var theoryUnit = inp ? (inp.dataset.unit || '') : '';
+                table1Data.push({'各组分名称':cells[1]?.textContent?.trim()||'','理论值':(theoryText?theoryText+' '+theoryUnit:''),'实测值':cells[3]?.textContent?.trim()||'','相对偏差':cells[4]?.textContent?.trim()||''});
+            });
+        });
+        const _getCodeText = (areaId) => {
+            const area = document.getElementById(areaId);
+            const checks = area.querySelectorAll('.verify-code-check:checked');
+            if (checks.length) return [...checks].map(c => c.dataset.code).join('\n');
+            return area.textContent.trim();
+        };
+        const payload = {'被核查对象编号':_getCodeText('verifyTargetCodeArea'),'核查对象编号':_getCodeText('verifySourceCodeArea'),'核查方法':'新旧标准品对比','核查时间':document.getElementById('verifyDate').value,'核查方法描述':document.getElementById('verifyMethodDesc').value,'核查结论':document.getElementById('verifyConclusion').value,'备注':document.getElementById('verifyNotes').value,'table0_data':table0Data,'table1_data':table1Data};
         try {
             const resp = await fetch('/api/lims/export_verification_docx',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
             if (!resp.ok) { const err = await resp.json().catch(()=>({})); alert('导出失败: '+(err.message||resp.statusText)); return; }
@@ -5664,14 +5916,9 @@
         document.getElementById('dTabCheckBtn').addEventListener('click', verifyCheckBtnHandler);
         document.getElementById('verifyMode').addEventListener('change', () => { verifyUpdateCodes(); if (_verifyMeasured.length) verifyRecalcResults(); });
         document.getElementById('verifyThreshold').addEventListener('change', () => { verifyUpdateCodes(); if (_verifyMeasured.length) verifyRecalcResults(); });
-        document.getElementById('verifyParseBtn').addEventListener('click', verifyParsePdf);
+        document.getElementById('verifySelectDFoldersBtn').addEventListener('click', verifySelectDFolders);
+        document.getElementById('verifyParseEpatempBtn').addEventListener('click', verifyParseEpatemp);
         document.getElementById('verifyExportBtn').addEventListener('click', verifyExportDocx);
-        document.querySelector('#verifyCompoundTable tbody').addEventListener('change', e => {
-            if (e.target.classList.contains('verify-theory-select') || e.target.classList.contains('verify-comp-check')) verifyRecalcResults();
-        });
-        document.querySelector('#verifyCompoundTable tbody').addEventListener('input', e => {
-            if (e.target.classList.contains('verify-theory-input')) verifyRecalcResults();
-        });
         document.querySelector('#dTabResultTable tbody').addEventListener('change', e => {
             if (e.target.classList.contains('dtab-row-check')) dTabUpdateSelection();
         });

@@ -1,0 +1,22 @@
+
+           Data File Information
+
+     Data File     : D:\GCMSÊý¾Ý\2026\04\0427\PAE C2.D\data.ms
+     Operator:     :   
+     Acquired On   :  27 Apr 2026  14:59    
+     Instrument    :  GCMS ONLINE
+     Method File   :  PAES-SCAN-20180919.M
+     Sample Name   :  PAE C2
+     Misc Info     :   
+     Vial Number   :  3
+     Sample Mult.  :  1.00
+     Sample Amount :  0.00
+     Exp. Barcode  :   
+     Act.  Barcode :   
+
+
+
+     Files in Data Directory
+
+
+     * = File time stamp is before latest quant update

@@ -1,0 +1,59 @@
+D:\MassHunter\GCMS\1\data\2026\05\0512\MOCA C1.D\audit.txt 
+Created Wed May 13 08:52:16 2026
+
+
+ Modified : Wed May 13 08:52:16 2026
+ Event    : Quantitation 
+ Message  : Calculation using initial calibration
+ QuantFile: MOCA-CAL.RES
+ Severity : 0
+
+
+ Modified : Wed May 13 08:52:16 2026
+ Event    : Report Generation 
+ Message  : Generated Report using option: s
+ QuantFile: MOCA-CAL.RES
+ Severity : 0
+
+
+ Modified : Wed May 13 08:52:16 2026
+ Event    : ISTD Area 
+ Message  : 573092 Ýìd10
+ QuantFile: MOCA-CAL.RES
+ Severity : 1
+
+
+ Modified : Wed May 13 08:52:27 2026
+ Event    : Quantitation 
+ Message  : Calculation using initial calibration
+ QuantFile: MOCA-CAL.RES
+ Severity : 0
+
+
+ Modified : Wed May 13 08:52:28 2026
+ Event    : Report Generation 
+ Message  : Generated Report using option: s
+ QuantFile: MOCA-CAL.RES
+ Severity : 0
+
+
+ Modified : Wed May 13 08:52:28 2026
+ Event    : ISTD Area 
+ Message  : 573092 Ýìd10
+ QuantFile: MOCA-CAL.RES
+ Severity : 1
+
+
+ Modified : Wed May 13 08:52:32 2026
+ Event    : Report Generation 
+ Message  : Generated Report using option: 
+ QuantFile: MOCA-CAL.RES
+ Severity : 0
+
+
+ Modified : Wed May 13 08:52:32 2026
+ Event    : ISTD Area 
+ Message  : 573092 Ýìd10
+ QuantFile: MOCA-CAL.RES
+ Severity : 1
+

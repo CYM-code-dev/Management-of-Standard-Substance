@@ -1424,9 +1424,47 @@ def parse_pdf_report(file_path: str) -> dict:
     return result
 
 
+def parse_epatemp_txt(file_path: str) -> dict:
+    """解析 epatemp.txt 定量报告，返回 {compound_name: (measured_value, unit)}。"""
+    import os
+    if not os.path.isfile(file_path):
+        return {}
+    # 匹配目标化合物行: 编号) 名称 保留时间 定量离子 响应值  浓度 单位 [偏差]
+    # 响应值可能是纯数字或带m后缀(手动积分)，浓度单位可能是ng/mg/L等
+    row_pattern = re.compile(
+        r'^\s*\d+\)\s+(.+?)\s{2,}'
+        r'[\d.]+\s+\d+\s+\d+[m]?\s+([\d.]+)\s+(ng|mg/L|μg/mL|ug/mL)'
+    )
+    for encoding in ('gbk', 'gb18030', 'gb2312', 'utf-8', 'latin-1'):
+        try:
+            with open(file_path, 'r', encoding=encoding) as f:
+                content = f.read()
+            if '�' in content:
+                continue
+            result = {}
+            extracting = False
+            for line in content.splitlines():
+                if '目标化合物' in line:
+                    extracting = True
+                    continue
+                if not extracting:
+                    continue
+                m = row_pattern.match(line)
+                if m:
+                    name = m.group(1).strip()
+                    if name:
+                        result[name] = (float(m.group(2)), m.group(3))
+            if result:
+                if encoding != 'latin-1':
+                    return result
+                if encoding == 'latin-1':
+                    return result
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    return {}
+
+
 # 运行应用程序
-if __name__ == "__main__":
-    # 配置ttk样式为现代主题
     try:
         from ctypes import windll
 

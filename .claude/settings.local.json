@@ -55,7 +55,8 @@
       "Bash(ls -d node_modules .codegraph .claude/worktrees)",
       "Bash(git ls-files *)",
       "Bash(ls -la debug_consumable_bill.json package-lock.json package.json)",
-      "Bash(grep -E \"\\\\.\\(py|js|html|css\\)$\")"
+      "Bash(grep -E \"\\\\.\\(py|js|html|css\\)$\")",
+      "Bash(xxd \"D:\\\\Agent\\\\标准品管理\\\\Management-of-Standard-Substance\\\\templates\\\\SolutionConfig.html\")"
     ]
   }
 }
