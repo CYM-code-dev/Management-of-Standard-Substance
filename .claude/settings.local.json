@@ -56,7 +56,20 @@
       "Bash(git ls-files *)",
       "Bash(ls -la debug_consumable_bill.json package-lock.json package.json)",
       "Bash(grep -E \"\\\\.\\(py|js|html|css\\)$\")",
-      "Bash(xxd \"D:\\\\Agent\\\\标准品管理\\\\Management-of-Standard-Substance\\\\templates\\\\SolutionConfig.html\")"
+      "Bash(xxd \"D:\\\\Agent\\\\标准品管理\\\\Management-of-Standard-Substance\\\\templates\\\\SolutionConfig.html\")",
+      "Bash(grep -E \"\\\\.py$|\\\\.json$|\\\\.md$\")",
+      "WebSearch",
+      "Bash(powershell.exe -Command 'Get-PnpDevice -Class Ports -ErrorAction SilentlyContinue | Where-Object {$_.Status -eq '\\\\''OK'\\\\''} | Select-Object FriendlyName, InstanceId | Format-List')",
+      "Bash(npm --version)",
+      "Bash(niimblue-cli --help)",
+      "Bash(npx @mmote/niimblue-node --help)",
+      "Bash(niimblue-cli server *)",
+      "Bash(D:/Agent/标准品管理/Management-of-Standard-Substance/.venv/Scripts/python.exe *)",
+      "Bash(pip --version)",
+      "Bash(powershell.exe -Command 'Get-Process | Where-Object {$_.Modules.FileName -match '\\\\''serial'\\\\'' -or $_.Name -match '\\\\''niim'\\\\''} | Select-Object Id, Name')",
+      "Bash(powershell.exe *)",
+      "Bash(niimblue-cli print *)",
+      "Bash(niimblue-cli connect *)"
     ]
   }
 }

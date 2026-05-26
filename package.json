@@ -1,0 +1,12 @@
+{
+  "name": "standard-substance-print-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NIIMBOT M2_H 标签打印服务依赖",
+  "dependencies": {
+    "@mmote/niimblue-node": "latest"
+  },
+  "scripts": {
+    "start": "niimblue-cli server -p 5001 --cors"
+  }
+}

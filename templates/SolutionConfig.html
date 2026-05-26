@@ -904,6 +904,7 @@
       <div class="modal-footer gap-2">
         <button class="btn btn-sm btn-secondary" id="bbcdCancelBtn" data-bs-dismiss="modal"><i class="fas fa-times me-1"></i>取消</button>
         <button class="btn btn-sm btn-outline-secondary" id="bbcdExportBtn" disabled><i class="fas fa-file-word me-1"></i>导出配制记录</button>
+        <button class="btn btn-sm btn-outline-secondary" id="bbcdPrintLabelBtn" disabled><i class="fas fa-print me-1"></i>打印标签</button>
         <button class="btn btn-sm btn-primary" id="bbcdSaveBtn" disabled><i class="fas fa-save me-1"></i>保存配置</button>
       </div>
     </div>
@@ -2136,6 +2137,20 @@
     function bbcdRoundConc(v) { return v < 0.10 ? Math.round(v * 1000) / 1000 : Math.round(v * 100) / 100; }
     function bbcdFmtConc(v) { return v < 0.10 ? v.toFixed(3) : v.toFixed(2); }
 
+    // 读取指定稀释点所有组分的计算浓度，返回均值（无有效值返回 null）
+    function bbcdGetPointMeanConc(dilutionIdx) {
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')].filter(tr => tr._src);
+        const concs = [];
+        rows.forEach(tr => {
+            const cell = tr.querySelector(`.bbcd-d-conc[data-dilution="${dilutionIdx}"]`);
+            if (cell) {
+                const v = parseFloat(cell.value);
+                if (isFinite(v) && v > 0) concs.push(v);
+            }
+        });
+        return concs.length > 0 ? concs.reduce((a, b) => a + b, 0) / concs.length : null;
+    }
+
     // 自编号自动生成
     let bbcdCodeAuto = true;
     let bbcdNameAuto = true;
@@ -2439,13 +2454,8 @@
             const count2 = window.bbcdCurrentDilutionCount || 5;
             const pointAvgs = [];
             for (let i = 0; i < count2; i++) {
-                const concsAtPoint = [];
-                rows.forEach(tr => {
-                    const cell = tr.querySelector(`.bbcd-d-conc[data-dilution="${i}"]`);
-                    const v = parseFloat(cell?.value);
-                    if (isFinite(v) && v > 0) concsAtPoint.push(v);
-                });
-                if (concsAtPoint.length) pointAvgs.push(concsAtPoint.reduce((a, b) => a + b, 0) / concsAtPoint.length);
+                const avg = bbcdGetPointMeanConc(i);
+                if (avg !== null) pointAvgs.push(avg);
             }
 
             if (pointAvgs.length === 0) {
@@ -2481,19 +2491,8 @@
             // 多源：计算每个稀释点的平均浓度
             const avgConcs = [];
             for (let i = 0; i < count; i++) {
-                const concsAtPoint = [];
-                rows.forEach(tr => {
-                    const concCell = tr.querySelector(`.bbcd-d-conc[data-dilution="${i}"]`);
-                    const text = concCell?.value.trim();
-                    if (text) {
-                        const v = parseFloat(text);
-                        if (isFinite(v) && v > 0) concsAtPoint.push(v);
-                    }
-                });
-                if (concsAtPoint.length > 0) {
-                    const avg = concsAtPoint.reduce((sum, c) => sum + c, 0) / concsAtPoint.length;
-                    avgConcs.push(avg);
-                }
+                const avg = bbcdGetPointMeanConc(i);
+                if (avg !== null) avgConcs.push(avg);
             }
 
             if (avgConcs.length === 0) {
@@ -2742,8 +2741,11 @@
         document.getElementById('bbcdSaveBtn').className = 'btn btn-sm btn-primary';
         document.getElementById('bbcdSaveBtn').innerHTML = '<i class="fas fa-save me-1"></i>保存配置';
         document.getElementById('bbcdExportBtn').disabled = true;
+        document.getElementById('bbcdPrintLabelBtn').disabled = true;
         document.getElementById('bbcdExportBtn').className = 'btn btn-sm btn-outline-secondary';
+        document.getElementById('bbcdPrintLabelBtn').className = 'btn btn-sm btn-outline-secondary';
         document.getElementById('bbcdExportBtn').innerHTML = '<i class="fas fa-file-word me-1"></i>导出配制记录';
+        document.getElementById('bbcdPrintLabelBtn').innerHTML = '<i class="fas fa-print me-1"></i>打印标签';
 
         // 显示/隐藏稀释点区域
         const dilutionSection = document.getElementById('bbcdDilutionSection');
@@ -2995,8 +2997,11 @@
         document.getElementById('bbcdSaveBtn').className = 'btn btn-sm btn-primary';
         document.getElementById('bbcdSaveBtn').innerHTML = '<i class="fas fa-save me-1"></i>保存修改';
         document.getElementById('bbcdExportBtn').disabled = false;
+        document.getElementById('bbcdPrintLabelBtn').disabled = false;
         document.getElementById('bbcdExportBtn').className = 'btn btn-sm btn-outline-secondary';
+        document.getElementById('bbcdPrintLabelBtn').className = 'btn btn-sm btn-outline-secondary';
         document.getElementById('bbcdExportBtn').innerHTML = '<i class="fas fa-file-word me-1"></i>导出配制记录';
+        document.getElementById('bbcdPrintLabelBtn').innerHTML = '<i class="fas fa-print me-1"></i>打印标签';
         document.getElementById('bbcdValidityHint').style.display = 'none';
 
         // 6. Store detailList ids for save
@@ -3812,6 +3817,7 @@
         if (!rows.length || !dataRows.length) {
             document.getElementById('bbcdSaveBtn').disabled = true;
             document.getElementById('bbcdExportBtn').disabled = true;
+            document.getElementById('bbcdPrintLabelBtn').disabled = true;
             return;
         }
 
@@ -3819,11 +3825,13 @@
         const isWorkingSolution = (solType === 'SOLUTION_TYPE_D');
         document.getElementById('bbcdSaveBtn').disabled = false;
         document.getElementById('bbcdExportBtn').disabled = false;
+        document.getElementById('bbcdPrintLabelBtn').disabled = false;
 
         const duplicateSources = bbcdApplyDuplicateASourceState();
         if (duplicateSources.length) {
             document.getElementById('bbcdSaveBtn').disabled = true;
             document.getElementById('bbcdExportBtn').disabled = true;
+            document.getElementById('bbcdPrintLabelBtn').disabled = true;
             return;
         }
 
@@ -4416,11 +4424,15 @@
             const volume = bbcdRoundVol(parseFloat(volEl?.value));
             const volStr = bbcdFmtVol(volume);
 
-            // 优先读取用户手动修改的浓度
-            const firstConcInput = sourceGroups[0].rows[0].querySelector(`.bbcd-d-conc[data-dilution="${i}"]`);
+            // 优先读取用户手动修改的浓度（多组分取均值）
             let resultConc;
-            if (firstConcInput && firstConcInput._userEdited) {
-                resultConc = parseFloat(firstConcInput.value) || chainConcs[i];
+            const anyEdited = rows.some(tr => {
+                const el = tr.querySelector(`.bbcd-d-conc[data-dilution="${i}"]`);
+                return el && el._userEdited;
+            });
+            if (anyEdited) {
+                const mean = bbcdGetPointMeanConc(i);
+                resultConc = mean !== null ? bbcdRoundConc(mean) : chainConcs[i];
             } else {
                 resultConc = chainConcs[i];
             }
@@ -5857,6 +5869,7 @@
         }, true);
         document.getElementById('bbcdSaveBtn').addEventListener('click', bbcdSave);
         document.getElementById('bbcdExportBtn').addEventListener('click', bbcdExport);
+        document.getElementById('bbcdPrintLabelBtn').addEventListener('click', bbcdPrintLabel);
         document.getElementById('bbcdConfigModal').addEventListener('click', (e) => {
             const btn = e.target.closest('#bbcdFillBtn');
             if (!btn) return;
@@ -6373,10 +6386,306 @@
         }
     }
 
-    function qqPrintLabel(idx) {
+    async function doActualPrint(imagesKey) {
+        const images = window['_' + imagesKey];
+        if (!images || images.length === 0) { alert('没有可打印的标签'); return; }
+        const btn = event.target.closest('button');
+        const orig = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>打印中...';
+        try {
+            for (let i = 0; i < images.length; i++) {
+                const img = images[i];
+                if (!img.image) continue;
+                const resp = await fetch('/api/lims/do_print', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ image_base64: img.image, quantity: 1 })
+                });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.message || '打印失败');
+                if (images.length > 1) await new Promise(r => setTimeout(r, 1000));
+            }
+            btn.innerHTML = '<i class="fas fa-check me-1"></i>打印成功';
+            setTimeout(() => { btn.innerHTML = orig; btn.disabled = false; }, 2000);
+        } catch (e) {
+            alert('打印失败: ' + e.message);
+            btn.innerHTML = orig;
+            btn.disabled = false;
+        }
+    }
+
+    async function bbcdPrintLabel() {
+        const btn = document.getElementById('bbcdPrintLabelBtn');
+        const orig = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
+
+        try {
+            const solType = document.getElementById('bbcdSolType').value;
+            const solutionName = document.getElementById('bbcdSolutionName').value.trim();
+            const solutionCode = document.getElementById('bbcdSolutionCode').value.trim();
+            const configureDate = document.getElementById('bbcdConfigureDate').value;
+            const validityDate = document.getElementById('bbcdValidityDate').value;
+            const storageCondition = document.getElementById('bbcdStorage').value;
+            const medium = document.getElementById('bbcdMedium')?.value.trim() || document.getElementById('bbcdMediumD')?.value.trim() || '';
+            // 优先从已保存记录获取配置人
+            let creatorName = '';
+            if (window.bbcdViewDetailMode && window.bbcdViewDetailRecord) {
+                creatorName = (window.bbcdViewDetailRecord.creatorName || window.bbcdViewDetailRecord.configuratorName || '').trim();
+            }
+            if (!creatorName) {
+                try {
+                    const sr = await fetch('/api/status');
+                    const sd = await sr.json();
+                    creatorName = (sd.display_name || sd.username || '').trim();
+                } catch(e) {}
+            }
+
+            if (!solutionName || !solutionCode) {
+                alert('请先填写溶液名称和编号');
+                return;
+            }
+
+            const images = [];
+
+            if (solType === 'SOLUTION_TYPE_D') {
+                // 工作液：每个稀释点一个标签
+                const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')].filter(tr => tr._src);
+                const count = parseInt(document.getElementById('bbcdDilutionCount').value) || (window.bbcdCurrentDilutionCount || 5);
+                const today = configureDate ? configureDate.replace(/-/g, '') : new Date().toISOString().slice(0,10).replace(/-/g,'');
+
+                // 从 solutionCode 提取前缀（去掉浓度范围和日期部分）
+                const baseCode = solutionCode.replace(/-\[[^\]]+\]-\d{8}$/, '');
+
+                for (let i = 0; i < count; i++) {
+                    const avg = bbcdGetPointMeanConc(i);
+                    if (avg === null) continue;
+                    const concStr = bbcdFmtConc(bbcdRoundConc(avg));
+
+                    const labelCode = `${baseCode}-${concStr}-${today}`;
+                    const firstUnit = rows[0]._src?.concUnit || 'μg/mL';
+                    const concentration = `${concStr}${firstUnit}`;
+
+                    const resp = await fetch('/api/lims/print_label', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            solution_name: solutionName,
+                            solution_code: labelCode,
+                            concentration,
+                            configure_date: configureDate,
+                            validity_date: validityDate,
+                            storage_condition: storageCondition,
+                            medium,
+                            creator_name: creatorName,
+                        }),
+                    });
+                    const data = await resp.json();
+                    if (!data.success) throw new Error(data.message || '生成失败');
+                    images.push({ code: labelCode, conc: concentration, preview: data.preview, image: data.image });
+                }
+            } else {
+                // B/C 类型：取所有浓度均值
+                const concEls = [...document.querySelectorAll('#bbcdConfigTable tbody .bbcd-c-conc')];
+                const unitEls = [...document.querySelectorAll('#bbcdConfigTable tbody .bbcd-c-unit')];
+                const concValues = concEls.map(el => parseFloat(el.textContent.trim())).filter(v => isFinite(v) && v > 0);
+                const unitStr = unitEls.length ? unitEls[0].textContent.trim() : '';
+                let concentration = '';
+                if (concValues.length > 0) {
+                    const avg = concValues.reduce((a, b) => a + b, 0) / concValues.length;
+                    concentration = bbcdFmtConc(avg) + unitStr;
+                }
+
+                const payload = {
+                    solution_name: solutionName,
+                    solution_code: solutionCode,
+                    concentration,
+                    configure_date: configureDate,
+                    validity_date: validityDate,
+                    storage_condition: storageCondition,
+                    medium,
+                    creator_name: creatorName,
+                };
+                const resp = await fetch('/api/lims/print_label', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload),
+                });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.message || '生成失败');
+                images.push({ code: solutionCode, preview: data.preview, image: data.image });
+            }
+
+            if (images.length === 0) {
+                alert('未找到可打印的标签数据');
+                return;
+            }
+
+            // 弹窗展示标签图片
+            const modalId = 'bbcdLabelPreviewModal';
+            let modal = document.getElementById(modalId);
+            if (modal) modal.remove();
+
+            // 存储 images 供打印按钮使用
+            window._bbcdLabelImages = images;
+
+            const imgHTML = images.map((img, idx) => {
+                const label = img.conc ? `稀释点 ${idx + 1}: ${img.conc}` : '';
+                return `<div class="mb-3">
+                    ${label ? `<div class="small text-muted mb-1">${label}</div>` : ''}
+                    <img src="${img.preview}" style="border:1px solid #dee2e6;max-width:100%;" alt="标签预览">
+                </div>`;
+            }).join('');
+
+            document.body.insertAdjacentHTML('beforeend', `
+                <div class="modal fade" id="${modalId}" tabindex="-1">
+                  <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                      <div class="modal-header">
+                        <h5 class="modal-title">标签预览</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                      </div>
+                      <div class="modal-body">${imgHTML}</div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-primary" id="bbcdDoPrintBtn" onclick="doActualPrint('bbcdLabelImages')"><i class="fas fa-print me-1"></i>确认打印</button>
+                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">关闭</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+            `);
+            bootstrap.Modal.getOrCreateInstance(document.getElementById(modalId)).show();
+        } catch (e) {
+            alert('生成标签失败: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = orig;
+        }
+    }
+
+    async function qqPrintLabel(idx) {
         const item = qqLastResults[idx];
         if (!item) return;
-        alert('标签打印功能开发中：' + (item.configureOrder || ''));
+        const solType = qqDetectType(item);
+        try {
+            const resp = await fetch('/api/lims/get_solution_detail', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: item.id, configure_order: item.configureOrder })
+            });
+            const data = await resp.json();
+            if (!data.success) { alert('获取详情失败: ' + (data.message || '')); return; }
+            const rec = data.data;
+
+            const creatorName = (rec.creatorName || rec.configuratorName || '').trim();
+            const configureDate = rec.configureDate || '';
+            const validityDate = rec.validityDate || '';
+            const storageCondition = rec.storageCondition || '';
+            const medium = rec.medium || '';
+            const today = configureDate ? configureDate.replace(/-/g, '') : '';
+            const images = [];
+
+            if (solType === 'SOLUTION_TYPE_D' && rec.detailList) {
+                const solutionCode = rec.solutionCode || '';
+                const baseCode = solutionCode.replace(/-\[[^\]]+\]-\d{8}$/, '');
+                const detailList = Array.isArray(rec.detailList) ? rec.detailList : JSON.parse(rec.detailList || '[]');
+
+                // 收集每个稀释点的浓度
+                const dilutionFields = ['dilutionOne','dilutionTwo','dilutionThree','dilutionFour',
+                    'dilutionFive','dilutionSix','dilutionSeven','dilutionEight',
+                    'dilutionNine','dilutionTen','dilutionEleven','dilutionTwelve'];
+                for (const field of dilutionFields) {
+                    const concs = detailList.map(d => parseFloat(d[field])).filter(v => isFinite(v) && v > 0);
+                    if (concs.length === 0) continue;
+                    const avg = concs.reduce((a, b) => a + b, 0) / concs.length;
+                    const concStr = avg < 0.10 ? avg.toFixed(3) : avg.toFixed(2);
+                    const unit = detailList[0]?.groupUnit || 'μg/mL';
+                    const labelCode = `${baseCode}-${concStr}-${today}`;
+                    const concentration = `${concStr}${unit}`;
+
+                    const printResp = await fetch('/api/lims/print_label', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            solution_name: rec.solutionName || '',
+                            solution_code: labelCode,
+                            concentration,
+                            configure_date: configureDate,
+                            validity_date: validityDate,
+                            storage_condition: storageCondition,
+                            medium,
+                            creator_name: creatorName,
+                        }),
+                    });
+                    const printData = await printResp.json();
+                    if (!printData.success) throw new Error(printData.message || '生成失败');
+                    images.push({ code: labelCode, conc: concentration, preview: printData.preview, image: printData.image });
+                }
+            } else {
+                // B/C 类型：从浓度字符串提取数值取均值
+                const rawConc = rec.concentration || '';
+                const concMatches = rawConc.match(/:(\d+\.?\d*)\(/g);
+                const concValues = concMatches ? concMatches.map(m => parseFloat(m.replace(/:/, ''))) : [];
+                const unitMatch = rawConc.match(/\(([^)]+)\)/);
+                const unit = unitMatch ? unitMatch[1] : 'μg/mL';
+                let concStr = '';
+                if (concValues.length > 0) {
+                    const avg = concValues.reduce((a, b) => a + b, 0) / concValues.length;
+                    concStr = (avg < 0.10 ? avg.toFixed(3) : avg.toFixed(2)) + unit;
+                }
+                const printResp = await fetch('/api/lims/print_label', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        solution_name: rec.solutionName || '',
+                        solution_code: rec.solutionCode || '',
+                        concentration: concStr,
+                        configure_date: configureDate,
+                        validity_date: validityDate,
+                        storage_condition: storageCondition,
+                        medium,
+                        creator_name: creatorName,
+                    }),
+                });
+                const printData = await printResp.json();
+                if (!printData.success) throw new Error(printData.message || '生成失败');
+                images.push({ code: rec.solutionCode, preview: printData.preview, image: printData.image });
+            }
+
+            if (images.length === 0) { alert('未找到可打印的标签数据'); return; }
+
+            const modalId = 'qqLabelPreviewModal';
+            let modal = document.getElementById(modalId);
+            if (modal) modal.remove();
+
+            window._qqLabelImages = images;
+
+            const imgHTML = images.map((img, i) => {
+                const label = img.conc ? `稀释点 ${i + 1}: ${img.conc}` : '';
+                return `<div class="mb-3">${label ? `<div class="small text-muted mb-1">${label}</div>` : ''}
+                    <img src="${img.preview}" style="border:1px solid #dee2e6;max-width:100%;" alt="标签预览">
+                </div>`;
+            }).join('');
+
+            document.body.insertAdjacentHTML('beforeend', `
+                <div class="modal fade" id="${modalId}" tabindex="-1">
+                  <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                      <div class="modal-header"><h5 class="modal-title">标签预览</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                      <div class="modal-body">${imgHTML}</div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-primary" id="qqDoPrintBtn" onclick="doActualPrint('qqLabelImages')"><i class="fas fa-print me-1"></i>确认打印</button>
+                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">关闭</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+            `);
+            bootstrap.Modal.getOrCreateInstance(document.getElementById(modalId)).show();
+        } catch (e) {
+            alert('生成标签失败: ' + e.message);
+        }
     }
 
     async function qqDeleteRecord(idx) {

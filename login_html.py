@@ -3326,6 +3326,191 @@ def lims_export_verification_docx():
         return jsonify({"success": False, "message": f"导出失败: {str(e)}"}), 500
 
 
+@app.route('/api/lims/print_label', methods=['POST'])
+def lims_print_label():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    from PIL import ImageDraw, ImageFont
+    try:
+        p = request.get_json() or {}
+        solution_code = p.get('solution_code', '')
+        solution_name = p.get('solution_name', '')
+        concentration = p.get('concentration', '')
+        configure_date = p.get('configure_date', '')
+        validity_date = p.get('validity_date', '')
+        storage_condition = p.get('storage_condition', '')
+        medium = p.get('medium', '')
+        creator_name = p.get('creator_name', '')
+
+        # 字体（Windows 系统字体）
+        system_font_dirs = ['C:/Windows/Fonts', 'C:\\Windows\\Fonts']
+        def load_font(size):
+            for d in system_font_dirs:
+                for name in ['msyh.ttc', 'msyhbd.ttc', 'simhei.ttf', 'simsun.ttc']:
+                    fp = os.path.join(d, name)
+                    if os.path.exists(fp):
+                        try:
+                            return ImageFont.truetype(fp, size)
+                        except:
+                            pass
+            return ImageFont.load_default()
+
+        # 标签尺寸 40mm×60mm @300DPI
+        # 预览：709×472（横版可读），打印：472×709（竖版旋转）
+        PW, PH = 709, 472
+
+        font_normal = load_font(32)
+
+        img_preview = Image.new('RGB', (PW, PH), 'white')
+        draw = ImageDraw.Draw(img_preview)
+
+        pad = 20
+        max_text_w = PW - pad - 10
+
+        # 自动换行，续行缩进到"："之后
+        def wrap_text(text, font, max_w):
+            colon_pos = text.find('：')
+            if colon_pos < 0:
+                colon_pos = text.find(':')
+            indent = draw.textlength(text[:colon_pos + 1], font=font) if colon_pos >= 0 else 0
+            rest_max = max_w - indent
+            if draw.textlength(text, font=font) <= max_w:
+                return [(text, 0)]
+            lines = []
+            cur = ''
+            first = True
+            cur_max = max_w
+            for ch in text:
+                if draw.textlength(cur + ch, font=font) > cur_max:
+                    if cur:
+                        lines.append((cur, 0 if first else indent))
+                    cur = ch
+                    first = False
+                    cur_max = rest_max
+                else:
+                    cur += ch
+            if cur:
+                lines.append((cur, 0 if first else indent))
+            return lines or [('', 0)]
+
+        label_items = [
+            f"标样编号：{solution_code}",
+            f"标样名称：{solution_name}",
+            f"介质/浓度：{medium}/{concentration}" if medium else f"浓度：{concentration}",
+            f"配置人/日期：{creator_name}/{configure_date}",
+            f"有效期至：{validity_date}",
+            f"储存地点/温度：{storage_condition}",
+        ]
+
+        all_lines = []
+        for item in label_items:
+            wrapped = wrap_text(item, font_normal, max_text_w)
+            for j, (text, ind) in enumerate(wrapped):
+                all_lines.append((text, ind, j > 0))
+
+        line_gap = 44
+        wrap_gap = 36
+
+        # 计算总高度，垂直居中
+        total_h = sum(wrap_gap if c else line_gap for _, _, c in all_lines)
+        total_h -= wrap_gap if all_lines[-1][2] else line_gap
+        total_h += 32
+        y = max(pad, (PH - total_h) / 2)
+
+        for text, indent, is_cont in all_lines:
+            draw.text((pad + indent, y), text, fill='black', font=font_normal)
+            y += wrap_gap if is_cont else line_gap
+
+        # 旋转用于打印
+        img = img_preview.transpose(Image.Transpose.ROTATE_90)
+
+        # 保存到文件
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'print_output')
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        file_path = os.path.join(output_dir, f"{solution_code}.png")
+        img.save(file_path, 'PNG')
+
+        # 返回 base64：preview（未旋转可读）+ image（旋转后打印）
+        buf_preview = BytesIO()
+        img_preview.save(buf_preview, format='PNG')
+        preview_b64 = base64.b64encode(buf_preview.getvalue()).decode('utf-8')
+
+        buf_print = BytesIO()
+        img.save(buf_print, format='PNG')
+        print_b64 = base64.b64encode(buf_print.getvalue()).decode('utf-8')
+        return jsonify({"success": True, "preview": f"data:image/png;base64,{preview_b64}", "image": f"data:image/png;base64,{print_b64}"})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"生成标签失败: {str(e)}"}), 500
+
+
+NIIMBOT_SERVER = "http://localhost:5001"
+
+
+def _niimbot_ensure_connected():
+    """确保打印机已连接，未连接则自动扫描连接。返回 (成功, 错误信息)。"""
+    try:
+        resp = requests.get(f"{NIIMBOT_SERVER}/connected", timeout=3)
+        if resp.ok and resp.json().get("connected"):
+            return True, None
+    except Exception:
+        pass
+    # 扫描串口
+    try:
+        resp = requests.post(f"{NIIMBOT_SERVER}/scan", json={"transport": "serial"}, timeout=5)
+        devices = resp.json().get("devices", [])
+        for dev in devices:
+            addr = dev["address"]
+            try:
+                conn = requests.post(f"{NIIMBOT_SERVER}/connect", json={"transport": "serial", "address": addr}, timeout=5)
+                if conn.ok and conn.json().get("message") == "Connected":
+                    return True, None
+            except Exception:
+                continue
+        return False, "未找到打印机，请检查 USB 连接"
+    except Exception as e:
+        return False, f"扫描打印机失败: {str(e)}"
+
+
+@app.route('/api/lims/do_print', methods=['POST'])
+def do_print():
+    try:
+        data = request.json or {}
+        image_base64 = data.get("image_base64", "")
+        quantity = data.get("quantity", 1)
+
+        if not image_base64:
+            return jsonify({"success": False, "message": "缺少标签图片"}), 400
+
+        # 去掉 data:image/png;base64, 前缀
+        if "," in image_base64:
+            image_base64 = image_base64.split(",", 1)[1]
+
+        ok, err = _niimbot_ensure_connected()
+        if not ok:
+            return jsonify({"success": False, "message": err}), 503
+
+        resp = requests.post(f"{NIIMBOT_SERVER}/print", json={
+            "printTask": "B1",
+            "printDirection": "top",
+            "density": 3,
+            "quantity": quantity,
+            "imageBase64": image_base64,
+            "labelWidth": 472,
+            "labelHeight": 709,
+            "imageFit": "contain"
+        }, timeout=30)
+
+        if resp.ok:
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "message": resp.json().get("error", "打印失败")}), 500
+    except requests.exceptions.ConnectionError:
+        return jsonify({"success": False, "message": "打印服务未启动，请先运行 niimblue-cli server -p 5001 --cors"}), 503
+    except Exception as e:
+        return jsonify({"success": False, "message": f"打印失败: {str(e)}"}), 500
+
+
 if __name__ == '__main__':
     if not os.path.exists('templates'):
         os.makedirs('templates')
