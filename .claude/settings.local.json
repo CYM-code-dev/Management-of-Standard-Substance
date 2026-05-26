@@ -69,7 +69,8 @@
       "Bash(powershell.exe -Command 'Get-Process | Where-Object {$_.Modules.FileName -match '\\\\''serial'\\\\'' -or $_.Name -match '\\\\''niim'\\\\''} | Select-Object Id, Name')",
       "Bash(powershell.exe *)",
       "Bash(niimblue-cli print *)",
-      "Bash(niimblue-cli connect *)"
+      "Bash(niimblue-cli connect *)",
+      "Bash(.venv/Scripts/python -c ' *)"
     ]
   }
 }

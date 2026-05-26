@@ -2536,6 +2536,8 @@ def lims_export_bbcd_docx():
             top_items = []
     else:
         top_items = [item for item in detail_list if item.get('dilutionIdx', 0) == 0]
+    if not top_items and detail_list:
+        top_items = [detail_list[0]]
 
     # Header name
     source_names = []
@@ -3408,8 +3410,8 @@ def lims_print_label():
             for j, (text, ind) in enumerate(wrapped):
                 all_lines.append((text, ind, j > 0))
 
-        line_gap = 44
-        wrap_gap = 36
+        line_gap = 56
+        wrap_gap = 40
 
         # 计算总高度，垂直居中
         total_h = sum(wrap_gap if c else line_gap for _, _, c in all_lines)

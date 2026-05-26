@@ -6344,8 +6344,39 @@
             });
             const data = await resp.json();
             if (!data.success) { alert('获取详情失败: ' + (data.message || '')); return; }
+            const rec = data.data;
+            // Pre-fetch source info for D-type (same as bbcdViewDetail)
+            if (solType === 'SOLUTION_TYPE_D' && rec.detailList) {
+                const saved = bbcdLastResults;
+                bbcdLastResults = qqLastResults;
+                const sources = new Map();
+                rec.detailList.forEach(dl => {
+                    const order = String(dl.originalCode || '').trim();
+                    const id = String(dl.originalId || '').trim();
+                    if (order && !sources.has(order)) sources.set(order, {order, id: id || ''});
+                    else if (!order && id && !sources.has(id)) sources.set(id, {order: '', id});
+                });
+                if (sources.size > 0) {
+                    const results = {};
+                    await Promise.all([...sources.values()].map(async (src) => {
+                        try {
+                            const params = new URLSearchParams();
+                            if (src.order) params.set('order', src.order);
+                            if (src.id) params.set('id', src.id);
+                            const r = await fetch('/api/lims/get_source_info?' + params.toString());
+                            const d = await r.json();
+                            if (d.success && d.data) {
+                                if (src.order) results[src.order] = d.data;
+                                if (src.id) results[src.id] = d.data;
+                            }
+                        } catch (e) {}
+                    }));
+                    window._dViewSourceInfo = results;
+                }
+                bbcdLastResults = saved;
+            }
             if (typeof bbcdPopulateConfigModal !== 'function') { alert('导出功能不可用'); return; }
-            bbcdPopulateConfigModal(data.data, solType);
+            bbcdPopulateConfigModal(rec, solType);
             // 构建导出 payload 并下载
             let payload;
             let useExportDocx = false;
