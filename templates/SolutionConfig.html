@@ -868,7 +868,12 @@
               <input type="checkbox" class="onoffswitch-checkbox" id="bbcdGradualDilution" checked>
               <span class="onoffswitch-switch"></span>
             </label>
-            <small class="text-muted">开启后逐级稀释</small>
+            <small class="text-muted" id="bbcdGradualHint" style="display:none;">开启后逐级稀释</small>
+            <label class="form-label mb-0 fw-bold ms-3">紫外</label>
+            <label class="onoffswitch">
+              <input type="checkbox" class="onoffswitch-checkbox" id="bbcdUVMode">
+              <span class="onoffswitch-switch"></span>
+            </label>
             <button type="button" class="btn btn-sm btn-outline-secondary ms-2" id="bbcdResetWorkingSolutionBtn" title="重置">
               <i class="fas fa-undo"></i>
             </button>
@@ -2981,6 +2986,13 @@
         bbcdNameAuto = false;
         bbcdCodeAuto = false;
 
+        // UV auto-check based on solution name
+        const uvCb = document.getElementById('bbcdUVMode');
+        if (uvCb) {
+            const name = (rec.solutionName || '').toUpperCase();
+            uvCb.checked = name.includes('甲醛') || name.includes('六价铬');
+        }
+
         const isD = (solType === 'SOLUTION_TYPE_D');
 
         // 4. Show/hide sections
@@ -3384,6 +3396,10 @@
         const gradualSwitch = document.getElementById('bbcdGradualDilution');
         if (gradualSwitch) gradualSwitch.checked = true;
 
+        // 重置UV复选框
+        const uvCb = document.getElementById('bbcdUVMode');
+        if (uvCb) uvCb.checked = false;
+
         // 触发验证
         bbcdCheckValidity();
     }
@@ -3726,6 +3742,10 @@
                     } else {
                         prevConc = parseFloat(el.value) || prevConc;
                     }
+                } else if (qty === 0 && vol > 0) {
+                    concCells[i].value = bbcdFmtConc(0);
+                    concCells[i]._userEdited = false;
+                    if (isGradual) prevConc = 0;
                 } else {
                     concCells[i].value = '';
                     concCells[i]._userEdited = false;
@@ -3927,7 +3947,8 @@
                     qtyInputs.forEach((input, i) => {
                         const qty = parseFloat(input.value);
                         const maxQty = (i === 0) ? stock : dilutionVols[i - 1];
-                        if (!qty || qty <= 0 || (maxQty > 0 && qty > maxQty + 1e-9)) {
+                        const empty = input.value === '' || input.value === undefined;
+                        if (empty || qty < 0 || (maxQty > 0 && qty > maxQty + 1e-9)) {
                             input.classList.add('is-invalid'); ok = false;
                         } else { input.classList.remove('is-invalid'); }
                     });
@@ -3937,7 +3958,8 @@
                     const exceed = stock > 0 && total > stock + 1e-9;
                     qtyInputs.forEach(input => {
                         const qty = parseFloat(input.value);
-                        if (!qty || qty <= 0 || exceed) {
+                        const empty = input.value === '' || input.value === undefined;
+                        if (empty || qty < 0 || exceed) {
                             input.classList.add('is-invalid'); ok = false;
                         } else { input.classList.remove('is-invalid'); }
                     });
@@ -4295,6 +4317,7 @@
             : null;
 
         const _viewRec2 = window.bbcdViewDetailMode && window.bbcdViewDetailRecord;
+        const _isUpdate = !!_viewRec2;
         return {
             id: _viewRec2 ? _viewRec2.id : null,
             createDatetime: _viewRec2 ? _viewRec2.createDatetime : nowStr,
@@ -4305,30 +4328,37 @@
             serialVersionUID: null,
             solutionName: document.getElementById('bbcdSolutionName').value.trim(),
             solutionCode: document.getElementById('bbcdSolutionCode').value.trim(),
-            deviceIds: null, deviceNames: null,
+            deviceIds: _viewRec2 ? _viewRec2.deviceIds : null,
+            deviceNames: _viewRec2 ? _viewRec2.deviceNames : null,
             configureDate: document.getElementById('bbcdConfigureDate').value,
             validityDate: document.getElementById('bbcdValidityDate').value,
             storageCondition: document.getElementById('bbcdStorage').value || null,
-            storageLocation: '4-1-华业4-1',
+            storageLocation: _viewRec2 ? _viewRec2.storageLocation : '4-1-华业4-1',
             concentration: concentrationParts.join(';'),
             concentrationCount: concentrationCountParts.join(';'),
-            concentrationUnitName: null, uncertainty: null, configureOrder: null,
+            concentrationUnitName: _viewRec2 ? _viewRec2.concentrationUnitName : null,
+            uncertainty: null,
+            configureOrder: _viewRec2 ? _viewRec2.configureOrder : null,
             originalCode: originalCodes,
             controlledNo: controlledNos,
             medium: document.getElementById('bbcdMediumD')?.value.trim() || null,
-            configuratorId: null,
+            configuratorId: _viewRec2 ? _viewRec2.configuratorId : null,
             solutionType: 'SOLUTION_TYPE_D',
-            configuratorName: null,
-            constantVolume: 0, totalConstantVolume: 0, usedConstantVolume: 0,
+            configuratorName: _viewRec2 ? _viewRec2.configuratorName : null,
+            constantVolume: _viewRec2 ? _viewRec2.constantVolume : 0,
+            totalConstantVolume: _viewRec2 ? _viewRec2.totalConstantVolume : 0,
+            usedConstantVolume: _viewRec2 ? _viewRec2.usedConstantVolume : 0,
             remark: null, diluteStatus: true,
-            consumableReceive: null,
+            consumableReceive: _viewRec2 ? _viewRec2.consumableReceive : null,
             customType: document.getElementById('bbcdCustomType').value.trim() || null,
-            auditUserName: null, auditTime: null,
-            diluteConcentrationControl: '[]',
-            pageType: hasMultiComponent ? 'SOLUTION_TYPE_E' : 'SOLUTION_TYPE_B',
+            auditUserName: _viewRec2 ? _viewRec2.auditUserName : null,
+            auditTime: _viewRec2 ? _viewRec2.auditTime : null,
+            diluteConcentrationControl: _viewRec2 ? _viewRec2.diluteConcentrationControl : null,
+            pageType: 'SOLUTION_TYPE_D',
             saveDetailList: JSON.stringify(saveDetailList),
             originalValidityDate: originalValidityDate,
-            configurationTemplateId: null, intermediateTemplateId: null,
+            configurationTemplateId: _viewRec2 ? _viewRec2.configurationTemplateId : null,
+            intermediateTemplateId: _viewRec2 ? _viewRec2.intermediateTemplateId : null,
             temperature: document.getElementById('bbcdTemp').value.trim(),
             humidity: document.getElementById('bbcdHumid').value.trim(),
             computingFormula: null, configurationMethod: null,
@@ -4337,8 +4367,8 @@
             configurationSolutionTemplateId: null, configurationRecordId: null,
             modifierName: null,
             modifyDatetime: nowStr,
-            receivedUint: 'mL',
-            receivedQuantity: receivedQuantityParts.join(';'),
+            receivedUint: _viewRec2 ? (_viewRec2.receivedUint || '') : 'mL',
+            receivedQuantity: _viewRec2 ? (_viewRec2.receivedQuantity || 0) : 0,
         };
     }
 
@@ -4394,11 +4424,18 @@
             const volEl = document.querySelector(`.bbcd-dilution-vol[data-idx="${i}"]`);
             const vol = parseFloat(volEl?.value) || 0;
             let hasQty = false;
+            let qtyIsZero = false;
             let firstQty = 0;
             for (const grp of sourceGroups) {
                 const qtyEl = grp.rows[0].querySelector(`.bbcd-d-qty[data-dilution="${i}"]`);
                 const q = parseFloat(qtyEl?.value) || 0;
                 if (q > 0) { hasQty = true; firstQty = q; break; }
+                else if (q === 0) qtyIsZero = true;
+            }
+            if (qtyIsZero && vol > 0) {
+                chainConcs.push(0);
+                if (isGradual) prevConc = 0;
+                continue;
             }
             if (!hasQty || vol <= 0) {
                 chainConcs.push(null);
@@ -4526,6 +4563,7 @@
             storage_condition: document.getElementById('bbcdStorage').value || '',
             custom_type:       document.getElementById('bbcdCustomType').value.trim(),
             is_multi_source:   isMultiSource,
+            use_uv_template:   document.getElementById('bbcdUVMode')?.checked || false,
             detail_list:       detailList,
         };
     }
@@ -5765,6 +5803,9 @@
         document.getElementById('bbcdSolutionName').addEventListener('input', e => {
             if (document.activeElement === e.target) bbcdNameAuto = false;
             bbcdUpdateValidity();
+            const name = (e.target.value || '').toUpperCase();
+            const uvCb = document.getElementById('bbcdUVMode');
+            if (uvCb) uvCb.checked = name.includes('甲醛') || name.includes('六价铬');
         });
         const bbcdSolutionCodeEl = document.getElementById('bbcdSolutionCode');
         bbcdSolutionCodeEl.addEventListener('input', e => {
@@ -5831,6 +5872,22 @@
             if (document.getElementById('bbcdSolType').value === 'SOLUTION_TYPE_D') {
                 bbcdRecalcWorkingSolution();
                 bbcdCheckValidity();
+            }
+        });
+
+        // 紫外复选框选中时自动关闭逐级稀释
+        document.getElementById('bbcdUVMode')?.addEventListener('change', e => {
+            const hint = document.getElementById('bbcdGradualHint');
+            hint.style.display = e.target.checked ? 'none' : '';
+            if (e.target.checked) {
+                const gd = document.getElementById('bbcdGradualDilution');
+                if (gd && gd.checked) {
+                    gd.checked = false;
+                    if (document.getElementById('bbcdSolType').value === 'SOLUTION_TYPE_D') {
+                        bbcdRecalcWorkingSolution();
+                        bbcdCheckValidity();
+                    }
+                }
             }
         });
 

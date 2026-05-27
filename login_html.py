@@ -1883,8 +1883,13 @@ def lims_update_solution():
         }
         resp = system.session.post(url, json=payload, headers=headers)
         if not resp.ok:
-            print(f"[updateObj1] status={resp.status_code} body={resp.text[:500]}")
+            import json as _json
+            print(f"[updateObj1] status={resp.status_code} payload={_json.dumps(payload, ensure_ascii=False)[:3000]}")
+            print(f"[updateObj1] body={resp.text[:500]}")
         result = resp.json()
+        if not result.get("success"):
+            import json as _json
+            print(f"[updateObj1] FAILED payload={_json.dumps(payload, ensure_ascii=False)[:3000]}")
         if not result.get("success"):
             err_ctx = result.get('errorCtx') or {}
             err_msg = result.get('errorDesc') or (err_ctx.get('errorMsg') if isinstance(err_ctx, dict) else '') or '修改失败'
@@ -2449,8 +2454,12 @@ def lims_export_bbcd_docx():
     detail_list     = p.get('detail_list', [])
     is_merged       = p.get('is_merged_export', False)
     top_ancestor    = p.get('top_ancestor', {})
+    use_uv          = p.get('use_uv_template', False)
 
-    template_name = 'RF10-10 标准溶液配制记录（稀释）(1).docx'
+    if use_uv:
+        template_name = 'RF10-12 标准溶液配制校准曲线记录.docx'
+    else:
+        template_name = 'RF10-10 标准溶液配制记录（稀释）(1).docx'
     template_path = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), 'word_templates', template_name)
     if not os.path.exists(template_path):
@@ -2584,7 +2593,7 @@ def lims_export_bbcd_docx():
     tc4 = r1_tcs[4]
     tc5 = r1_tcs[5]
 
-    _fill_tc1(tc4, f'浓度({conc_unit})')
+    _fill_tc1(tc4, f'浓度\n({conc_unit})' if use_uv else f'浓度({conc_unit})')
 
     # Header concentration: single source → specific value, multi source → 见下表
     if len(top_items) <= 1:
@@ -2596,14 +2605,24 @@ def lims_export_bbcd_docx():
         show_source_names = True
 
     r3_tcs = table.rows[3]._tr.findall(qn('w:tc'))
-    _set_tc_text(r3_tcs[0], f'母体标液({conc_unit})', center=True)
-    _set_tc_text(r3_tcs[1], f'取量({qty_unit})', center=True)
-    _set_tc_text(r3_tcs[2], '溶剂', center=True)
-    _set_tc_text(r3_tcs[3], '稀释至,ml', center=True)
-    _set_tc_text(r3_tcs[4], f'浓度({conc_unit})', center=True)
-    _set_tc_text(r3_tcs[5], '编号', center=True)
-    _set_tc_text(r3_tcs[6], '配制日期', center=True)
-    _set_tc_text(r3_tcs[7], '有效期', center=True)
+    if use_uv:
+        _set_tc_text(r3_tcs[0], f'母体标液({conc_unit})', center=True)
+        _set_tc_text(r3_tcs[1], f'取量({qty_unit})', center=True)
+        _set_tc_text(r3_tcs[2], '溶剂', center=True)
+        _set_tc_text(r3_tcs[3], '稀释至,ml', center=True)
+        _set_tc_text(r3_tcs[4], f'浓度/含量Y({conc_unit})', center=True)
+        # TC[5] X1, TC[6] X2 — leave as-is (template has header text)
+        _set_tc_text(r3_tcs[7], '编号', center=True)
+        _set_tc_text(r3_tcs[8], '有效期', center=True)
+    else:
+        _set_tc_text(r3_tcs[0], f'母体标液({conc_unit})', center=True)
+        _set_tc_text(r3_tcs[1], f'取量({qty_unit})', center=True)
+        _set_tc_text(r3_tcs[2], '溶剂', center=True)
+        _set_tc_text(r3_tcs[3], '稀释至,ml', center=True)
+        _set_tc_text(r3_tcs[4], f'浓度({conc_unit})', center=True)
+        _set_tc_text(r3_tcs[5], '编号', center=True)
+        _set_tc_text(r3_tcs[6], '配制日期', center=True)
+        _set_tc_text(r3_tcs[7], '有效期', center=True)
 
     # For merged export: separate header items (all) from body items (exclude weighing steps)
     if is_merged:
@@ -2624,8 +2643,10 @@ def lims_export_bbcd_docx():
                 break
 
     if n_items > n_tpl:
+        # Clone source row: for RF10-12 use a data row (row 4), for RF10-10 use row before remark
+        clone_src_row_idx = 4 if use_uv else (remark_row_idx - 1)
         for _ in range(n_items - n_tpl):
-            src_tr    = table.rows[remark_row_idx - 1]._tr
+            src_tr    = table.rows[clone_src_row_idx]._tr
             new_tr    = copy.deepcopy(src_tr)
             remark_tr = table.rows[remark_row_idx]._tr
             table._tbl.insert(list(table._tbl).index(remark_tr), new_tr)
@@ -2660,25 +2681,51 @@ def lims_export_bbcd_docx():
     first_dil_rows = sum(1 for rv in row_values if rv['dilutionIdx'] == 0)
     is_multi_source = is_working and first_dil_rows > 1
 
-    # Column values for data rows (index 2=溶剂, 3=稀释至, 4=浓度, 5=编号, 6=配制日期, 7=有效期)
-    col_vals_map = {
-        2: [rv['medium']      for rv in row_values],
-        3: [rv['volume']      for rv in row_values],
-        4: [rv['result_conc'] for rv in row_values],
-        5: [rv['result_code'] for rv in row_values],
-        6: [rv['configure_date'] for rv in row_values],
-        7: [rv['validity_date'] for rv in row_values],
-    }
+    # Column mapping depends on template
+    if use_uv:
+        # RF10-12: TC[0]=母体标液, TC[1]=取量, TC[2]=溶剂, TC[3]=稀释至,
+        #          TC[4]=浓度, TC[5]=X1(skip), TC[6]=X2(skip), TC[7]=编号, TC[8]=有效期
+        col_medium = 2
+        col_volume = 3
+        col_conc = 4
+        col_code = 7
+        col_validity = 8
+        n_data_tcs = 9
+        uv_validity = '一天'
+        follow_code_merge_cols = {col_medium, col_volume, col_validity}
+        value_merge_cols = {col_medium, col_volume, col_conc, col_code} if not (is_working and not is_multi_source) else {col_conc, col_code}
+    else:
+        # RF10-10: TC[0]=母体标液, TC[1]=取量, TC[2]=溶剂, TC[3]=稀释至,
+        #          TC[4]=浓度, TC[5]=编号, TC[6]=配制日期, TC[7]=有效期
+        col_medium = 2
+        col_volume = 3
+        col_conc = 4
+        col_code = 5
+        col_date = 6
+        col_validity = 7
+        n_data_tcs = 8
+        uv_validity = None
+        follow_code_merge_cols = {col_medium, col_volume, col_date, col_validity}
+        value_merge_cols = {col_medium, col_volume, col_conc, col_code, col_date, col_validity} if not (is_working and not is_multi_source) else {col_conc, col_code}
 
-    # Columns that should follow 编号(col5) merge pattern: merge whenever 编号 merges
-    follow_code_merge_cols = {2, 3, 6, 7}
-    # Columns that merge based on their own value equality
-    value_merge_cols = {2, 3, 4, 5, 6, 7} if not (is_working and not is_multi_source) else {4, 5}
+    # Column values for data rows
+    col_vals_map = {
+        col_medium: [rv['medium']      for rv in row_values],
+        col_volume: [rv['volume']      for rv in row_values],
+        col_conc:   [rv['result_conc'] for rv in row_values],
+        col_code:   [rv['result_code'] for rv in row_values],
+        col_validity: [uv_validity or rv['validity_date'] for rv in row_values],
+    }
+    if not use_uv:
+        col_vals_map[col_date] = [rv['configure_date'] for rv in row_values]
+
+    # All fillable TC indices (excluding X1/X2 in UV mode)
+    fill_tc_indices = sorted(set(col_vals_map.keys()))
 
     for i, item in enumerate(body_list):
         tr  = table.rows[4 + i]._tr
         tcs = tr.findall(qn('w:tc'))
-        if len(tcs) < 8:
+        if len(tcs) < n_data_tcs:
             continue
 
         # 母体标液
@@ -2701,16 +2748,15 @@ def lims_export_bbcd_docx():
         # 取量
         _set_tc_text(tcs[1], row_values[i]['qty'])
 
-        # Determine if 编号(col5) would merge with previous row
+        # Determine if 编号 would merge with previous row
         same_dilution = i > 0 and row_values[i]['dilutionIdx'] == row_values[i - 1]['dilutionIdx']
         code_same_as_prev = i > 0 and row_values[i]['result_code'] == row_values[i - 1]['result_code']
         code_should_merge = same_dilution and code_same_as_prev
 
-        # Columns 2-7
-        for tc_idx in range(2, 8):
+        # Fill mapped columns
+        for tc_idx in fill_tc_indices:
             val = col_vals_map[tc_idx][i]
             if tc_idx in follow_code_merge_cols:
-                # 溶剂/稀释至/配置日期/有效期 follow 编号 merge pattern
                 if code_should_merge:
                     _clear_tc(tcs[tc_idx])
                     tcs[tc_idx].append(_make_para('', center=True))
@@ -2719,7 +2765,6 @@ def lims_export_bbcd_docx():
                     _set_tc_text(tcs[tc_idx], val)
                     _set_vmerge(tcs[tc_idx], 'restart')
             elif tc_idx in value_merge_cols:
-                # 浓度/编号 merge based on their own value equality
                 if same_dilution and val == col_vals_map[tc_idx][i - 1]:
                     _clear_tc(tcs[tc_idx])
                     tcs[tc_idx].append(_make_para('', center=True))
