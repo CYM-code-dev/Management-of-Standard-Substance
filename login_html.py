@@ -3364,9 +3364,9 @@ def lims_print_label():
 
         # 字体（Windows 系统字体）
         system_font_dirs = ['C:/Windows/Fonts', 'C:\\Windows\\Fonts']
-        def load_font(size):
+        def load_font(size, names):
             for d in system_font_dirs:
-                for name in ['msyh.ttc', 'msyhbd.ttc', 'simhei.ttf', 'simsun.ttc']:
+                for name in names:
                     fp = os.path.join(d, name)
                     if os.path.exists(fp):
                         try:
@@ -3379,7 +3379,11 @@ def lims_print_label():
         # 预览：709×472（横版可读），打印：472×709（竖版旋转）
         PW, PH = 709, 472
 
-        font_normal = load_font(32)
+        font_title = load_font(32, ['msyh.ttc', 'msyhbd.ttc', 'simhei.ttf'])
+        font_value = load_font(32, ['simsun.ttc', 'simsun.ttf'])
+        asc_t, _ = font_title.getmetrics()
+        asc_v, _ = font_value.getmetrics()
+        value_y_offset = asc_t - asc_v
 
         img_preview = Image.new('RGB', (PW, PH), 'white')
         draw = ImageDraw.Draw(img_preview)
@@ -3387,58 +3391,54 @@ def lims_print_label():
         pad = 20
         max_text_w = PW - pad - 10
 
-        # 自动换行，续行缩进到"："之后
-        def wrap_text(text, font, max_w):
-            colon_pos = text.find('：')
-            if colon_pos < 0:
-                colon_pos = text.find(':')
-            indent = draw.textlength(text[:colon_pos + 1], font=font) if colon_pos >= 0 else 0
-            rest_max = max_w - indent
-            if draw.textlength(text, font=font) <= max_w:
-                return [(text, 0)]
-            lines = []
-            cur = ''
-            first = True
-            cur_max = max_w
-            for ch in text:
-                if draw.textlength(cur + ch, font=font) > cur_max:
-                    if cur:
-                        lines.append((cur, 0 if first else indent))
-                    cur = ch
-                    first = False
-                    cur_max = rest_max
-                else:
-                    cur += ch
-            if cur:
-                lines.append((cur, 0 if first else indent))
-            return lines or [('', 0)]
-
         label_items = [
-            f"标样编号：{solution_code}",
-            f"标样名称：{solution_name}",
-            f"介质/浓度：{medium}/{concentration}" if medium else f"浓度：{concentration}",
-            f"配置人/日期：{creator_name}/{configure_date}",
-            f"有效期至：{validity_date}",
-            f"储存地点/温度：{storage_condition}",
+            ('标样编号', solution_code),
+            ('标样名称', solution_name),
+            ('介质/浓度', f'{medium}/{concentration}' if medium else concentration),
+            ('配置人/日期', f'{creator_name}/{configure_date}'),
+            ('有效期至', validity_date),
+            ('储存地点/温度', storage_condition),
         ]
 
+        # 自动换行（内容部分可能超宽）
         all_lines = []
-        for item in label_items:
-            wrapped = wrap_text(item, font_normal, max_text_w)
-            for j, (text, ind) in enumerate(wrapped):
-                all_lines.append((text, ind, j > 0))
+        for title, value in label_items:
+            label_prefix = title + '： '
+            prefix_w = draw.textlength(label_prefix, font=font_title)
+            value_max_w = max_text_w - prefix_w
+            if draw.textlength(value, font=font_value) <= value_max_w:
+                all_lines.append((label_prefix, value, 0, False))
+            else:
+                # 内容超宽，首行标题+部分内容，续行缩进
+                cur = ''
+                first = True
+                for ch in value:
+                    if draw.textlength(cur + ch, font=font_value) > (value_max_w if first else max_text_w):
+                        if cur:
+                            all_lines.append((label_prefix if first else '', cur, 0 if first else prefix_w, not first))
+                        cur = ch
+                        first = False
+                    else:
+                        cur += ch
+                if cur:
+                    all_lines.append((label_prefix if first else '', cur, 0 if first else prefix_w, not first))
 
         line_gap = 56
         wrap_gap = 40
 
         # 计算总高度，垂直居中
-        total_h = sum(wrap_gap if c else line_gap for _, _, c in all_lines)
-        total_h -= wrap_gap if all_lines[-1][2] else line_gap
+        total_h = sum(wrap_gap if c else line_gap for _, _, _, c in all_lines)
+        total_h -= wrap_gap if all_lines[-1][3] else line_gap
         total_h += 32
         y = max(pad, (PH - total_h) / 2)
 
-        for text, indent, is_cont in all_lines:
-            draw.text((pad + indent, y), text, fill='black', font=font_normal)
+        for label_prefix, value, indent, is_cont in all_lines:
+            if label_prefix:
+                draw.text((pad, y), label_prefix, fill='black', font=font_title)
+                tw = draw.textlength(label_prefix, font=font_title)
+            else:
+                tw = 0
+            draw.text((pad + tw + indent, y + value_y_offset), value, fill='black', font=font_value)
             y += wrap_gap if is_cont else line_gap
 
         # 旋转用于打印

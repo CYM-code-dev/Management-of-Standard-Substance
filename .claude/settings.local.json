@@ -74,7 +74,8 @@
       "Bash(.venv/Scripts/python login_html.py)",
       "Bash(.venv/Scripts/pip install *)",
       "Bash(.venv/Scripts/python -m playwright install chromium)",
-      "Bash(pkill -f \"python login_html.py\")"
+      "Bash(pkill -f \"python login_html.py\")",
+      "Bash(start *)"
     ]
   }
 }
