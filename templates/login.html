@@ -168,7 +168,7 @@
     <div class="note">点击刷新验证码 · 登录成功后可保存密码</div>
 </div>
 <script>
-    const error = "{{ error }}";
+    const error = {{ error_json | safe }};
     if (error) document.getElementById('errorMsg').style.display = 'block';
     document.getElementById('togglePasswordBtn').addEventListener('click', function() {
         const pwd = document.getElementById('passwordInput');

@@ -175,7 +175,9 @@ class RemoteSystem:
                 self.current_user = username
                 real_name = self._fetch_user_info()
                 if not real_name:
-                    real_name = result.get("resultData", {}).get("nickName", username)
+                    real_name = result.get("resultData", {}).get("nickName", "")
+                if not real_name:
+                    return False, "登录失败：无法获取用户信息"
                 self.current_real_name = real_name
                 self._save_session()
                 self.start_keep_alive()
@@ -720,8 +722,8 @@ def lims_receive():
         system.load_session()
     pid = session.get('pid') or system.current_pid or ''
     pname = session.get('display_name') or system.current_real_name or username
-
-    url = f"{system.base_url}/detectionManager/manager/consumableReceive/receive"
+    if not pid:
+        return jsonify({"success": False, "message": "无法获取用户PID，请重新登录"}), 401
     form_data = {
         "num": str(quantity),
         "receiveDate": receive_date,
@@ -772,6 +774,8 @@ def lims_save_solution():
         system.load_session()
     pid = session.get('pid') or system.current_pid or ''
     pname = session.get('display_name') or system.current_real_name or username
+    if not pid:
+        return jsonify({"success": False, "message": "无法获取用户PID，请重新登录"}), 401
 
     try:
         purity_str = str(p.get('purity_str', '99.5'))
@@ -1540,6 +1544,8 @@ def lims_list_configured_solutions():
         system.load_session()
     pid = session.get('pid') or system.current_pid or ''
     pname = session.get('display_name') or system.current_real_name or username
+    if not pid:
+        return jsonify({"success": False, "message": "无法获取用户PID，请重新登录"}), 401
 
     params = {
         "_search": "false",
@@ -1593,6 +1599,8 @@ def lims_list_d_solutions():
         system.load_session()
     pid = session.get('pid') or system.current_pid or ''
     pname = session.get('display_name') or system.current_real_name or username
+    if not pid:
+        return jsonify({"success": False, "message": "无法获取用户PID，请重新登录"}), 401
 
     params = {
         "_search": "false",
@@ -1646,6 +1654,8 @@ def lims_quick_query():
         system.load_session()
     pid = session.get('pid') or system.current_pid or ''
     pname = session.get('display_name') or system.current_real_name or username
+    if not pid:
+        return jsonify({"success": False, "message": "无法获取用户PID，请重新登录"}), 401
     operator = request.args.get('operator', '').strip()
     date_from = request.args.get('date_from', '')
     date_to = request.args.get('date_to', '')
@@ -1758,6 +1768,8 @@ def lims_save_solution_b():
         system.load_session()
     pid = session.get('pid') or system.current_pid or ''
     pname = session.get('display_name') or system.current_real_name or username
+    if not pid:
+        return jsonify({"success": False, "message": "无法获取用户PID，请重新登录"}), 401
 
     payload['pid'] = pid
     payload['pname'] = pname
@@ -1858,6 +1870,8 @@ def lims_update_solution():
         system.load_session()
     pid = session.get('pid') or system.current_pid or ''
     pname = session.get('display_name') or system.current_real_name or username
+    if not pid:
+        return jsonify({"success": False, "message": "无法获取用户PID，请重新登录"}), 401
     payload['pid'] = pid
     payload['pname'] = pname
     payload['loginId'] = pid
@@ -1898,6 +1912,8 @@ def lims_delete_solution():
         system.load_session()
     pid = session.get('pid') or system.current_pid or ''
     pname = session.get('display_name') or system.current_real_name or username
+    if not pid:
+        return jsonify({"success": False, "message": "无法获取用户PID，请重新登录"}), 401
     try:
         url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/delById"
         form_data = {
@@ -1934,6 +1950,8 @@ def lims_delete_receive():
         system.load_session()
     pid = session.get('pid') or system.current_pid or ''
     pname = session.get('display_name') or system.current_real_name or username
+    if not pid:
+        return jsonify({"success": False, "message": "无法获取用户PID，请重新登录"}), 401
     try:
         # 如果传了 consumable_ids，先查询对应的领用记录ID
         consumable_ids = p.get('consumable_ids')
