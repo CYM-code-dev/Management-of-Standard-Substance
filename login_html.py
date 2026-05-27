@@ -3424,7 +3424,7 @@ def lims_print_label():
                     all_lines.append((label_prefix if first else '', cur, 0 if first else prefix_w, not first))
 
         line_gap = 56
-        wrap_gap = 40
+        wrap_gap = 36
 
         # 计算总高度，垂直居中
         total_h = sum(wrap_gap if c else line_gap for _, _, _, c in all_lines)
@@ -3432,14 +3432,15 @@ def lims_print_label():
         total_h += 32
         y = max(pad, (PH - total_h) / 2)
 
-        for label_prefix, value, indent, is_cont in all_lines:
+        for i, (label_prefix, value, indent, is_cont) in enumerate(all_lines):
+            if i > 0:
+                y += wrap_gap if is_cont else line_gap
             if label_prefix:
                 draw.text((pad, y), label_prefix, fill='black', font=font_title)
                 tw = draw.textlength(label_prefix, font=font_title)
             else:
                 tw = 0
             draw.text((pad + tw + indent, y + value_y_offset), value, fill='black', font=font_value)
-            y += wrap_gap if is_cont else line_gap
 
         # 旋转用于打印
         img = img_preview.transpose(Image.Transpose.ROTATE_90)
