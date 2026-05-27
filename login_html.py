@@ -3444,13 +3444,6 @@ def lims_print_label():
         # 旋转用于打印
         img = img_preview.transpose(Image.Transpose.ROTATE_90)
 
-        # 保存到文件
-        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'print_output')
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        file_path = os.path.join(output_dir, f"{solution_code}.png")
-        img.save(file_path, 'PNG')
-
         # 返回 base64：preview（未旋转可读）+ image（旋转后打印）
         buf_preview = BytesIO()
         img_preview.save(buf_preview, format='PNG')

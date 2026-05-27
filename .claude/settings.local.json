@@ -75,7 +75,13 @@
       "Bash(.venv/Scripts/pip install *)",
       "Bash(.venv/Scripts/python -m playwright install chromium)",
       "Bash(pkill -f \"python login_html.py\")",
-      "Bash(start *)"
+      "Bash(start *)",
+      "Bash(D:\\\\Agent\\\\标准品管理\\\\Management-of-Standard-Substance\\\\.venv\\\\Scripts\\\\pip list *)",
+      "Bash(sed 's/import .*//')",
+      "Bash(\"D:\\\\Agent\\\\标准品管理\\\\Management-of-Standard-Substance\\\\.venv\\\\Scripts\\\\pip\" show *)",
+      "Bash(\"D:\\\\Agent\\\\标准品管理\\\\Management-of-Standard-Substance\\\\.venv\\\\Scripts\\\\pip\" install *)",
+      "Bash(\"D:\\\\Agent\\\\标准品管理\\\\Management-of-Standard-Substance\\\\.venv\\\\Scripts\\\\pip\" uninstall *)",
+      "Bash(D:\\\\Agent\\\\标准品管理\\\\Management-of-Standard-Substance\\\\.venv\\\\Scripts\\\\python *)"
     ]
   }
 }
