@@ -372,14 +372,14 @@ def login():
 @app.route('/api/status')
 def status():
     if session.get('logged_in'):
-        return jsonify({"logged_in": True, "username": session.get('username'), "display_name": session.get('display_name')})
+        return jsonify({"logged_in": True, "username": session.get('username'), "display_name": session.get('display_name'), "pid": session.get('pid')})
     system = get_system()
     if system.current_user and system.verify_session():
         session['logged_in'] = True
         session['username'] = system.current_user
         session['display_name'] = system.current_real_name or system.current_user
         session['pid'] = system.current_pid
-        return jsonify({"logged_in": True, "username": system.current_user, "display_name": session['display_name']})
+        return jsonify({"logged_in": True, "username": system.current_user, "display_name": session['display_name'], "pid": session.get('pid')})
     return jsonify({"logged_in": False})
 
 @app.route('/api/logout', methods=['POST'])
@@ -1086,6 +1086,43 @@ def _fetch_solution_view(system, solution_id, order_str=None):
         if result2.get('detailList'):
             result = result2
     return result
+
+
+_ADMIN_DISPLAY_NAME = '崔艳梅'
+
+
+def _is_configurator_match(sess, record):
+    """Check if current session user matches the record's configurator by ID."""
+    current_pid = str(sess.get('pid') or '').strip()
+    if not current_pid:
+        return True
+    rec_pid = str(record.get('configuratorId') or record.get('creatorId') or '').strip()
+    if rec_pid:
+        return current_pid == rec_pid
+    return True
+
+
+def _check_edit_permission(sess, record):
+    """Check if current user has permission to modify a record.
+    Returns (allowed, reason) tuple."""
+    if (sess.get('display_name') or '').strip() == _ADMIN_DISPLAY_NAME:
+        return True, ''
+    if record and record.get('auditUserName'):
+        return False, '该记录已审核，不允许修改'
+    if not _is_configurator_match(sess, record):
+        return False, '只能修改自己配置的记录'
+    return True, ''
+
+
+def _check_delete_permission(sess, record):
+    """Check if current user has permission to delete a record.
+    Configurator can delete own records (including audited). Admin can delete any.
+    Returns (allowed, reason) tuple."""
+    if (sess.get('display_name') or '').strip() == _ADMIN_DISPLAY_NAME:
+        return True, ''
+    if not _is_configurator_match(sess, record):
+        return False, '只能删除自己配置的记录'
+    return True, ''
 
 
 def _fetch_solution_detail(system, solution_id):
@@ -1863,6 +1900,25 @@ def lims_update_solution():
     if not session.get('logged_in'):
         return jsonify({"success": False, "message": "未登录"}), 401
     payload = request.get_json() or {}
+    # 权限检查
+    allowed, reason = _check_edit_permission(session, None)
+    if not allowed:
+        solution_id = payload.get('id')
+        if solution_id:
+            try:
+                system = get_system()
+                username = session.get('username', '')
+                if system.current_user != username:
+                    system.current_user = username
+                    system.load_session()
+                order_str = payload.get('configureOrder') or payload.get('configure_order')
+                record = _fetch_solution_view(system, solution_id, order_str=order_str)
+                if record:
+                    allowed, reason = _check_edit_permission(session, record)
+            except Exception:
+                pass
+        if not allowed:
+            return jsonify({"success": False, "message": reason}), 403
     system = get_system()
     username = session.get('username', '')
     if system.current_user != username:
@@ -1883,13 +1939,8 @@ def lims_update_solution():
         }
         resp = system.session.post(url, json=payload, headers=headers)
         if not resp.ok:
-            import json as _json
-            print(f"[updateObj1] status={resp.status_code} payload={_json.dumps(payload, ensure_ascii=False)[:3000]}")
-            print(f"[updateObj1] body={resp.text[:500]}")
+            print(f"[updateObj1] status={resp.status_code} body={resp.text[:500]}")
         result = resp.json()
-        if not result.get("success"):
-            import json as _json
-            print(f"[updateObj1] FAILED payload={_json.dumps(payload, ensure_ascii=False)[:3000]}")
         if not result.get("success"):
             err_ctx = result.get('errorCtx') or {}
             err_msg = result.get('errorDesc') or (err_ctx.get('errorMsg') if isinstance(err_ctx, dict) else '') or '修改失败'
@@ -1910,6 +1961,22 @@ def lims_delete_solution():
     solution_type = p.get('type', '')
     if not solution_id:
         return jsonify({"success": False, "message": "缺少记录ID"})
+    # 权限检查
+    allowed, reason = _check_delete_permission(session, None)
+    if not allowed:
+        try:
+            system = get_system()
+            username = session.get('username', '')
+            if system.current_user != username:
+                system.current_user = username
+                system.load_session()
+            record = _fetch_solution_view(system, solution_id)
+            if record:
+                allowed, reason = _check_delete_permission(session, record)
+        except Exception:
+            pass
+        if not allowed:
+            return jsonify({"success": False, "message": reason}), 403
     system = get_system()
     username = session.get('username', '')
     if system.current_user != username:

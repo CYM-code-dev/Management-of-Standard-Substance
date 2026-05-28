@@ -801,7 +801,7 @@
       </div>
       <div class="modal-footer gap-2">
         <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">关闭</button>
-        <button class="btn btn-sm btn-outline-secondary" id="solExportBtn" disabled><i class="fas fa-file-word me-1"></i>导出配制记录</button>
+        <button class="btn btn-sm btn-outline-secondary" id="solExportBtn" disabled><i class="fas fa-file-word me-1"></i>导出记录</button>
         <button class="btn btn-sm btn-primary" id="solSaveBtn" disabled><i class="fas fa-save me-1"></i>确认领用并保存</button>
       </div>
     </div>
@@ -908,7 +908,7 @@
       </div>
       <div class="modal-footer gap-2">
         <button class="btn btn-sm btn-secondary" id="bbcdCancelBtn" data-bs-dismiss="modal"><i class="fas fa-times me-1"></i>取消</button>
-        <button class="btn btn-sm btn-outline-secondary" id="bbcdExportBtn" disabled><i class="fas fa-file-word me-1"></i>导出配制记录</button>
+        <button class="btn btn-sm btn-outline-secondary" id="bbcdExportBtn" disabled><i class="fas fa-file-word me-1"></i>导出记录</button>
         <button class="btn btn-sm btn-outline-secondary" id="bbcdPrintLabelBtn" disabled><i class="fas fa-print me-1"></i>打印标签</button>
         <button class="btn btn-sm btn-primary" id="bbcdSaveBtn" disabled><i class="fas fa-save me-1"></i>保存配置</button>
       </div>
@@ -1184,6 +1184,56 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+    // ---------- 权限控制常量与工具函数 ----------
+    const ADMIN_DISPLAY_NAME = '崔艳梅';
+    let _currentPid = '';
+    let _currentDisplayName = '';
+
+    function updateCurrentUser(pid, displayName) {
+        _currentPid = String(pid || '').trim();
+        _currentDisplayName = (displayName || '').trim();
+    }
+
+    function _isConfiguratorMatch(rec) {
+        if (!_currentPid) return true;
+        const recPid = String(rec.configuratorId || rec.creatorId || '').trim();
+        if (recPid) return _currentPid === recPid;
+        return true;
+    }
+
+    function canEditRecord(rec) {
+        if (_currentDisplayName === ADMIN_DISPLAY_NAME) return true;
+        if (rec.auditUserName) return false;
+        return _isConfiguratorMatch(rec);
+    }
+
+    function getEditDenyReason(rec) {
+        if (_currentDisplayName === ADMIN_DISPLAY_NAME) return '';
+        if (rec.auditUserName) return '该记录已审核，不允许修改';
+        if (!_isConfiguratorMatch(rec))
+            return '只能修改自己配置的记录';
+        return '';
+    }
+
+    function canDeleteRecord(rec) {
+        if (_currentDisplayName === ADMIN_DISPLAY_NAME) return true;
+        return _isConfiguratorMatch(rec);
+    }
+
+    function getDeleteDenyReason(rec) {
+        if (_currentDisplayName === ADMIN_DISPLAY_NAME) return '';
+        if (!_isConfiguratorMatch(rec))
+            return '只能删除自己配置的记录';
+        return '';
+    }
+
+    function renderDeleteIcon(item, realIdx, btnClass) {
+        if (_currentDisplayName === ADMIN_DISPLAY_NAME || _isConfiguratorMatch(item)) {
+            return '<i class="fas fa-trash-alt solution-config-icon ' + btnClass + '" data-idx="' + realIdx + '" title="删除" style="cursor:pointer;color:#ef4444;"></i>';
+        }
+        return '<i class="fas fa-trash-alt solution-config-icon" title="只能删除自己配置的记录" style="color:#ccc;cursor:not-allowed;"></i>';
+    }
+
     // ---------- 登录相关变量 ----------
     let loginModalInstance = null;
 
@@ -1208,15 +1258,16 @@
             const resp = await fetch('/api/status', { credentials: 'include' });
             const data = await resp.json();
             if (data.logged_in) {
-                showLoggedInUI(data.display_name || data.username);
+                showLoggedInUI(data.display_name || data.username, data.pid || '', data.username || '');
             } else showLoggedOutUI();
         } catch (e) { console.warn('获取登录状态失败', e); showLoggedOutUI(); }
     }
 
-    function showLoggedInUI(displayName) {
+    function showLoggedInUI(displayName, pid, username) {
         showLoginBtn.style.display = 'none';
         userInfoBox.style.display = 'block';
         displayUserNameSpan.textContent = displayName;
+        updateCurrentUser(pid, displayName);
         localStorage.setItem('auth_logged_in', 'true');
     }
 
@@ -1438,7 +1489,7 @@
         } else {
             btn.classList.remove('btn-success');
             btn.classList.add('btn-outline-secondary');
-            btn.innerHTML = '<i class="fas fa-file-word me-1"></i>导出配制记录';
+            btn.innerHTML = '<i class="fas fa-file-word me-1"></i>导出记录';
         }
     }
     function solMarkDirty() {
@@ -2624,7 +2675,7 @@
                 <td>${bbcdEsc(item.configureDate || '—')}</td>
                 <td>${bbcdEsc(item.validityDate || '—')}</td>
                 <td>${item.auditUserName ? '<span class="badge bg-success">已审核</span>' : '<span class="badge bg-secondary">未审核</span>'}</td>
-                <td><i class="fas fa-eye solution-config-icon me-1" data-idx="${realIdx}" title="查看详情" style="cursor:pointer;color:#14b8a6;"></i><i class="fas fa-trash-alt solution-config-icon bbcd-delete-btn" data-idx="${realIdx}" title="删除" style="cursor:pointer;color:#ef4444;"></i></td>
+                <td><i class="fas fa-eye solution-config-icon me-1" data-idx="${realIdx}" title="查看详情" style="cursor:pointer;color:#14b8a6;"></i>${renderDeleteIcon(item, realIdx, 'bbcd-delete-btn')}</td>
             </tr>`;
         }).join('');
 
@@ -2749,7 +2800,7 @@
         document.getElementById('bbcdPrintLabelBtn').disabled = true;
         document.getElementById('bbcdExportBtn').className = 'btn btn-sm btn-outline-secondary';
         document.getElementById('bbcdPrintLabelBtn').className = 'btn btn-sm btn-outline-secondary';
-        document.getElementById('bbcdExportBtn').innerHTML = '<i class="fas fa-file-word me-1"></i>导出配制记录';
+        document.getElementById('bbcdExportBtn').innerHTML = '<i class="fas fa-file-word me-1"></i>导出记录';
         document.getElementById('bbcdPrintLabelBtn').innerHTML = '<i class="fas fa-print me-1"></i>打印标签';
 
         // 显示/隐藏稀释点区域
@@ -2890,6 +2941,9 @@
         }
 
         // 标题已在类型选择时更新，直接打开模态框
+        document.querySelectorAll('#bbcdConfigArea input:not([type=hidden]), #bbcdConfigArea select').forEach(el => {
+            el.readOnly = false; el.disabled = false;
+        });
         bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdConfigModal')).show();
         if (document.getElementById('bbcdSolType').value !== 'SOLUTION_TYPE_D') {
             bbcdRecalcAll();
@@ -3004,17 +3058,41 @@
         const volumeCol = document.getElementById('bbcdVolume')?.closest('td');
         if (volumeCol) volumeCol.style.display = isD ? 'none' : '';
 
-        // 5. Buttons
-        document.getElementById('bbcdSaveBtn').disabled = false;
-        document.getElementById('bbcdSaveBtn').className = 'btn btn-sm btn-primary';
-        document.getElementById('bbcdSaveBtn').innerHTML = '<i class="fas fa-save me-1"></i>保存修改';
+        // 5. Buttons - 权限控制
+        const editAllowed = canEditRecord(rec);
+        const denyReason = getEditDenyReason(rec);
+
+        const saveBtn = document.getElementById('bbcdSaveBtn');
+        if (editAllowed) {
+            saveBtn.disabled = false;
+            saveBtn.className = 'btn btn-sm btn-primary';
+            saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>保存修改';
+            saveBtn.title = '';
+        } else {
+            saveBtn.disabled = true;
+            saveBtn.className = 'btn btn-sm btn-secondary';
+            saveBtn.innerHTML = '<i class="fas fa-lock me-1"></i>无修改权限';
+            saveBtn.title = denyReason;
+        }
         document.getElementById('bbcdExportBtn').disabled = false;
         document.getElementById('bbcdPrintLabelBtn').disabled = false;
         document.getElementById('bbcdExportBtn').className = 'btn btn-sm btn-outline-secondary';
         document.getElementById('bbcdPrintLabelBtn').className = 'btn btn-sm btn-outline-secondary';
-        document.getElementById('bbcdExportBtn').innerHTML = '<i class="fas fa-file-word me-1"></i>导出配制记录';
+        document.getElementById('bbcdExportBtn').innerHTML = '<i class="fas fa-file-word me-1"></i>导出记录';
         document.getElementById('bbcdPrintLabelBtn').innerHTML = '<i class="fas fa-print me-1"></i>打印标签';
         document.getElementById('bbcdValidityHint').style.display = 'none';
+
+        // 表单只读控制
+        const formInputs = document.querySelectorAll('#bbcdConfigArea input:not([type=hidden]), #bbcdConfigArea select');
+        formInputs.forEach(el => {
+            if (!editAllowed) {
+                el.readOnly = true;
+                el.disabled = true;
+            } else {
+                el.readOnly = false;
+                el.disabled = false;
+            }
+        });
 
         // 6. Store detailList ids for save
         window.bbcdDetailIds = {};
@@ -5200,7 +5278,7 @@
                 <td>${bbcdEsc(item.configureDate || '—')}</td>
                 <td>${bbcdEsc(item.validityDate || '—')}</td>
                 <td>${item.auditUserName ? '<span class="badge bg-success">已审核</span>' : '<span class="badge bg-secondary">未审核</span>'}</td>
-                <td><i class="fas fa-eye solution-config-icon me-1" data-idx="${realIdx}" data-tab="d" title="查看详情" style="cursor:pointer;color:#14b8a6;"></i><i class="fas fa-trash-alt solution-config-icon dtab-delete-btn" data-idx="${realIdx}" title="删除" style="cursor:pointer;color:#ef4444;"></i></td>
+                <td><i class="fas fa-eye solution-config-icon me-1" data-idx="${realIdx}" data-tab="d" title="查看详情" style="cursor:pointer;color:#14b8a6;"></i>${renderDeleteIcon(item, realIdx, 'dtab-delete-btn')}</td>
             </tr>`;
         }).join('');
 
@@ -5247,6 +5325,7 @@
     async function dTabDeleteRecord(idx) {
         const item = dTabLastResults[idx];
         if (!item || !item.id) { alert('无法获取记录ID'); return; }
+        if (!canDeleteRecord(item)) { alert(getDeleteDenyReason(item) || '无删除权限'); return; }
         const label = item.configureOrder || item.solutionName || item.id;
         if (!confirm(`确定要删除记录 [${label}] 吗？此操作不可恢复。`)) return;
         try {
@@ -5272,6 +5351,7 @@
     async function bbcdDeleteRecord(idx, source) {
         const item = bbcdLastResults[idx];
         if (!item || !item.id) { alert('无法获取记录ID'); return; }
+        if (!canDeleteRecord(item)) { alert(getDeleteDenyReason(item) || '无删除权限'); return; }
         const order = String(item.configureOrder || '').toUpperCase();
         let solType = 'SOLUTION_TYPE_B';
         if (order.startsWith('C-')) solType = 'SOLUTION_TYPE_C';
@@ -6327,7 +6407,7 @@
                 <td>
                     <div class="d-flex gap-2 justify-content-center">
                         <i class="fas fa-tag solution-config-icon qq-print-btn" data-idx="${realIdx}" title="标签打印" style="color:#6366f1;"></i>
-                        <i class="fas fa-file-export solution-config-icon qq-export-btn" data-idx="${realIdx}" title="导出配置记录" style="color:#f59e0b;"></i>
+                        <i class="fas fa-file-export solution-config-icon qq-export-btn" data-idx="${realIdx}" title="导出记录" style="color:#f59e0b;"></i>
                         <i class="fas fa-eye solution-config-icon qq-detail-btn" data-idx="${realIdx}" title="查看详情" style="color:#14b8a6;"></i>
                         <i class="fas fa-trash-alt solution-config-icon qq-delete-btn" data-idx="${realIdx}" title="删除" style="color:#ef4444;"></i>
                     </div>
