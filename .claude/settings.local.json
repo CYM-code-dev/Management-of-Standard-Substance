@@ -81,7 +81,12 @@
       "Bash(\"D:\\\\Agent\\\\标准品管理\\\\Management-of-Standard-Substance\\\\.venv\\\\Scripts\\\\pip\" show *)",
       "Bash(\"D:\\\\Agent\\\\标准品管理\\\\Management-of-Standard-Substance\\\\.venv\\\\Scripts\\\\pip\" install *)",
       "Bash(\"D:\\\\Agent\\\\标准品管理\\\\Management-of-Standard-Substance\\\\.venv\\\\Scripts\\\\pip\" uninstall *)",
-      "Bash(D:\\\\Agent\\\\标准品管理\\\\Management-of-Standard-Substance\\\\.venv\\\\Scripts\\\\python *)"
+      "Bash(D:\\\\Agent\\\\标准品管理\\\\Management-of-Standard-Substance\\\\.venv\\\\Scripts\\\\python *)",
+      "mcp__codegraph__codegraph_explore",
+      "Bash(tasklist /FI \"IMAGENAME eq letwareks37*\" /V /FO LIST)",
+      "Bash(tasklist /FI \"IMAGENAME eq letwareks37*\" /V /FO CSV)",
+      "Bash(wmic process *)",
+      "Bash(powershell -Command 'Get-Process | Where-Object { $_.Name -like '\\\\''*letwareks*'\\\\'' } | Select-Object Id, Name, Path, Company, Description, StartTime | Format-List')"
     ]
   }
 }

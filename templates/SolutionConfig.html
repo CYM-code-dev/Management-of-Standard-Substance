@@ -1629,7 +1629,7 @@
         const kwCas   = document.getElementById('solSearchCas').value.trim();
         const kwLabNo = document.getElementById('solSearchLabNo').value.trim();
         const kwOrg   = document.getElementById('solSearchOrg').value.trim();
-        const kw = kwName || kwLabNo || kwOrg;
+        const kw = kwName || kwLabNo;
         if (pageNo === undefined) pageNo = 1;
         solPageNo = pageNo;
         const searchKw = kw ? (kw.match(/^CK-[A-Z]+-(\d+)$/i) ? kw.match(/^CK-[A-Z]+-(\d+)$/i)[1] : kw) : '';
@@ -6301,6 +6301,35 @@
     let qqTotalRecords = 0;
     let qqPageSize = 30;
 
+    // 节假日缓存: { 'YYYY-MM-DD': true(放假) / false(补班) }
+    let _holidayMap = {};
+    let _holidayLoaded = false;
+
+    async function loadHolidays() {
+        if (_holidayLoaded) return;
+        const year = new Date().getFullYear();
+        try {
+            const resp = await fetch(`/api/holidays?year=${year}`);
+            const data = await resp.json();
+            if (data.success && data.data) {
+                for (const [mmdd, info] of Object.entries(data.data)) {
+                    _holidayMap[`${year}-${mmdd}`] = info.holiday;
+                }
+            }
+        } catch (e) { /* 降级为仅周末判断 */ }
+        _holidayLoaded = true;
+    }
+
+    function qqIsWorkday(dateStr) {
+        const d = new Date(dateStr + 'T00:00:00');
+        const dow = d.getDay();
+        const key = dateStr;
+        if (key in _holidayMap) {
+            return !_holidayMap[key]; // holiday=true表示放假，holiday=false表示补班
+        }
+        return dow !== 0 && dow !== 6;
+    }
+
     function qqDetectType(item) {
         const order = String(item.configureOrder || '').toUpperCase();
         if (order.startsWith('D-')) return 'SOLUTION_TYPE_D';
@@ -6316,23 +6345,23 @@
 
     function qqEsc(v) { return v == null ? '' : String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-    // 获取上一个工作日（从 date 出发往回找，跳过周末）
+    // 获取上一个工作日（从 date 出发往回找，跳过周末和法定假日）
     function qqPrevWorkday(date) {
-        const d = new Date(date);
+        const d = new Date(date + 'T00:00:00');
         d.setDate(d.getDate() - 1);
-        while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+        while (!qqIsWorkday(d.toISOString().slice(0, 10))) d.setDate(d.getDate() - 1);
         return d.toISOString().slice(0, 10);
     }
     // 获取下一个工作日（若 date 本身是工作日则返回自身，否则往后找）
     function qqNextWorkday(date) {
-        const d = new Date(date);
-        const dow = d.getDay();
-        if (dow === 6) d.setDate(d.getDate() + 2);
-        else if (dow === 0) d.setDate(d.getDate() + 1);
+        const d = new Date(date + 'T00:00:00');
+        if (qqIsWorkday(d.toISOString().slice(0, 10))) return d.toISOString().slice(0, 10);
+        while (!qqIsWorkday(d.toISOString().slice(0, 10))) d.setDate(d.getDate() + 1);
         return d.toISOString().slice(0, 10);
     }
 
     async function openQuickQueryModal() {
+        await loadHolidays();
         const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('quickQueryModal'));
         document.getElementById('qqOperator').value = displayUserNameSpan?.textContent || '';
         const today = new Date().toISOString().slice(0, 10);

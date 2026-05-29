@@ -1736,6 +1736,24 @@ def lims_quick_query():
 
     return jsonify({"success": True, "data": items, "total": len(items)})
 
+_holiday_cache = {}
+
+@app.route('/api/holidays')
+def get_holidays():
+    year = request.args.get('year', str(datetime.date.today().year))
+    if year in _holiday_cache:
+        return jsonify({"success": True, "data": _holiday_cache[year]})
+    try:
+        resp = requests.get(f'https://timor.tech/api/holiday/year/{year}', timeout=8)
+        resp.raise_for_status()
+        result = resp.json()
+        if result.get('code') == 0:
+            _holiday_cache[year] = result.get('holiday', {})
+            return jsonify({"success": True, "data": _holiday_cache[year]})
+        return jsonify({"success": False, "message": "节假日接口返回异常"})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"获取节假日失败: {str(e)}"})
+
 
 @app.route('/api/lims/get_source_info', methods=['GET'])
 def lims_get_source_info():
@@ -3570,9 +3588,6 @@ def lims_print_label():
         return jsonify({"success": False, "message": f"生成标签失败: {str(e)}"}), 500
 
 
-NIIMBOT_SERVER = "http://localhost:5001"
-
-
 def _niimbot_ensure_connected():
     """确保打印机已连接，未连接则自动扫描连接。返回 (成功, 错误信息)。"""
     try:
@@ -3581,16 +3596,29 @@ def _niimbot_ensure_connected():
             return True, None
     except Exception:
         pass
-    # 扫描串口
+    # 扫描串口，过滤非打印机设备，逐个尝试连接
     try:
         resp = requests.post(f"{NIIMBOT_SERVER}/scan", json={"transport": "serial"}, timeout=5)
         devices = resp.json().get("devices", [])
-        for dev in devices:
+        # 跳过已知非打印机设备（CH340 是常见串口转接芯片）
+        skip_names = ('ch340', 'cp210', 'ft232', 'pl2303')
+        candidates = [d for d in devices if not any(s in d.get('name', '').lower() for s in skip_names)]
+        for dev in candidates:
             addr = dev["address"]
             try:
                 conn = requests.post(f"{NIIMBOT_SERVER}/connect", json={"transport": "serial", "address": addr}, timeout=5)
                 if conn.ok and conn.json().get("message") == "Connected":
-                    return True, None
+                    # 验证打印机是否真正响应
+                    try:
+                        info = requests.get(f"{NIIMBOT_SERVER}/info", timeout=3)
+                        if info.ok and info.json().get("printerInfo"):
+                            return True, None
+                    except Exception:
+                        pass
+                    try:
+                        requests.post(f"{NIIMBOT_SERVER}/disconnect", timeout=3)
+                    except Exception:
+                        pass
             except Exception:
                 continue
         return False, "未找到打印机，请检查 USB 连接"
@@ -3637,6 +3665,39 @@ def do_print():
         return jsonify({"success": False, "message": f"打印失败: {str(e)}"}), 500
 
 
+import subprocess
+
+NIIMBOT_SERVER = "http://localhost:5001"
+
+
+def start_niimbot_server():
+    """自动启动 niimblue-cli 打印服务（后台运行）。"""
+    try:
+        requests.get(f"{NIIMBOT_SERVER}/connected", timeout=2)
+        print("  打印服务已在运行")
+        return
+    except Exception:
+        pass
+    try:
+        subprocess.Popen(
+            ['niimblue-cli', 'server', '-p', '5001', '--cors'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        # 等待服务启动
+        for _ in range(10):
+            time.sleep(1)
+            try:
+                requests.get(f"{NIIMBOT_SERVER}/connected", timeout=2)
+                print("  打印服务已自动启动")
+                return
+            except Exception:
+                continue
+        print("  警告：打印服务启动超时，请手动运行 npm start")
+    except Exception as e:
+        print(f"  警告：打印服务启动失败: {e}，请手动运行 npm start")
+
+
 if __name__ == '__main__':
     if not os.path.exists('templates'):
         os.makedirs('templates')
@@ -3644,4 +3705,5 @@ if __name__ == '__main__':
     print("  登录页面: http://127.0.0.1:5000/login")
     print("  耗材查询主页: http://127.0.0.1:5000/")
     print("  有机标准品管理: http://127.0.0.1:5000/organic-std")
+    start_niimbot_server()
     app.run(host='0.0.0.0', port=5000, debug=True)
