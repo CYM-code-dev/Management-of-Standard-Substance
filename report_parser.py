@@ -1433,7 +1433,7 @@ def parse_epatemp_txt(file_path: str) -> dict:
     # 响应值可能是纯数字或带m后缀(手动积分)，浓度单位可能是ng/mg/L等
     row_pattern = re.compile(
         r'^\s*\d+\)\s+(.+?)\s{2,}'
-        r'[\d.]+\s+\d+\s+\d+[m]?\s+([\d.]+)\s+(ng|mg/L|μg/mL|ug/mL)'
+        r'[\d.]+\s+\d+\s+\d+[m]?\s+([\d.]+)\s*(ng|mg/L|μg/mL|ug/mL)'
     )
     for encoding in ('gbk', 'gb18030', 'gb2312', 'utf-8', 'latin-1'):
         try:
@@ -1453,7 +1453,7 @@ def parse_epatemp_txt(file_path: str) -> dict:
                 if m:
                     name = m.group(1).strip()
                     if name:
-                        result[name] = (float(m.group(2)), m.group(3))
+                        result[name] = (float(m.group(2)), m.group(2), m.group(3))
             if result:
                 if encoding != 'latin-1':
                     return result

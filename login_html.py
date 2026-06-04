@@ -255,7 +255,13 @@ class RemoteSystem:
         if not self.current_user: return False
         try:
             resp = self.session.get(f"{self.base_url}/detectionManager/core/security/getLoginUser")
-            return resp.status_code == 200 and resp.json().get("success")
+            if resp.status_code != 200: return False
+            data = resp.json()
+            if not data.get('success'): return False
+            # 检测LIMS包在200中的认证错误
+            err_ctx = data.get('errorCtx') or {}
+            if err_ctx.get('errorCode') == '401': return False
+            return True
         except:
             return False
 
@@ -283,8 +289,19 @@ class RemoteSystem:
     def _keep_alive_worker(self):
         while self.keep_alive_flag and self.should_keep_alive() and self.current_user:
             try:
-                self.session.get(f"{self.base_url}/detectionManager/core/security/getLoginUser")
-            except: pass
+                resp = self.session.get(f"{self.base_url}/detectionManager/core/security/getLoginUser")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if not data.get('success'):
+                        print(f"[KeepAlive] LIMS会话已失效，停止保活")
+                        self.keep_alive_flag = False
+                        break
+                else:
+                    print(f"[KeepAlive] LIMS会话检查失败: status={resp.status_code}，停止保活")
+                    self.keep_alive_flag = False
+                    break
+            except Exception as e:
+                print(f"[KeepAlive] 会话检查异常（将继续重试）: {e}")
             for _ in range(self.keep_alive_interval):
                 if not self.keep_alive_flag: break
                 time.sleep(1)
@@ -1667,8 +1684,12 @@ def lims_list_d_solutions():
         url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/getSolutionAdata"
         headers = {"Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544"}
         resp = system.session.get(url, params=params, headers=headers)
-        resp.raise_for_status()
         result = resp.json()
+        # 检测LIMS返回的认证错误（可能包在200或500中）
+        err_ctx = result.get('errorCtx') or {}
+        if err_ctx.get('errorCode') == '401' or '未登录' in (err_ctx.get('errorMsg') or ''):
+            session.pop('logged_in', None)
+            return jsonify({"success": False, "message": "远程会话已失效，请重新登录"}), 401
         rd = result.get('resultData') or {}
         items = rd.get('voList', [])
         return jsonify({
@@ -2472,6 +2493,74 @@ def _docx_make_run(text, sz=18, underline=False):
     r_el.append(t_el)
     return r_el
 
+def _docx_set_tc_labelled_inline(tc, title, values, sz=18):
+    """Fill cell with title + values joined by ；on same line, left-aligned."""
+    el = _docx_unwrap_tc(tc)
+    _docx_clear_tc(el)
+    p_el = _docx_OxmlElement('w:p')
+    pPr = _docx_OxmlElement('w:pPr')
+    p_el.append(pPr)
+    # Title + values as single run (no bold)
+    full_text = title + ('；'.join(values) if values else '')
+    p_el.append(_docx_make_run(full_text, sz))
+    el.append(p_el)
+
+def _docx_set_v_align_center(tc):
+    """Set vertical alignment of a cell to center."""
+    el = _docx_unwrap_tc(tc)
+    tcPr = el.find(_docx_qn('w:tcPr'))
+    if tcPr is None:
+        tcPr = _docx_OxmlElement('w:tcPr')
+        el.insert(0, tcPr)
+    vAlign = tcPr.find(_docx_qn('w:vAlign'))
+    if vAlign is None:
+        vAlign = _docx_OxmlElement('w:vAlign')
+        tcPr.append(vAlign)
+    vAlign.set(_docx_qn('w:val'), 'center')
+
+def _docx_set_tc_checkbox(tc, text, sz=21, center=False):
+    """Fill cell with checkbox text in 宋体(SimSun). Supports \\n for line breaks."""
+    el = _docx_unwrap_tc(tc)
+    _docx_clear_tc(el)
+    p_el = _docx_OxmlElement('w:p')
+    pPr = _docx_OxmlElement('w:pPr')
+    jc = _docx_OxmlElement('w:jc')
+    jc.set(_docx_qn('w:val'), 'center' if center else 'left')
+    pPr.append(jc)
+    p_el.append(pPr)
+    # Build runs: split text on \n, insert w:br between parts
+    def _make_r(t):
+        r_el = _docx_OxmlElement('w:r')
+        rPr = _docx_OxmlElement('w:rPr')
+        rFonts = _docx_OxmlElement('w:rFonts')
+        rFonts.set(_docx_qn('w:ascii'), 'SimSun')
+        rFonts.set(_docx_qn('w:eastAsia'), 'SimSun')
+        rFonts.set(_docx_qn('w:hAnsi'), 'SimSun')
+        rPr.append(rFonts)
+        sz_el = _docx_OxmlElement('w:sz')
+        sz_el.set(_docx_qn('w:val'), str(sz))
+        szCs_el = _docx_OxmlElement('w:szCs')
+        szCs_el.set(_docx_qn('w:val'), str(sz))
+        rPr.append(sz_el)
+        rPr.append(szCs_el)
+        r_el.append(rPr)
+        t_el = _docx_OxmlElement('w:t')
+        t_el.text = t
+        if t and (t[0] == ' ' or t[-1] == ' '):
+            t_el.set('{http://www.w3.org/XML/1998/XMLSchema-instance}space', 'preserve')
+        r_el.append(t_el)
+        return r_el
+
+    parts = text.split('\n')
+    for i, part in enumerate(parts):
+        p_el.append(_make_r(part))
+        if i < len(parts) - 1:
+            br_r = _docx_OxmlElement('w:r')
+            br_el = _docx_OxmlElement('w:br')
+            br_r.append(br_el)
+            p_el.append(br_r)
+    el.append(p_el)
+
 def _docx_make_para(text, center=False, sz=18):
     p_el = _docx_OxmlElement('w:p')
     pPr  = _docx_OxmlElement('w:pPr')
@@ -2483,29 +2572,38 @@ def _docx_make_para(text, center=False, sz=18):
     p_el.append(_docx_make_run(text, sz))
     return p_el
 
+def _docx_unwrap_tc(tc):
+    """Return the underlying lxml element for a table cell (_Cell -> CT_Tc)."""
+    return tc._tc if hasattr(tc, '_tc') else tc
+
 def _docx_clear_tc(tc):
+    tc = _docx_unwrap_tc(tc)
     for p in tc.findall(_docx_qn('w:p')):
         tc.remove(p)
 
 def _docx_set_tc_text(tc, text, center=True, sz=18):
-    _docx_clear_tc(tc)
-    tc.append(_docx_make_para(text, center=center, sz=sz))
+    el = _docx_unwrap_tc(tc)
+    _docx_clear_tc(el)
+    el.append(_docx_make_para(text, center=center, sz=sz))
 
 def _docx_set_tc_two_lines(tc, line1, line2, sz=18):
-    _docx_clear_tc(tc)
-    tc.append(_docx_make_para(line1, center=True, sz=sz))
-    tc.append(_docx_make_para(line2, center=True, sz=sz))
+    el = _docx_unwrap_tc(tc)
+    _docx_clear_tc(el)
+    el.append(_docx_make_para(line1, center=True, sz=sz))
+    el.append(_docx_make_para(line2, center=True, sz=sz))
 
 def _docx_set_tc_multi_lines(tc, lines, sz=18):
-    _docx_clear_tc(tc)
+    el = _docx_unwrap_tc(tc)
+    _docx_clear_tc(el)
     for line in lines:
-        tc.append(_docx_make_para(line, center=True, sz=sz))
+        el.append(_docx_make_para(line, center=True, sz=sz))
 
 def _docx_set_vmerge(tc, mode):
-    tcPr = tc.find(_docx_qn('w:tcPr'))
+    el = _docx_unwrap_tc(tc)
+    tcPr = el.find(_docx_qn('w:tcPr'))
     if tcPr is None:
         tcPr = _docx_OxmlElement('w:tcPr')
-        tc.insert(0, tcPr)
+        el.insert(0, tcPr)
     vm = tcPr.find(_docx_qn('w:vMerge'))
     if vm is None:
         vm = _docx_OxmlElement('w:vMerge')
@@ -2517,7 +2615,144 @@ def _docx_set_vmerge(tc, mode):
             del vm.attrib[_docx_qn('w:val')]
 
 
-@app.route('/api/lims/export_bbcd_docx', methods=['POST'])
+# ── 核查记录导出 PDF 合并辅助函数 ──
+
+def _detect_encoding(raw_bytes):
+    """检测字节数组的编码，按常见中文编码顺序尝试。"""
+    for enc in ['utf-8', 'gbk', 'gb2312', 'gb18030', 'big5', 'latin-1']:
+        try:
+            text = raw_bytes.decode(enc)
+            return text, enc
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw_bytes.decode('gbk', errors='replace'), 'gbk'
+
+
+def _register_chinese_font():
+    """检测并注册可用的中文字体，返回 ReportLab 字体名称。"""
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    font_candidates = [
+        ('SimSun', 'simsun.ttc'),
+        ('NSimSun', 'simsun.ttc'),
+        ('KaiTi', 'simkai.ttf'),
+        ('STSong', 'STSONG.TTF'),
+        ('SimHei', 'simhei.ttf'),
+    ]
+    fonts_dir = os.path.join(os.environ.get('WINDIR', 'C:\\Windows'), 'Fonts')
+    for name, fname in font_candidates:
+        fpath = os.path.join(fonts_dir, fname)
+        if os.path.exists(fpath):
+            try:
+                pdfmetrics.registerFont(TTFont(name, fpath))
+                return name
+            except Exception:
+                continue
+    return 'Helvetica'
+
+
+def _epatemp_txt_to_pdf_bytes(text_content):
+    """将 epatemp.txt 文本内容用 ReportLab 生成为 PDF 字节。
+
+    排版参数与 epatemp_to_pdf.py 的 txt_to_pdf() 一致：
+    A4、零边距、12pt/14pt 行高、&nbsp; 对齐。
+    """
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.colors import white
+    from reportlab.platypus import SimpleDocTemplate, Paragraph
+
+    buf = BytesIO()
+    font_name = _register_chinese_font()
+
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(
+        name='EpatempEmpty', fontName=font_name, fontSize=12, leading=14,
+        spaceBefore=0, spaceAfter=0, textColor=white))
+    styles.add(ParagraphStyle(
+        name='EpatempLine', fontName=font_name, fontSize=12, leading=14,
+        spaceBefore=0, spaceAfter=0))
+
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            rightMargin=40, leftMargin=0,
+                            topMargin=0, bottomMargin=0)
+    story = []
+
+    lines = text_content.split('\n')
+    # 去除末尾空白行
+    while lines and lines[-1].strip() == '':
+        lines.pop()
+
+    for line in lines:
+        stripped = line.rstrip()
+        if stripped == '':
+            story.append(Paragraph('&nbsp;', styles['EpatempEmpty']))
+        else:
+            story.append(Paragraph(stripped.replace(' ', '&nbsp;'), styles['EpatempLine']))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
+
+
+def _docx_to_pdf_bytes(docx_bytes):
+    """用 Word COM 将 docx 字节转为 PDF 字节。"""
+    import tempfile
+    import win32com.client
+    import pythoncom
+
+    tmp_docx = None
+    tmp_pdf = None
+    word_app = None
+    try:
+        pythoncom.CoInitialize()
+        # 写入临时 docx 文件
+        tmp_docx = tempfile.NamedTemporaryFile(suffix='.docx', delete=False)
+        tmp_docx.write(docx_bytes)
+        tmp_docx.close()
+
+        tmp_pdf = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)
+        tmp_pdf.close()
+
+        word_app = win32com.client.Dispatch("Word.Application")
+        word_app.Visible = False
+        word_app.DisplayAlerts = False
+        com_doc = word_app.Documents.Open(os.path.abspath(tmp_docx.name))
+        com_doc.SaveAs(os.path.abspath(tmp_pdf.name), FileFormat=17)  # wdFormatPDF
+        com_doc.Close(False)
+
+        with open(tmp_pdf.name, 'rb') as f:
+            return f.read()
+    finally:
+        if word_app:
+            try:
+                word_app.Quit(False)
+            except Exception:
+                pass
+        for p in [tmp_docx, tmp_pdf]:
+            if p:
+                try:
+                    os.unlink(p.name)
+                except OSError:
+                    pass
+        pythoncom.CoUninitialize()
+
+
+def _merge_pdfs(pdf_pages):
+    """用 pypdfium2 合并多个 PDF 字节，返回合并后的 PDF 字节。"""
+    import pypdfium2 as pdfium
+
+    merged = pdfium.PdfDocument.new()
+    for pdf_bytes in pdf_pages:
+        src = pdfium.PdfDocument(pdf_bytes)
+        merged.import_pages(src)
+        src.close()
+
+    buf = BytesIO()
+    merged.save(buf)
+    merged.close()
+    buf.seek(0)
+    return buf.read()
 def lims_export_bbcd_docx():
     if not session.get('logged_in'):
         return jsonify({"success": False, "message": "未登录"}), 401
@@ -2596,8 +2831,9 @@ def lims_export_bbcd_docx():
     table = doc.tables[0]
 
     def _fill_tc1(tc, text):
-        for p in tc.findall(qn('w:p')):
-            tc.remove(p)
+        el = tc._tc if hasattr(tc, '_tc') else tc
+        for p in el.findall(qn('w:p')):
+            el.remove(p)
         lines = text.split('\n')
         for line in lines:
             p_el = OxmlElement('w:p')
@@ -2621,7 +2857,7 @@ def lims_export_bbcd_docx():
                 t_el.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
             r_el.append(t_el)
             p_el.append(r_el)
-            tc.append(p_el)
+            el.append(p_el)
 
     # Determine top-level source items for header
     if is_merged:
@@ -3066,11 +3302,18 @@ def _extract_d_concentration_points(record):
     return points
 
 
+def _format_conc_value(value):
+    """浓度修约: 浓度<0.10保留至小数点后3位, 浓度≥0.10保留至小数点后2位"""
+    if value < 0.10:
+        return f"{value:.3f}"
+    return f"{value:.2f}"
+
+
 def _build_concentration_point_code(record, point):
     """构建浓度点编号: CK-CG-{num}-{concentration}-{date}"""
     code = str(record.get('solutionCode', '')).strip()
     date = str(record.get('configureDate', ''))[:10].replace('-', '')
-    conc_str = point.get('conc_str', f"{point['concentration']:g}")
+    conc_str = point.get('conc_str') or _format_conc_value(point['concentration'])
     parts = code.split('-')
     if len(parts) >= 3:
         base = '-'.join(parts[:3])
@@ -3124,6 +3367,7 @@ def lims_get_verification_info():
 
             # 解析concentration字段: 物质名 -> [conc0, conc1, ...] (降序)
             substance_concs = {}
+            substance_concs_raw = {}  # 保留原始字符串精度 (e.g. "0.60" not 0.6)
             all_unit = ''
             if ':' in conc_str and ';' in conc_str:
                 for group in conc_str.split(';'):
@@ -3138,6 +3382,7 @@ def lims_get_verification_info():
                         cparts = re.findall(r'([\d.]+)\s*(mg/L|μg/mL|ug/mL|ng/ml|ppm)', cstr)
                     if cparts and not all_unit: all_unit = cparts[0][1]
                     substance_concs[sname] = [float(cv) for cv, cu in cparts]
+                    substance_concs_raw[sname] = [cv for cv, cu in cparts]
             elif conc_str:
                 sname = str(rec.get('solutionName', '')).strip()
                 cparts = re.findall(r'([\d.]+)\s*\(([^)]+)\)', conc_str)
@@ -3146,6 +3391,7 @@ def lims_get_verification_info():
                 if cparts:
                     all_unit = cparts[0][1]
                     substance_concs[sname] = [float(cv) for cv, cu in cparts]
+                    substance_concs_raw[sname] = [cv for cv, cu in cparts]
             all_sub_names = list(substance_concs.keys())
 
             # 从detailList提取resultCode
@@ -3171,14 +3417,16 @@ def lims_get_verification_info():
                 first_concs = substance_concs.get(all_sub_names[0], []) if all_sub_names else []
                 for pi, cv in enumerate(first_concs):
                     sub_concs = {sn: substance_concs[sn][pi] for sn in all_sub_names if pi < len(substance_concs[sn])}
-                    pt = {'index': pi, 'concentration': cv, 'unit': all_unit, 'conc_str': f"{cv:g}",
-                          'name': ','.join(all_sub_names), 'sub_concs': sub_concs}
+                    sub_concs_str = {sn: _format_conc_value(substance_concs[sn][pi]) for sn in all_sub_names if pi < len(substance_concs.get(sn, []))}
+                    pt = {'index': pi, 'concentration': cv, 'unit': all_unit, 'conc_str': _format_conc_value(cv),
+                          'name': ','.join(all_sub_names), 'sub_concs': sub_concs, 'sub_concs_str': sub_concs_str}
                     pt['code'] = _build_concentration_point_code(rec, pt)
                     points.append(pt)
             else:
                 sorted_codes = sorted(code_map.items(), key=lambda x: x[1].get('dilutionIdx', 0))
                 for pi, (rc, info) in enumerate(sorted_codes):
                     sub_concs = {sn: substance_concs[sn][pi] for sn in all_sub_names if pi < len(substance_concs.get(sn, []))}
+                    sub_concs_str = {sn: _format_conc_value(substance_concs[sn][pi]) for sn in all_sub_names if pi < len(substance_concs.get(sn, []))}
                     conc_from_code = ''
                     parts = rc.split('-')
                     if len(parts) >= 2 and re.match(r'^[\d.]+$', parts[-2]):
@@ -3189,6 +3437,7 @@ def lims_get_verification_info():
                     points.append({
                         'code': rc, 'concentration': conc_val, 'unit': all_unit,
                         'name': ','.join(info['names']), 'sub_concs': sub_concs,
+                        'sub_concs_str': sub_concs_str,
                         'conc_str': conc_from_code or '',
                     })
             point_codes = [pt['code'] for pt in points]
@@ -3232,37 +3481,24 @@ def lims_get_verification_info():
                     # 从detailList的originalNo提取A级的controlledNo
                     a_controlled_no = ''
                     a_concentration = ''
-                    for dl in (r.get('_detail_list') or []):
+                    detail_list = r.get('_detail_list') or []
+                    for dl in detail_list:
                         dl_name = str(dl.get('originalName', '')).strip()
-                        if dl_name and dl_name == a_name:
-                            dl_no = str(dl.get('originalNo', '')).strip()
-                            # originalNo格式如 'A-24092\nCIRS400484-3\nCK-CG-2025214'
-                            # 取最后一段（CK-CG-xxx）作为controlledNo
-                            lines = [l.strip() for l in dl_no.split('\n') if l.strip()]
-                            a_controlled_no = lines[-1] if lines else ''
+                        dl_no = str(dl.get('originalNo', '')).strip()
+                        lines = [l.strip() for l in dl_no.split('\n') if l.strip()]
+                        potential_no = lines[-1] if lines else ''
+                        # 优先精确匹配名称
+                        if dl_name and a_name and dl_name == a_name:
+                            a_controlled_no = potential_no
                             a_concentration = str(dl.get('originalConcentration', '')).strip()
                             break
-                    # 通过consumableBill API用controlledNo查询保存条件
-                    a_storage_condition = ''
-                    if a_controlled_no:
-                        try:
-                            import time as _time
-                            cb_params = {
-                                "_search": "false", "nd": str(int(_time.time()*1000)),
-                                "pageSize": 30, "pageNo": 1, "sidx": "", "sord": "asc",
-                                "type": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE", "casNo": "",
-                                "orgName": "", "groupId": "", "status": "",
-                                "keyword": a_controlled_no,
-                                "pid": session.get('user_id', ''), "pname": session.get('username', ''),
-                                "loginId": session.get('user_id', ''),
-                            }
-                            cb_resp = system.session.get(f"{system.base_url}/detectionManager/manager/consumableBill/pageObj", params=cb_params)
-                            cb_data = cb_resp.json() if cb_resp.status_code == 200 else {}
-                            vo_list = (cb_data.get('resultData') or {}).get('voList') or []
-                            if vo_list:
-                                a_storage_condition = str(vo_list[0].get('storageCondition') or '').strip()
-                        except Exception as e:
-                            print(f"[VerificationTrace] 查询consumableBill失败: {e}")
+                        # 精确匹配失败时，取第一个有CK-CG编号的行作为候选
+                        if not a_controlled_no and potential_no:
+                            a_controlled_no = potential_no
+                            a_concentration = str(dl.get('originalConcentration', '')).strip()
+                    if not a_controlled_no:
+                        print(f"[VerificationTrace] controlledNo提取失败: a_name='{a_name}' detailList行数={len(detail_list)}")
+                    a_storage_condition = str(r.get('storage_condition') or '').strip()
                     if a_controlled_no and a_controlled_no not in seen:
                         seen.add(a_controlled_no)
                         ancestors.append({
@@ -3300,6 +3536,53 @@ def lims_get_verification_info():
 
     except Exception as e:
         return jsonify({"success": False, "message": f"获取核查信息异常: {str(e)}"}), 500
+
+
+@app.route('/api/lims/storage_conditions', methods=['POST'])
+def lims_storage_conditions():
+    """根据controlledNo列表批量查询标准物质保存条件"""
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    data = request.get_json() or {}
+    keywords = data.get('keywords', [])
+    if not keywords:
+        return jsonify({"success": True, "conditions": {}})
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+    pid = session.get('pid', '')
+    conditions = {}
+    for kw in keywords:
+        kw = str(kw).strip()
+        if not kw or kw in conditions:
+            continue
+        try:
+            cb_params = {
+                "_search": "false", "nd": str(int(time.time()*1000)),
+                "pageSize": 30, "pageNo": 1, "sidx": "", "sord": "asc",
+                "type": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE",
+                "receiveUserName": "", "receiveStartDate": "", "receiveEndDate": "",
+                "confirmUserName": "", "confirmStartDate": "", "confirmEndDate": "",
+                "invoiceNo": "", "groupId": "",
+                "casNo": "", "orgName": "", "state": "normal",
+                "keyword": kw,
+                "pid": pid, "pname": username, "loginId": pid,
+            }
+            for _status in ("normal", "history", "overdue"):
+                cb_params["status"] = _status
+                cb_resp = system.session.get(f"{system.base_url}/detectionManager/manager/consumableBill/pageObj", params=cb_params)
+                if cb_resp.status_code != 200:
+                    continue
+                cb_data = cb_resp.json()
+                vo_list = (cb_data.get('resultData') or {}).get('voList') or []
+                if vo_list:
+                    conditions[kw] = str(vo_list[0].get('storageCondition') or '').strip()
+                    break
+        except Exception as e:
+            print(f"[StorageCondition] 查询失败: keyword={kw} error={e}")
+    return jsonify({"success": True, "conditions": conditions})
 
 
 @app.route('/api/lims/parse_verification_pdf', methods=['POST'])
@@ -3372,11 +3655,13 @@ def lims_parse_epatemp_content():
             tmp.write(raw_bytes)
             tmp.close()
             parsed = parse_epatemp_txt(tmp.name)
-            for compound_name, (val, unit) in parsed.items():
+            for compound_name, vals in parsed.items():
+                measured_raw = vals[1] if len(vals) > 2 else str(vals[0])
                 all_compounds.append({
                     'name': compound_name,
-                    'measured_value': val,
-                    'unit': unit,
+                    'measured_value': vals[0],
+                    'measured_raw': measured_raw,
+                    'unit': vals[-1],
                     'source_file': name,
                 })
         except Exception as e:
@@ -3386,6 +3671,23 @@ def lims_parse_epatemp_content():
             if tmp:
                 try: os.unlink(tmp.name)
                 except OSError: pass
+
+    # 去重：同一文件内，同一化合物如果存在 -149 离子变体，只保留 -149
+    import re as _re
+    base_map = {}
+    for c in all_compounds:
+        base = _re.sub(r'[-–]\d{2,4}$', '', c['name'])
+        key = (base, c.get('source_file', ''))
+        base_map.setdefault(key, []).append(c)
+    filtered = []
+    for (base, _sf), compounds in base_map.items():
+        variant_149 = base + '-149'
+        c149 = next((c for c in compounds if c['name'] == variant_149), None)
+        if c149 and len(compounds) > 1:
+            filtered.append(c149)
+        else:
+            filtered.extend(compounds)
+    all_compounds = filtered
 
     msg = '解析成功，提取到 ' + str(len(all_compounds)) + ' 个化合物'
     if skipped:
@@ -3413,64 +3715,156 @@ def lims_export_verification_docx():
 
         # ── Table0: 标准物质信息 ──
         table0_data = p.get('table0_data', [])
+        verify_date_str = str(p.get('核查时间', ''))[:10]
         for ri, item in enumerate(table0_data):
             row_idx = ri + 2  # 从第3行开始（0/1是表头）
             if row_idx >= len(t0.rows):
                 break
             row = t0.rows[row_idx]
-            row.cells[0].text = str(item.get('序号', ri + 1))
-            row.cells[1].text = str(item.get('标准物质名称', ''))
-            row.cells[2].text = str(item.get('标准物质编号', ''))
+            # 序号、标准物质名称、标准物质编号 - 居中对齐+垂直居中
+            _docx_set_tc_text(row.cells[0], str(item.get('序号', ri + 1)), center=True, sz=18)
+            _docx_set_v_align_center(row.cells[0])
+            _docx_set_tc_text(row.cells[1], str(item.get('标准物质名称', '')), center=True, sz=18)
+            _docx_set_v_align_center(row.cells[1])
+            _docx_set_tc_text(row.cells[2], str(item.get('标准物质编号', '')), center=True, sz=18)
+            _docx_set_v_align_center(row.cells[2])
             row.cells[3].text = str(item.get('保存条件', ''))
+            # Col4: 是否在有效期 - 根据有效期情况勾选
+            item_validity = str(item.get('有效期', '')).strip()[:10]
+            if item_validity and verify_date_str:
+                try:
+                    from datetime import datetime as _dt
+                    is_valid = _dt.strptime(item_validity, '%Y-%m-%d') >= _dt.strptime(verify_date_str, '%Y-%m-%d')
+                except ValueError:
+                    is_valid = True
+            else:
+                is_valid = True
+            _docx_set_tc_checkbox(row.cells[4], '☑是\n□否' if is_valid else '□是\n☑否')
+            _docx_set_v_align_center(row.cells[4])
+            # Col5: 标志是否齐全 - 默认勾选是
+            _docx_set_tc_checkbox(row.cells[5], '☑是\n□否')
+            _docx_set_v_align_center(row.cells[5])
+            # Col6: 容器是否损伤 - 默认勾选否
+            _docx_set_tc_checkbox(row.cells[6], '□是\n☑否')
+            _docx_set_v_align_center(row.cells[6])
 
         # ── Table1: 核查结果 ──
-        # R0: 被核查对象编号 (合并单元格)
+        # R0: 被核查对象编号 - 标题和内容同一行，用；分隔
         target_code = str(p.get('被核查对象编号', ''))
-        _docx_set_tc_multi_lines(t1.rows[0].cells[0], target_code.split(', '), sz=18)
+        target_values = [l for l in target_code.replace(', ', '\n').split('\n') if l.strip()]
+        _docx_set_tc_labelled_inline(t1.rows[0].cells[0], '被核查对象编号：', target_values, sz=18)
 
-        # R1: 核查对象编号 (合并单元格)
+        # R1: 核查对象编号 - 标题和内容同一行，用；分隔
         source_code = str(p.get('核查对象编号', ''))
-        _docx_set_tc_multi_lines(t1.rows[1].cells[0], source_code.split(', '), sz=18)
+        source_values = [l for l in source_code.replace(', ', '\n').split('\n') if l.strip()]
+        _docx_set_tc_labelled_inline(t1.rows[1].cells[0], '核查对象编号：', source_values, sz=18)
 
         # R2: 核查方法 + 核查时间
-        t1.rows[2].cells[0].text = '核查方法：' + str(p.get('核查方法', '新旧标准品对比'))
-        t1.rows[2].cells[2].text = '核查时间：' + str(p.get('核查时间', ''))
+        _docx_set_tc_text(t1.rows[2].cells[0], '核查方法：' + str(p.get('核查方法', '新旧标准曲线比对')), center=False, sz=18)
+        _docx_set_tc_text(t1.rows[2].cells[2], '核查时间：' + str(p.get('核查时间', '')), center=False, sz=18)
 
-        # R3: 核查方法描述
+        # R3: 核查方法描述 - 标题和内容同一行，垂直居中
         method_desc = str(p.get('核查方法描述', ''))
-        _docx_set_tc_multi_lines(t1.rows[3].cells[0], [method_desc], sz=18)
+        _docx_set_tc_labelled_inline(t1.rows[3].cells[0], '核查方法描述：', [method_desc] if method_desc else [], sz=18)
+        _docx_set_v_align_center(t1.rows[3].cells[0])
 
-        # R5-R20: 组分数据
+        # R5+: 组分数据 (行数不够时自动增加)
         table1_data = p.get('table1_data', [])
+        data_start = 5   # R5 开始填数据
+        data_end = len(t1.rows) - 2  # 留出结论和备注行
+        max_data_rows = data_end - data_start
+
+        if len(table1_data) > max_data_rows:
+            # 需要增加行: 在结论行前插入新行
+            from copy import deepcopy
+            # 以数据区第一行(R5)为模板克隆
+            template_tr = t1.rows[data_start]._tr
+            conclusion_tr = t1.rows[-2]._tr
+            tbl_el = template_tr.getparent()
+            extra_needed = len(table1_data) - max_data_rows
+            for _ in range(extra_needed):
+                new_row = deepcopy(template_tr)
+                # 清空新行所有单元格
+                for tc_el in new_row.findall(_docx_qn('w:tc')):
+                    for p_el in tc_el.findall(_docx_qn('w:p')):
+                        tc_el.remove(p_el)
+                    tc_el.append(_docx_OxmlElement('w:p'))
+                tbl_el.insert(list(tbl_el).index(conclusion_tr), new_row)
+            # 重新获取t1引用（行数已变化）
+            t1 = doc.tables[1]
+
         for ri, item in enumerate(table1_data):
-            row_idx = ri + 5
-            if row_idx >= len(t1.rows) - 2:  # 留出结论和备注行
+            row_idx = ri + data_start
+            if row_idx >= len(t1.rows) - 2:
                 break
             row = t1.rows[row_idx]
-            row.cells[0].text = str(item.get('各组分名称', ''))
-            row.cells[1].text = str(item.get('理论值', ''))
-            row.cells[2].text = str(item.get('实测值', ''))
-            row.cells[3].text = str(item.get('相对偏差', ''))
+            # 组分数据居中对齐
+            _docx_set_tc_text(row.cells[0], str(item.get('各组分名称', '')), center=True, sz=18)
+            _docx_set_tc_text(row.cells[1], str(item.get('理论值', '')), center=True, sz=18)
+            _docx_set_tc_text(row.cells[2], str(item.get('实测值', '')), center=True, sz=18)
+            _docx_set_tc_text(row.cells[3], str(item.get('相对偏差', '')), center=True, sz=18)
 
-        # R21: 核查结论
+        # 核查结论 - 宋体五号
         conclusion = str(p.get('核查结论', '合格'))
-        conclusion_text = f"核查结论：{'☑合格；☐不合格' if conclusion == '合格' else '☐合格；☑不合格'}"
-        t1.rows[-2].cells[0].text = conclusion_text
+        _docx_set_tc_checkbox(t1.rows[-2].cells[0], "核查结论：☑合格；□不合格" if conclusion == '合格' else "核查结论：□合格；☑不合格")
+        _docx_set_v_align_center(t1.rows[-2].cells[0])
 
-        # R22: 备注
+        # 备注
         t1.rows[-1].cells[0].text = '备注：' + str(p.get('备注', ''))
 
-        buf = io.BytesIO()
-        doc.save(buf)
-        buf.seek(0)
+        new_code = str(p.get('new_solution_code', '')).strip()
+        epatemp_contents = p.get('epatemp_contents', [])
 
-        download_name = '标准物质期间核查记录.docx'
-        from flask import send_file
-        from urllib.parse import quote as _urlquote
-        resp = send_file(buf, as_attachment=True, download_name=download_name,
-                         mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-        resp.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{_urlquote(download_name)}"
-        return resp
+        if epatemp_contents:
+            # 有 .D 文件夹时，将 docx 页面强制设为 A4 以匹配后续 PDF
+            from docx.shared import Cm
+            for section in doc.sections:
+                section.page_width = Cm(21.0)
+                section.page_height = Cm(29.7)
+
+        if not epatemp_contents:
+            # 无 .D 文件夹 → 保持原有 docx 导出
+            buf = io.BytesIO()
+            doc.save(buf)
+            buf.seek(0)
+            download_name = (new_code + '期间核查.docx') if new_code else '标准物质期间核查记录.docx'
+            from flask import send_file
+            from urllib.parse import quote as _urlquote
+            resp = send_file(buf, as_attachment=True, download_name=download_name,
+                             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+            resp.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{_urlquote(download_name)}"
+            return resp
+        else:
+            # 有 .D 文件夹 → docx 转 PDF + epatemp PDF 合并
+            import base64 as _b64
+
+            # 1. docx → PDF（Word COM）
+            docx_buf = io.BytesIO()
+            doc.save(docx_buf)
+            docx_buf.seek(0)
+            docx_pdf_bytes = _docx_to_pdf_bytes(docx_buf.read())
+
+            # 2. 每个 epatemp → PDF（ReportLab）
+            epatemp_pdf_pages = [docx_pdf_bytes]
+            for item in epatemp_contents:
+                content_b64 = item.get('content_b64', '')
+                if not content_b64:
+                    continue
+                raw_bytes = _b64.b64decode(content_b64)
+                text, _ = _detect_encoding(raw_bytes)
+                epatemp_pdf_pages.append(_epatemp_txt_to_pdf_bytes(text))
+
+            # 3. 合并所有 PDF
+            merged_bytes = _merge_pdfs(epatemp_pdf_pages)
+
+            # 4. 返回合并后的 PDF
+            download_name = (new_code + '期间核查.pdf') if new_code else '标准物质期间核查记录.pdf'
+            from flask import send_file
+            from urllib.parse import quote as _urlquote
+            resp = send_file(BytesIO(merged_bytes), as_attachment=True, download_name=download_name,
+                             mimetype='application/pdf')
+            resp.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{_urlquote(download_name)}"
+            return resp
 
     except Exception as e:
         return jsonify({"success": False, "message": f"导出失败: {str(e)}"}), 500
@@ -3679,8 +4073,11 @@ def start_niimbot_server():
     except Exception:
         pass
     try:
+        project_dir = os.path.dirname(os.path.abspath(__file__))
         subprocess.Popen(
-            ['niimblue-cli', 'server', '-p', '5001', '--cors'],
+            f'npm start',
+            shell=True,
+            cwd=project_dir,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             creationflags=subprocess.CREATE_NO_WINDOW
         )
