@@ -1010,7 +1010,6 @@ def _resolve_order_to_lims_id(system, configure_order):
                     break
                 page_no += 1
             _type_list_cache[sol_type] = items
-            print(f"[ResolveOrder] {configure_order} type={sol_type} fetched {len(items)} records")
         # Exact match
         for item in items:
             order = str(item.get('configureOrder', '')).strip()
@@ -1031,9 +1030,8 @@ def _resolve_order_to_lims_id(system, configure_order):
                 if lid:
                     _order_to_id_cache[configure_order] = lid
                     return lid
-        print(f"[ResolveOrder] NO match for {configure_order}")
     except Exception as e:
-        print(f"[ResolveOrder] ERROR {configure_order}: {e}")
+        pass
     return None
 
 
@@ -1073,11 +1071,9 @@ def _resolve_by_solution_code(system, solution_code):
                     if lid:
                         _order_to_id_cache[solution_code] = lid
                         _order_to_id_cache[co] = lid
-                        print(f"[ResolveSC] {solution_code} → id={lid} ({co})")
                         return lid, co
-        except Exception as e:
-            print(f"[ResolveSC] ERROR solutionCode={solution_code} type={sol_type}: {e}")
-    print(f"[ResolveSC] not found: solutionCode={solution_code}")
+        except Exception:
+            pass
     return None, None
 
 
@@ -1177,7 +1173,6 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
             num_part = order_str.split('-')[1].strip()
             if num_part.isdigit():
                 resolved = int(num_part)
-                print(f"[TraceFetch] fallback: configureOrder number as ID: {resolved}")
         if not resolved:
             return None
 
@@ -1189,12 +1184,10 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
             if is_solution_code:
                 rec_sc = str(rec.get('solutionCode', '')).strip()
                 if rec_sc and rec_sc != order_str:
-                    print(f"[TraceFetch] ID {resolved} solutionCode={rec_sc}, expected {order_str}, skipping")
                     return False
             else:
                 rec_order = str(rec.get('configureOrder', '')).strip()
                 if rec_order and rec_order != order_str:
-                    print(f"[TraceFetch] ID {resolved} returned {rec_order}, expected {order_str}, skipping")
                     return False
             return True
 
@@ -1202,14 +1195,14 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
             rec = _fetch_solution_view(system, resolved, order_str=view_order_str)
             if rec and rec.get('id') and _validate(rec):
                 return rec
-        except Exception as e:
-            print(f"[TraceFetch] view error id={resolved}: {e}")
+        except Exception:
+            pass
         try:
             rec = _fetch_solution_detail(system, resolved)
             if rec and rec.get('id') and _validate(rec):
                 return rec
-        except Exception as e:
-            print(f"[TraceFetch] detail error id={resolved}: {e}")
+        except Exception:
+            pass
         return None
 
     def _has_pct_source_conc(record, parent_order):
@@ -1311,16 +1304,6 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
         if prefix == 'B' and received_unit == 'g':
             is_weighing_top = True
 
-        print(f"[TraceRecord] {rec_order} | level={prefix} | solutionCode={record.get('solutionCode','')} | "
-              f"conc='{rec_conc}' | parent='{parent_name}' | parent_conc={parent_conc_val}({parent_conc_unit}) | "
-              f"vol={constant_volume} | recv={received_qty}{received_unit} | weighing={is_weighing_top} | "
-              f"originalCode='{original_code}' | detailList={len(detail_list)}行")
-        if detail_list:
-            for di, dl in enumerate(detail_list):
-                print(f"  detailList[{di}]: originalCode={dl.get('originalCode','')} originalNo={repr(dl.get('originalNo',''))} originalName={dl.get('originalName','')} "
-                      f"originalConcentration={dl.get('originalConcentration','')} receivedQuantity={dl.get('receivedQuantity','')} "
-                      f"originalId={dl.get('originalId','')} volume={dl.get('volume','')} medium={dl.get('medium','')}")
-
         matched.append({
             'level': prefix,
             'configure_order': rec_order,
@@ -1361,17 +1344,13 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
 
         # Continue tracing: filter out A-type parents and %-concentration parents
         if original_code:
-            print(f"[TraceParents] {rec_order} → parent_orders={parent_orders} | parent_id_map={parent_id_map}")
             for po in parent_orders:
                 po_prefix = po.split('-')[0].upper() if '-' in po else ''
                 if po_prefix == 'A':
-                    print(f"[TraceStop] {rec_order} → 父级 {po} 为 A 类，停止")
                     continue
                 if _has_pct_source_conc(record, po):
-                    print(f"[TraceStop] {rec_order} → 父级 {po} 源浓度为 %，停止")
                     continue
                 pid = parent_id_map.get(po)
-                print(f"[TraceContinue] {rec_order} → 追溯父级 {po} (id={pid})")
                 _trace(lims_id=pid, order_str=po, depth=depth + 1)
 
         visiting.discard(key)
@@ -1381,14 +1360,6 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
         _trace(lims_id=lims_id, order_str=order)
 
     matched.reverse()
-
-    print(f"[TraceSummary] ===== 溯源完成 ===== 共 {len(matched)} 条记录，顺序(top→bottom):")
-    for mi, rec in enumerate(matched):
-        print(f"  [{mi}] {rec.get('level','')}-{rec.get('configure_order','')} | "
-              f"name={rec.get('solution_name','')} | conc={rec.get('concentration','')} | "
-              f"originalCode={rec.get('original_code','')} | parent={rec.get('parent_name','')} | "
-              f"source_details={len(rec.get('source_details',[]))}条 | "
-              f"weighing={rec.get('_is_weighing_top',False)}")
 
     # Build lookup
     matched_by_order = {}
@@ -1503,7 +1474,6 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
                     'concentration': f"{pc}({pu})" if pc and pu else str(pc) if pc else '',
                 }
 
-    print(f"[TraceSummary] top_ancestor={top_ancestor}")
     return matched, top_ancestor
 
 
@@ -1828,7 +1798,6 @@ def lims_get_source_info():
             }
         })
     except Exception as e:
-        print(f"[GetSourceInfo] ERROR order={configure_order} id={source_id}: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
 
@@ -3497,7 +3466,7 @@ def lims_get_verification_info():
                             a_controlled_no = potential_no
                             a_concentration = str(dl.get('originalConcentration', '')).strip()
                     if not a_controlled_no:
-                        print(f"[VerificationTrace] controlledNo提取失败: a_name='{a_name}' detailList行数={len(detail_list)}")
+                        pass
                     a_storage_condition = str(r.get('storage_condition') or '').strip()
                     if a_controlled_no and a_controlled_no not in seen:
                         seen.add(a_controlled_no)
@@ -3521,7 +3490,7 @@ def lims_get_verification_info():
                         })
                 return ancestors
             except Exception as e:
-                print(f"[VerificationTrace] 溯源失败: {e}")
+                pass
                 return []
 
         new_info['ancestors'] = _trace_to_a(new_rec)
@@ -3581,7 +3550,7 @@ def lims_storage_conditions():
                     conditions[kw] = str(vo_list[0].get('storageCondition') or '').strip()
                     break
         except Exception as e:
-            print(f"[StorageCondition] 查询失败: keyword={kw} error={e}")
+            pass
     return jsonify({"success": True, "conditions": conditions})
 
 
@@ -3615,7 +3584,7 @@ def lims_parse_verification_pdf():
                     'source_file': f.filename,
                 }
         except Exception as e:
-            print(f"[ParsePDF] 解析 {f.filename} 失败: {e}")
+            pass
         finally:
             if tmp:
                 try:
@@ -3665,7 +3634,7 @@ def lims_parse_epatemp_content():
                     'source_file': name,
                 })
         except Exception as e:
-            print(f"[ParseEpatemp] 解析 {name} 失败: {e}")
+            pass
             skipped.append(name)
         finally:
             if tmp:
