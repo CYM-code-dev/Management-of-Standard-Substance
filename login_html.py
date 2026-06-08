@@ -32,6 +32,7 @@ CORS(app, supports_credentials=True)
 
 # ==================== 配置文件路径 ====================
 CONFIG_FILE = 'config.json'
+MANUAL_UPLOAD_DIR = 'manual_uploads'
 
 
 # ==================== 数值修约规则 ====================
@@ -88,14 +89,49 @@ def _fmt_conc(val, conc_unit):
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {'excelPath': '', 'certPath': ''}
+            data = json.load(f)
+        # 自动迁移旧格式（扁平 → {defaults, users}）
+        if 'defaults' not in data and ('excelPath' in data or 'certPath' in data):
+            data = {
+                'defaults': {'excelPath': data.get('excelPath', ''), 'certPath': data.get('certPath', '')},
+                'users': {}
+            }
+            with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        return data
+    return {'defaults': {'excelPath': '', 'certPath': ''}, 'users': {}}
 
 
 def save_config(excel_path, cert_path):
-    config = {'excelPath': excel_path, 'certPath': cert_path}
+    """保存全局默认路径"""
+    config = load_config()
+    config['defaults'] = {'excelPath': excel_path, 'certPath': cert_path}
     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=2)
+        json.dump(config, f, indent=2, ensure_ascii=False)
+
+
+def get_user_paths(display_name):
+    """返回 (excelPath, certPath)，优先用户配置，回退默认值"""
+    config = load_config()
+    user = config.get('users', {}).get(display_name, {})
+    defaults = config.get('defaults', {})
+    return (
+        user.get('excelPath') or defaults.get('excelPath', ''),
+        user.get('certPath') or defaults.get('certPath', '')
+    )
+
+
+def set_user_paths(username, excel_path, cert_path):
+    """设置用户专属路径，两个路径都为空时删除该用户条目"""
+    config = load_config()
+    if 'users' not in config:
+        config['users'] = {}
+    if excel_path or cert_path:
+        config['users'][username] = {'excelPath': excel_path, 'certPath': cert_path}
+    else:
+        config['users'].pop(username, None)
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
 
 
 # ==================== 远程系统连接类 ====================
@@ -467,7 +503,9 @@ def query():
 
 @app.route('/api/config', methods=['GET', 'POST'])
 def handle_config():
-    if request.method == 'GET': return jsonify(load_config())
+    if request.method == 'GET':
+        excel_path, cert_path = get_user_paths(session.get('display_name', ''))
+        return jsonify({"excelPath": excel_path, "certPath": cert_path})
     data = request.get_json()
     excel_path = data.get('excelPath', '').strip()
     cert_path = data.get('certPath', '').strip()
@@ -480,29 +518,110 @@ def handle_config():
     if not cert_ok: msg.append("证书路径不可访问")
     return jsonify({"success": False, "message": "；".join(msg)}), 400
 
+
+# ==================== 管理员：用户路径管理 ====================
+@app.route('/api/admin/paths', methods=['GET'])
+def admin_get_paths():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    if (session.get('display_name') or '').strip() != _ADMIN_DISPLAY_NAME:
+        return jsonify({"success": False, "message": "无权限"}), 403
+    config = load_config()
+    return jsonify({"defaults": config.get('defaults', {}), "users": config.get('users', {})})
+
+
+@app.route('/api/admin/paths', methods=['POST'])
+def admin_set_paths():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    if (session.get('display_name') or '').strip() != _ADMIN_DISPLAY_NAME:
+        return jsonify({"success": False, "message": "无权限"}), 403
+    data = request.get_json()
+    username = data.get('username', '').strip()
+    excel_path = data.get('excelPath', '').strip()
+    cert_path = data.get('certPath', '').strip()
+    if not username:
+        return jsonify({"success": False, "message": "用户名不能为空"}), 400
+    set_user_paths(username, excel_path, cert_path)
+    return jsonify({"success": True})
+
+
+@app.route('/api/admin/paths/<username>', methods=['DELETE'])
+def admin_delete_paths(username):
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    if (session.get('display_name') or '').strip() != _ADMIN_DISPLAY_NAME:
+        return jsonify({"success": False, "message": "无权限"}), 403
+    config = load_config()
+    config.get('users', {}).pop(username, None)
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+    return jsonify({"success": True})
+
+
+# ==================== 手动导入 Excel ====================
+@app.route('/api/upload_excel', methods=['POST'])
+def upload_excel():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    file = request.files.get('file')
+    if not file:
+        return jsonify({"success": False, "message": "未选择文件"}), 400
+    os.makedirs(MANUAL_UPLOAD_DIR, exist_ok=True)
+    username = session.get('username', 'anonymous')
+    ext = os.path.splitext(file.filename)[1] or '.xlsx'
+    save_path = os.path.join(MANUAL_UPLOAD_DIR, f'{username}{ext}')
+    file.save(save_path)
+    session['manual_excel_path'] = save_path
+    return jsonify({"success": True, "path": save_path})
+
+
+@app.route('/api/clear_manual_excel', methods=['POST'])
+def clear_manual_excel():
+    session.pop('manual_excel_path', None)
+    return jsonify({"success": True})
+
+
+@app.route('/manual_excel/<path:filename>')
+def serve_manual_excel(filename):
+    return send_from_directory(MANUAL_UPLOAD_DIR, filename)
+
+
 @app.route('/organic_excel/<path:filename>')
 def serve_excel(filename):
-    config = load_config()
-    excel_dir = os.path.dirname(config.get('excelPath', ''))
+    excel_path, _ = get_user_paths(session.get('display_name', ''))
+    excel_dir = os.path.dirname(excel_path)
     if not excel_dir:
         return jsonify({"success": False, "message": "未配置 Excel 路径"}), 400
     return send_from_directory(excel_dir, filename)
 
 @app.route('/certificates/<path:filename>')
 def serve_cert(filename):
-    config = load_config()
-    cert_dir = config.get('certPath', '')
+    _, cert_dir = get_user_paths(session.get('display_name', ''))
     if not cert_dir:
         return jsonify({"success": False, "message": "未配置证书路径"}), 400
     return send_from_directory(cert_dir, filename)
 
 
 # ==================== 智能插入写入 Excel ====================
+_KNOWN_SHEET_NAMES = ['有机标准物质', 'FCM标准品']
+
+def detect_sheet_name(wb):
+    """从 workbook 中自动检测目标 sheet 名"""
+    for name in _KNOWN_SHEET_NAMES:
+        if name in wb.sheetnames:
+            return name
+    # 都没有则返回第一个 sheet
+    return wb.sheetnames[0] if wb.sheetnames else None
+
 def get_prefix_type(original_id):
     if not original_id: return 'number'
     first = original_id[0].upper()
-    if first == 'D': return 'D'
-    if first == 'E': return 'E'
+    if first == 'A': return 'A'     # FCM 室温
+    if first == 'B': return 'B'     # FCM 4℃
+    if first == 'C': return 'C'     # FCM -18℃
+    if first == 'D': return 'D'     # 有机 D
+    if first == 'E': return 'E'     # 有机 E
     return 'number'
 
 def extract_number(original_id):
@@ -536,32 +655,22 @@ def parse_existing_records_xls(sheet):
 def find_insert_position(records, new_id):
     new_type = get_prefix_type(new_id)
     new_num = extract_number(new_id)
-    numbers = [r for r in records if get_prefix_type(r['original_id']) == 'number']
-    d_records = [r for r in records if get_prefix_type(r['original_id']) == 'D']
-    e_records = [r for r in records if get_prefix_type(r['original_id']) == 'E']
-    numbers.sort(key=lambda x: extract_number(x['original_id']))
-    d_records.sort(key=lambda x: extract_number(x['original_id']))
-    e_records.sort(key=lambda x: extract_number(x['original_id']))
-    if new_type == 'number':
-        idx = 0
-        for r in numbers:
-            if extract_number(r['original_id']) < new_num: idx += 1
-            else: break
-        return 2 + idx
-    elif new_type == 'D':
-        base = 2 + len(numbers)
-        idx = 0
-        for r in d_records:
-            if extract_number(r['original_id']) < new_num: idx += 1
-            else: break
-        return base + idx
-    else:
-        base = 2 + len(numbers) + len(d_records)
-        idx = 0
-        for r in e_records:
-            if extract_number(r['original_id']) < new_num: idx += 1
-            else: break
-        return base + idx
+    groups = ['number', 'A', 'B', 'C', 'D', 'E']
+    typed = {g: [] for g in groups}
+    for r in records:
+        typed[get_prefix_type(r['original_id'])].append(r)
+    base = 2
+    for g in groups:
+        group = typed[g]
+        group.sort(key=lambda x: extract_number(x['original_id']))
+        if new_type == g:
+            idx = 0
+            for r in group:
+                if extract_number(r['original_id']) < new_num: idx += 1
+                else: break
+            return base + idx
+        base += len(group)
+    return base
 
 def check_duplicate_labno(records, new_lab_no):
     if not new_lab_no or new_lab_no.strip() == '/' or new_lab_no.strip() == '':
@@ -587,13 +696,12 @@ def add_to_excel():
         data = request.get_json()
         record = data.get('record')
         if not record: return jsonify({"success": False, "message": "无数据"}), 400
-        config = load_config()
-        excel_path = config.get('excelPath', '').strip()
+        excel_path, _ = get_user_paths(session.get('display_name', ''))
+        excel_path = excel_path.strip()
         if not excel_path: return jsonify({"success": False, "message": "未配置 Excel 路径"}), 400
         ext = os.path.splitext(excel_path)[1].lower()
         if ext not in ['.xls', '.xlsx']: return jsonify({"success": False, "message": "仅支持 .xls 或 .xlsx"}), 400
 
-        sheet_name = '有机标准物质'
         headers = ['编号', '组别', '实验室编号', '标品名称', 'CAS号', '规格/浓度', '生产商',
                    '有效期', '存放地点', '入库日期', '使用情况', '备注']
         new_lab_no = record.get('labNo', '')
@@ -605,6 +713,7 @@ def add_to_excel():
 
         if ext == '.xlsx':
             wb = openpyxl.load_workbook(excel_path)
+            sheet_name = detect_sheet_name(wb) or '有机标准物质'
             if sheet_name not in wb.sheetnames:
                 ws = wb.create_sheet(sheet_name)
                 for col, h in enumerate(headers, 1):
@@ -647,6 +756,14 @@ def add_to_excel():
             rb = xlrd.open_workbook(excel_path, formatting_info=True)
             wb = xl_copy(rb)
             styles = Styles(rb)
+            # 自动检测 sheet 名
+            sheet_name = None
+            for name in _KNOWN_SHEET_NAMES:
+                if name in rb.sheet_names():
+                    sheet_name = name
+                    break
+            if not sheet_name and rb.sheet_names():
+                sheet_name = rb.sheet_names()[0]
             if sheet_name in rb.sheet_names():
                 sheet_rb = rb.sheet_by_name(sheet_name)
                 ws = wb.get_sheet(sheet_name)
@@ -3092,18 +3209,18 @@ def update_excel_usage():
     if not new_usage:
         return jsonify({"success": False, "message": "使用情况不能为空"}), 400
 
-    config = load_config()
-    excel_path = config.get('excelPath', '').strip()
+    excel_path, _ = get_user_paths(session.get('display_name', ''))
+    excel_path = excel_path.strip()
     if not excel_path:
         return jsonify({"success": False, "message": "未配置 Excel 路径"}), 400
 
     ext = os.path.splitext(excel_path)[1].lower()
-    sheet_name = '有机标准物质'
 
     try:
         if ext == '.xlsx':
             wb = openpyxl.load_workbook(excel_path)
-            if sheet_name not in wb.sheetnames:
+            sheet_name = detect_sheet_name(wb)
+            if not sheet_name or sheet_name not in wb.sheetnames:
                 wb.close()
                 return jsonify({"success": True, "message": "工作表不存在，跳过"})
             ws = wb[sheet_name]
@@ -3152,7 +3269,14 @@ def update_excel_usage():
 
         elif ext == '.xls':
             rb = xlrd.open_workbook(excel_path, formatting_info=True)
-            if sheet_name not in rb.sheet_names():
+            sheet_name = None
+            for name in _KNOWN_SHEET_NAMES:
+                if name in rb.sheet_names():
+                    sheet_name = name
+                    break
+            if not sheet_name and rb.sheet_names():
+                sheet_name = rb.sheet_names()[0]
+            if not sheet_name or sheet_name not in rb.sheet_names():
                 return jsonify({"success": True, "message": "工作表不存在，跳过"})
             sheet = rb.sheet_by_name(sheet_name)
             

@@ -469,7 +469,7 @@
                           <th style="width:36px;"><input type="checkbox" id="solResultCheckAll"></th>
                           <th>实验室编号</th>
                           <th>名称</th>
-                          <th>有机库存</th>
+                          <th>EXCEL库存</th>
                           <th>CAS No.</th>
                           <th>浓度</th>
                           <th>规格/剩余量</th>
@@ -1401,7 +1401,10 @@
             if (!resp.ok) return;
             const buf = await resp.arrayBuffer();
             const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
-            const ws = wb.Sheets['有机标准物质'];
+            const knownSheets = ['有机标准物质', 'FCM标准品'];
+            let ws = null;
+            for (const name of knownSheets) { if (wb.Sheets[name]) { ws = wb.Sheets[name]; break; } }
+            if (!ws && wb.SheetNames.length) ws = wb.Sheets[wb.SheetNames[0]];
             if (!ws) return;
             const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
             if (rows.length < 2) return;
@@ -1463,12 +1466,13 @@
         const year = extractYear(labNo);
         const candidates = [baseUrl + encodeURIComponent(labNo) + '.pdf'];
         if (year) {
-            candidates.push(baseUrl + year + '年标品证书/' + encodeURIComponent(labNo) + '.pdf');
-            candidates.push(baseUrl + year + '标品证书/' + encodeURIComponent(labNo) + '.pdf');
-            candidates.push(baseUrl + year + '年标品证书/消费品/' + encodeURIComponent(labNo) + '.pdf');
-            candidates.push(baseUrl + year + '标品证书/消费品/' + encodeURIComponent(labNo) + '.pdf');
-            candidates.push(baseUrl + year + '年标品证书/轻工/' + encodeURIComponent(labNo) + '.pdf');
-            candidates.push(baseUrl + year + '标品证书/轻工/' + encodeURIComponent(labNo) + '.pdf');
+            const subs = ['', '消费品', '轻工', 'FCM', 'MD', '日化', '医疗器械', '食品接触材料', '食品'];
+            for (const suffix of ['年标品证书', '标品证书']) {
+                for (const sub of subs) {
+                    const path = sub ? `${year}${suffix}/${sub}/` : `${year}${suffix}/`;
+                    candidates.push(baseUrl + path + encodeURIComponent(labNo) + '.pdf');
+                }
+            }
         }
         for (const url of [...new Set(candidates)]) {
             try { const resp = await fetch(url, { method: 'HEAD', cache: 'no-store' }); if (resp.ok) return url; } catch(e) {}

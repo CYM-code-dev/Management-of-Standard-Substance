@@ -334,10 +334,10 @@
             <i class="fas fa-user-circle"></i> <span id="displayUserName"></span>
             <button class="ms-2" id="logoutBtn" title="退出登录"><i class="fas fa-sign-out-alt"></i></button>
         </div>
-        <button class="btn btn-outline-secondary me-2" id="manualImportBtn"><i class="fas fa-file-excel me-1"></i>手动导入Excel</button>
         <button class="btn btn-primary shadow-sm me-2" data-bs-toggle="modal" data-bs-target="#standardModal" onclick="openAddModal()"><i class="fas fa-plus-circle me-1"></i>新增标准品</button>
         <button class="btn btn-outline-info me-2" id="solutionConfigBtn"><i class="fas fa-vial me-1"></i>标准物质配置</button>
         <button class="btn btn-outline-secondary" id="settingsBtn"><i class="fas fa-cog me-1"></i>设置</button>
+        <button class="btn btn-outline-warning ms-2" id="adminPathsBtn" style="display:none;"><i class="fas fa-users-cog me-1"></i>用户路径</button>
     </div>
 </div>
 <div class="container-fluid px-3 px-lg-4 py-3">
@@ -500,6 +500,9 @@
 <!-- 设置模态框 -->
 <div class="modal fade" id="settingsModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header bg-info text-white"><h5 class="modal-title"><i class="fas fa-cog me-2"></i>系统设置</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label fw-bold">Excel文件UNC路径</label><input type="text" class="form-control" id="settingExcelUrl" placeholder="\\\\server\\share\\folder\\有机标准品.xls"></div><div class="mb-3"><label class="form-label fw-bold">证书文件夹UNC路径</label><input type="text" class="form-control" id="settingCertBaseUrl" placeholder="\\\\server\\share\\证书文件夹"></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button type="button" class="btn btn-primary" id="saveSettingsBtn">保存并加载</button></div></div></div></div>
 
+<!-- 用户路径管理模态框 (管理员) -->
+<div class="modal fade" id="adminPathsModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header bg-warning text-dark"><h5 class="modal-title"><i class="fas fa-users-cog me-2"></i>用户路径管理</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-info small"><strong>说明：</strong>为指定人员（真实姓名）配置独立的 Excel/证书路径。留空表示使用全局默认路径。</div><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>真实姓名</th><th>Excel 路径</th><th>证书路径</th><th style="width:130px">操作</th></tr></thead><tbody id="adminPathsBody"></tbody></table></div><hr><h6>添加 / 编辑用户路径</h6><div class="mb-2"><label class="form-label">真实姓名</label><input type="text" class="form-control" id="adminPathUsername" placeholder="输入真实姓名，如：沈佳芮"></div><div class="mb-2"><label class="form-label">Excel 文件 UNC 路径</label><input type="text" class="form-control" id="adminPathExcel" placeholder="留空使用默认"></div><div class="mb-2"><label class="form-label">证书文件夹 UNC 路径</label><input type="text" class="form-control" id="adminPathCert" placeholder="留空使用默认"></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button><button type="button" class="btn btn-primary" id="adminPathSaveBtn">保存</button></div></div></div></div>
+
 <!-- 删除确认模态框 -->
 <div class="modal fade" id="deleteModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header bg-danger"><h5 class="modal-title">确认删除</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">确定要删除 <strong id="deleteItemName"></strong> 吗？</div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-danger" id="confirmDeleteBtn">确认删除</button></div></div></div></div>
 
@@ -569,6 +572,7 @@
 <script>
     // ---------- 全局变量 ----------
     let standardsData = [];
+    let isFCMTemplate = false;
     let deleteTargetId = null;
     let excelUncPath = '';
     let certUncPath = '';
@@ -617,12 +621,15 @@
         userInfoBox.style.display = 'block';
         displayUserNameSpan.textContent = displayName;
         localStorage.setItem('auth_logged_in', 'true');
+        // 管理员按钮：仅管理员可见
+        document.getElementById('adminPathsBtn').style.display = displayName.trim() === '崔艳梅' ? 'inline-block' : 'none';
     }
 
     function showLoggedOutUI() {
         showLoginBtn.style.display = 'inline-block';
         userInfoBox.style.display = 'none';
         currentLoggedUser = null;
+        document.getElementById('adminPathsBtn').style.display = 'none';
         localStorage.removeItem('auth_logged_in');
     }
 
@@ -774,12 +781,13 @@
         const year = extractYear(labNo);
         const candidates = [baseUrl + encodeURIComponent(labNo) + '.pdf'];
         if (year) {
-            candidates.push(baseUrl + year + '年标品证书/' + encodeURIComponent(labNo) + '.pdf');
-            candidates.push(baseUrl + year + '标品证书/' + encodeURIComponent(labNo) + '.pdf');
-            candidates.push(baseUrl + year + '年标品证书/消费品/' + encodeURIComponent(labNo) + '.pdf');
-            candidates.push(baseUrl + year + '标品证书/消费品/' + encodeURIComponent(labNo) + '.pdf');
-            candidates.push(baseUrl + year + '年标品证书/轻工/' + encodeURIComponent(labNo) + '.pdf');
-            candidates.push(baseUrl + year + '标品证书/轻工/' + encodeURIComponent(labNo) + '.pdf');
+            const subs = ['', '消费品', '轻工', 'FCM', 'MD', '日化', '医疗器械', '食品接触材料', '食品'];
+            for (const suffix of ['年标品证书', '标品证书']) {
+                for (const sub of subs) {
+                    const path = sub ? `${year}${suffix}/${sub}/` : `${year}${suffix}/`;
+                    candidates.push(baseUrl + path + encodeURIComponent(labNo) + '.pdf');
+                }
+            }
         }
         for (const url of [...new Set(candidates)]) {
             try { const resp = await fetch(url, { method: 'HEAD', cache: 'no-store' }); if (resp.ok) return url; } catch(e) {}
@@ -863,7 +871,7 @@ function filterData() {
     }
     function parseExcelAndStore(workbook) {
         const allRecords = [];
-        const sheetNames = ['有机标准物质', '过期标准品'];
+        const sheetNames = workbook.SheetNames;
         for (let sheetName of sheetNames) {
             if (!workbook.Sheets[sheetName]) continue;
             const sheet = workbook.Sheets[sheetName];
@@ -875,7 +883,7 @@ function filterData() {
                 if (firstCell.includes('编号') || firstCell.includes('组别')) { headerRow = rows[i]; headerIndex = i; break; }
             }
             if (!headerRow) continue;
-            const colMap = { 'id': ['编号', '序号'], 'group': ['组别'], 'labNo': ['实验室编号'], 'name': ['标品名称', '名称'], 'cas': ['CAS号', 'CAS'], 'spec': ['规格', '规格  浓度', '浓度'], 'manufacturer': ['生产商', '厂家'], 'expiry': ['有效期'], 'location': ['存放地点'], 'storageDate': ['入库日期'], 'usage': ['使用情况'], 'remarks': ['备注'] };
+            const colMap = { 'id': ['编号', '序号'], 'group': ['组别'], 'labNo': ['实验室编号', '内部编号'], 'name': ['标品名称', '名称'], 'cas': ['CAS号', 'CAS'], 'spec': ['规格', '规格  浓度', '浓度'], 'manufacturer': ['生产商', '厂家', '供应商', '制造单位'], 'expiry': ['有效期'], 'location': ['存放地点'], 'storageDate': ['入库日期', '到货日期'], 'usage': ['使用情况', '余量'], 'remarks': ['备注'] };
             const idx = {};
             for (let j = 0; j < headerRow.length; j++) {
                 const cell = headerRow[j]?.toString().trim() || '';
@@ -901,36 +909,23 @@ function filterData() {
         if (allRecords.length === 0) return false;
         const map = new Map(); for (let rec of allRecords) map.set(rec.id, rec);
         standardsData = Array.from(map.values());
+        // 检测是否为 FCM 模板（数据中有 A/B/C 前缀的编号）
+        isFCMTemplate = standardsData.some(r => /^[ABC]/i.test(r.originalId || ''));
         localStorage.setItem('standardData', JSON.stringify(standardsData));
         return true;
     }
-    function manualImport(file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            if (parseExcelAndStore(workbook)) { 
-                alert(`成功导入 ${standardsData.length} 条数据`); 
-                resetFilters(); 
-                updateGroupDatalist();
-            }
-            else alert('文件解析失败，请确认包含“有机标准物质”或“过期标准品”工作表且列名正确');
-        };
-        reader.readAsArrayBuffer(file);
-    }
-
     // ---------- 编号自动生成逻辑 ----------
     function inferPrefixAndType(locationStr) {
         const loc = (locationStr || '').toLowerCase();
         if (loc.includes('-') || loc.includes('冷冻') || loc.includes('零下')) {
-            return { prefix: 'E', type: 'freezer' };
+            return { prefix: isFCMTemplate ? 'C' : 'E', type: 'freezer' };
         }
-        if (loc.includes('2~8') || loc.includes('2-8') || 
-            loc.includes('4℃') || loc.includes('4度') || loc.includes('4±') || 
+        if (loc.includes('2~8') || loc.includes('2-8') ||
+            loc.includes('4℃') || loc.includes('4度') || loc.includes('4±') ||
             loc.includes('冷藏')) {
-            return { prefix: 'D', type: 'fridge' };
+            return { prefix: isFCMTemplate ? 'B' : 'D', type: 'fridge' };
         }
-        return { prefix: '', type: 'room' };
+        return { prefix: isFCMTemplate ? 'A' : '', type: 'room' };
     }
 
     function getNextAvailableNumber(prefix) {
@@ -1351,7 +1346,67 @@ function filterData() {
     function openSettingsModal() {
         document.getElementById('settingExcelUrl').value = excelUncPath;
         document.getElementById('settingCertBaseUrl').value = certUncPath;
+        // 非管理员：只读，隐藏保存按钮
+        const isAdmin = (displayUserNameSpan.textContent || '').trim() === '崔艳梅';
+        document.getElementById('settingExcelUrl').readOnly = !isAdmin;
+        document.getElementById('settingCertBaseUrl').readOnly = !isAdmin;
+        document.getElementById('saveSettingsBtn').style.display = isAdmin ? 'inline-block' : 'none';
         new bootstrap.Modal(document.getElementById('settingsModal')).show();
+    }
+
+    // ========== 管理员：用户路径管理 ==========
+    let _adminPathsData = {};
+    async function loadAdminPaths() {
+        const resp = await fetch('/api/admin/paths');
+        if (!resp.ok) { alert('无权限或未登录'); return; }
+        _adminPathsData = await resp.json();
+        const tbody = document.getElementById('adminPathsBody');
+        tbody.innerHTML = '';
+        const users = _adminPathsData.users || {};
+        for (const [username, paths] of Object.entries(users)) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + username + '</td>' +
+                '<td class="small">' + (paths.excelPath || '<em class="text-muted">默认</em>') + '</td>' +
+                '<td class="small">' + (paths.certPath || '<em class="text-muted">默认</em>') + '</td>' +
+                '<td><button class="btn btn-sm btn-outline-primary me-1" onclick="editUserPath(\'' + username + '\')">编辑</button>' +
+                '<button class="btn btn-sm btn-outline-danger" onclick="deleteUserPath(\'' + username + '\')">删除</button></td>';
+            tbody.appendChild(tr);
+        }
+    }
+
+    async function saveAdminPath() {
+        const username = document.getElementById('adminPathUsername').value.trim();
+        const excelPath = document.getElementById('adminPathExcel').value.trim();
+        const certPath = document.getElementById('adminPathCert').value.trim();
+        if (!username) { alert('请输入真实姓名'); return; }
+        const resp = await fetch('/api/admin/paths', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username, excelPath, certPath})
+        });
+        const result = await resp.json();
+        if (result.success) {
+            await loadAdminPaths();
+            document.getElementById('adminPathUsername').value = '';
+            document.getElementById('adminPathExcel').value = '';
+            document.getElementById('adminPathCert').value = '';
+            alert('保存成功');
+        } else alert('保存失败：' + (result.message || '未知错误'));
+    }
+
+    async function deleteUserPath(username) {
+        if (!confirm('确定删除 ' + username + ' 的路径配置？')) return;
+        const resp = await fetch('/api/admin/paths/' + encodeURIComponent(username), {method: 'DELETE'});
+        const result = await resp.json();
+        if (result.success) await loadAdminPaths();
+        else alert('删除失败：' + (result.message || '未知错误'));
+    }
+
+    function editUserPath(username) {
+        const paths = (_adminPathsData.users || {})[username] || {};
+        document.getElementById('adminPathUsername').value = username;
+        document.getElementById('adminPathExcel').value = paths.excelPath || '';
+        document.getElementById('adminPathCert').value = paths.certPath || '';
     }
 
     // ---------- 初始化 ----------
@@ -1371,15 +1426,15 @@ function filterData() {
         document.getElementById('resetBtn').addEventListener('click', resetFilters);
         document.getElementById('saveStandardBtn').addEventListener('click', saveStandard);
         document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
-        document.getElementById('manualImportBtn').addEventListener('click', () => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.xls, .xlsx';
-            input.onchange = (e) => { if (e.target.files.length) manualImport(e.target.files[0]); };
-            input.click();
-        });
         document.getElementById('settingsBtn').addEventListener('click', openSettingsModal);
         document.getElementById('saveSettingsBtn').addEventListener('click', saveSettingsAndLoad);
+
+        // 管理员路径管理
+        document.getElementById('adminPathsBtn').addEventListener('click', async () => {
+            await loadAdminPaths();
+            new bootstrap.Modal(document.getElementById('adminPathsModal')).show();
+        });
+        document.getElementById('adminPathSaveBtn').addEventListener('click', saveAdminPath);
         document.getElementById('searchNameCas').addEventListener('keypress', e => { if(e.key === 'Enter') filterData(); });
         document.getElementById('searchGroup').addEventListener('keypress', e => { if(e.key === 'Enter') filterData(); });
         document.getElementById('queryLabNoBtn').addEventListener('click', () => queryAndFill(1));
