@@ -357,7 +357,7 @@ def get_system():
 @app.route('/')
 def index():
     if not session.get('logged_in'): return redirect('/login')
-    return redirect('/organic-std')
+    return redirect('/solution-config')
 
 @app.route('/login')
 def login_page():
