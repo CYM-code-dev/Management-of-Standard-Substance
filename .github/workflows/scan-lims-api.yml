@@ -1,0 +1,58 @@
+name: Scan LIMS API
+
+on:
+  push:
+    branches: [main, main-1]
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write # 创建 Issue 需要写权限
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Scan for new LIMS endpoints
+        id: scan
+        run: |
+          NEW_ENDPOINTS=$(python scripts/lims_api_scanner.py --json)
+          echo "result=$NEW_ENDPOINTS" >> $GITHUB_OUTPUT
+          if [ "$NEW_ENDPOINTS" != "[]" ]; then
+            echo "has_new=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_new=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Issue for new endpoints
+        if: steps.scan.outputs.has_new == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python -c "
+          import json, subprocess, os
+          endpoints = json.loads('''${{ steps.scan.outputs.result }}''')
+          title = f'🔍 发现 {len(endpoints)} 个新的 LIMS 接口'
+          body_lines = ['发现以下新的 LIMS 外部接口，请确认是否纳入 API 文档管理：\n']
+          for i, ep in enumerate(endpoints, 1):
+            body_lines.append(f'{i}. **{ep[\"method\"]}** `{ep[\"path\"]}`')
+            body_lines.append(f'   - 文件: {ep[\"file\"]}:{ep[\"line\"]}')
+            body_lines.append('')
+          body_lines.append('---')
+          body_lines.append('确认后请在 Claude Code 中说：\"把这个新接口添加到 LIMS_API_openapi.json 并同步到 Apifox\"')
+          body = '\n'.join(body_lines)
+          # 使用 gh CLI 创建 issue
+          result = subprocess.run(
+            ['gh', 'issue', 'create', '--title', title, '--body', body, '--label', 'api-doc'],
+            capture_output=True, text=True, env={**os.environ}
+          )
+          print(result.stdout)
+          if result.returncode != 0:
+            print(result.stderr)
+          "
