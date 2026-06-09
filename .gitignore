@@ -11,7 +11,9 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+新建文件夹
 
 # OS
 Thumbs.db
 Desktop.ini
+.claude/worktrees/
