@@ -6246,7 +6246,6 @@
         const input = document.createElement('input');
         input.type = 'file';
         input.webkitdirectory = true;
-        input.accept = '.D,.d';
         input.style.display = 'none';
         document.body.appendChild(input);
         input.onchange = async function() {
@@ -6275,7 +6274,7 @@
             listDiv.innerHTML = '<div class="border rounded p-2 bg-light mb-1">' +
                 '<div class="d-flex justify-content-end mb-1"><button class="btn btn-sm btn-outline-secondary" id="verifyConfirmDFolders">确认选择</button></div>' +
                 '<div class="d-flex flex-column gap-1">' +
-                dFolders.map((f, i) => '<label class="d-flex align-items-center gap-1 small mb-0"><input type="checkbox" class="verify-d-check" data-idx="'+i+'" checked><span>'+f.name+'</span></label>').join('') +
+                dFolders.map((f, i) => '<label class="d-flex align-items-center gap-1 small mb-0"><input type="checkbox" class="verify-d-check" data-idx="'+i+'"><span>'+f.name+'</span></label>').join('') +
                 '</div></div>';
             listDiv.style.display = 'block';
             status.textContent = '找到 '+dFolders.length+' 个.D文件夹，请勾选后点确认';
