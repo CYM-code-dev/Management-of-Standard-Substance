@@ -2839,6 +2839,8 @@ def _merge_pdfs(pdf_pages):
     merged.close()
     buf.seek(0)
     return buf.read()
+
+@app.route('/api/lims/export_bbcd_docx', methods=['POST'])
 def lims_export_bbcd_docx():
     if not session.get('logged_in'):
         return jsonify({"success": False, "message": "未登录"}), 401
