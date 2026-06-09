@@ -4196,6 +4196,10 @@ if __name__ == '__main__':
     print("Flask 服务启动，访问以下地址：")
     print("  登录页面: http://127.0.0.1:5000/login")
     print("  耗材查询主页: http://127.0.0.1:5000/")
-    print("  有机标准品管理: http://127.0.0.1:5000/organic-std")
+    print("  有机标准品管理: https://127.0.0.1:5000/organic-std")
     start_niimbot_server()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    ssl_ctx = None
+    if os.path.exists('cert.pem') and os.path.exists('key.pem'):
+        ssl_ctx = ('cert.pem', 'key.pem')
+        print("  HTTPS 已启用 (自签名证书)")
+    app.run(host='0.0.0.0', port=5000, debug=True, ssl_context=ssl_ctx)

@@ -6245,7 +6245,8 @@
     function _verifySelectDFoldersFallback() {
         const input = document.createElement('input');
         input.type = 'file';
-        input.webkitdirectory = true;
+        input.setAttribute('webkitdirectory', '');
+        input.setAttribute('directory', '');
         input.style.display = 'none';
         document.body.appendChild(input);
         input.onchange = async function() {
