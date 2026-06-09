@@ -15,7 +15,16 @@ echo [2/3] pip install...
 echo.
 
 echo [3/3] restart service...
-nssm restart FlaskStdMgr 2>nul || echo service not registered, skip
+set "NSSM_PATH="
+where nssm >nul 2>&1 && set "NSSM_PATH=nssm"
+if not defined NSSM_PATH if exist "%PROJECT_DIR%\nssm.exe" set "NSSM_PATH=%PROJECT_DIR%\nssm.exe"
+if defined NSSM_PATH (
+    %NSSM_PATH% restart FlaskStdMgr
+    if errorlevel 1 echo [WARN] nssm restart failed
+) else (
+    echo [WARN] nssm not found, cannot restart service automatically
+    echo        Please restart manually: nssm restart FlaskStdMgr
+)
 echo.
 
 echo Done!

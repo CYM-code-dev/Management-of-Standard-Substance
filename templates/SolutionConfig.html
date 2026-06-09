@@ -5216,6 +5216,7 @@
             btn.classList.remove('btn-primary');
             btn.classList.add('btn-success');
             btn.innerHTML = '<i class="fas fa-check me-1"></i>已保存';
+            btn.disabled = false;
         } catch (e) {
             btn.innerHTML = orig;
             btn.disabled = false;
