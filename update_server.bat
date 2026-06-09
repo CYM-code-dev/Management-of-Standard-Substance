@@ -2,12 +2,13 @@
 chcp 936 >nul 2>&1
 title Update
 
-set "PROJECT_DIR=%~dp0Management-of-Standard-Substance"
+set "PROJECT_DIR=%~dp0."
 
 cd /d "%PROJECT_DIR%"
 
-echo [1/3] git pull...
-git pull
+echo [1/3] git fetch + reset...
+git fetch origin
+git reset --hard origin/main-1
 echo.
 
 echo [2/3] pip install...

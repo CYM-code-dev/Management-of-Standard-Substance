@@ -6200,9 +6200,15 @@
     let _verifyEpatempContents = [];
 
     async function verifySelectDFolders() {
-        if (!window.showDirectoryPicker) {
-            alert('当前浏览器不支持文件夹选择，请使用 Chrome 或 Edge'); return;
+        if (window.showDirectoryPicker) {
+            await _verifySelectDFoldersNative();
+        } else {
+            _verifySelectDFoldersFallback();
         }
+    }
+
+    // ── 方案 A: File System Access API (Chrome/Edge + 安全上下文) ──
+    async function _verifySelectDFoldersNative() {
         try {
             const dirHandle = await window.showDirectoryPicker();
             const listDiv = document.getElementById('verifyDFolderList');
@@ -6216,7 +6222,6 @@
                 }
             }
             if (!dFolders.length) { status.textContent = '未找到.D文件夹'; status.className = 'small text-muted'; return; }
-            // 显示复选框列表
             listDiv.innerHTML = '<div class="border rounded p-2 bg-light mb-1">' +
                 '<div class="d-flex justify-content-end mb-1"><button class="btn btn-sm btn-outline-secondary" id="verifyConfirmDFolders">确认选择</button></div>' +
                 '<div class="d-flex flex-column gap-1">' +
@@ -6225,7 +6230,6 @@
             listDiv.style.display = 'block';
             status.textContent = '找到 '+dFolders.length+' 个.D文件夹，请勾选后点确认';
             status.className = 'small text-success';
-            // 存储句柄供确认时使用
             window._verifyPendingDFolders = dFolders;
             document.getElementById('verifyConfirmDFolders').addEventListener('click', function() {
                 const checks = listDiv.querySelectorAll('.verify-d-check:checked');
@@ -6235,6 +6239,57 @@
                 verifyRenderSelectedDFolders();
             });
         } catch (e) { if (e.name !== 'AbortError') { alert('选择文件夹失败: '+e.message); } }
+    }
+
+    // ── 方案 B: webkitdirectory 降级 (非安全上下文也能用) ──
+    function _verifySelectDFoldersFallback() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.webkitdirectory = true;
+        input.accept = '.D,.d';
+        input.style.display = 'none';
+        document.body.appendChild(input);
+        input.onchange = async function() {
+            const files = Array.from(input.files);
+            document.body.removeChild(input);
+            if (!files.length) return;
+            const status = document.getElementById('verifyScanStatus');
+            status.textContent = '扫描中...'; status.className = 'small text-warning';
+            // 按直接子目录名分组，只取 .D 文件夹
+            const folderMap = {};
+            files.forEach(f => {
+                const parts = f.webkitRelativePath.split('/');
+                if (parts.length < 2) return;
+                const folderName = parts[1];
+                if (folderName.toUpperCase().endsWith('.D')) {
+                    if (!folderMap[folderName]) folderMap[folderName] = [];
+                    folderMap[folderName].push(f);
+                }
+            });
+            const folderNames = Object.keys(folderMap);
+            if (!folderNames.length) { status.textContent = '未找到.D文件夹'; status.className = 'small text-muted'; return; }
+            // 转为与 native 方案相同的数据结构（handle 改为 files 数组）
+            const dFolders = folderNames.map(name => ({ name, files: folderMap[name] }));
+            // 弹出复选框列表
+            const listDiv = document.getElementById('verifyDFolderList');
+            listDiv.innerHTML = '<div class="border rounded p-2 bg-light mb-1">' +
+                '<div class="d-flex justify-content-end mb-1"><button class="btn btn-sm btn-outline-secondary" id="verifyConfirmDFolders">确认选择</button></div>' +
+                '<div class="d-flex flex-column gap-1">' +
+                dFolders.map((f, i) => '<label class="d-flex align-items-center gap-1 small mb-0"><input type="checkbox" class="verify-d-check" data-idx="'+i+'" checked><span>'+f.name+'</span></label>').join('') +
+                '</div></div>';
+            listDiv.style.display = 'block';
+            status.textContent = '找到 '+dFolders.length+' 个.D文件夹，请勾选后点确认';
+            status.className = 'small text-success';
+            window._verifyPendingDFolders = dFolders;
+            document.getElementById('verifyConfirmDFolders').addEventListener('click', function() {
+                const checks = listDiv.querySelectorAll('.verify-d-check:checked');
+                if (!checks.length) { alert('请至少选择一个.D文件夹'); return; }
+                _verifySelectedDFolders = [];
+                checks.forEach(c => { const idx = parseInt(c.dataset.idx, 10); _verifySelectedDFolders.push(window._verifyPendingDFolders[idx]); });
+                verifyRenderSelectedDFolders();
+            });
+        };
+        input.click();
     }
 
     function verifyRenderSelectedDFolders() {
@@ -6266,9 +6321,21 @@
             const dFoldersData = [];
             for (const f of _verifySelectedDFolders) {
                 try {
-                    const fileHandle = await f.handle.getFileHandle('epatemp.txt');
-                    const file = await fileHandle.getFile();
-                    const buf = await file.arrayBuffer();
+                    let buf;
+                    if (f.handle) {
+                        // 方案 A: File System Access API
+                        const fileHandle = await f.handle.getFileHandle('epatemp.txt');
+                        const file = await fileHandle.getFile();
+                        buf = await file.arrayBuffer();
+                    } else if (f.files) {
+                        // 方案 B: webkitdirectory 降级
+                        const epatempFile = f.files.find(fi => {
+                            const parts = fi.webkitRelativePath.split('/');
+                            return parts[parts.length - 1].toLowerCase() === 'epatemp.txt';
+                        });
+                        if (!epatempFile) throw new Error('无epatemp.txt');
+                        buf = await epatempFile.arrayBuffer();
+                    }
                     const bytes = new Uint8Array(buf);
                     let binary = '';
                     for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
