@@ -443,7 +443,7 @@ def logout():
 
 @app.route('/api/query')
 def query():
-    if not session.get('logged_in'): return jsonify({"success": False, "message": "未登录"})
+    if not session.get('logged_in'): return jsonify({"success": False, "message": "未登录"}), 401
     pid = session.get('pid')
     username = session.get('username')
     if not pid:

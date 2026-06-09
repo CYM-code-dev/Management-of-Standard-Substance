@@ -1218,6 +1218,19 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+    // 全局 fetch 拦截：session 过期(401)自动跳转登录页
+    const _origFetch = window.fetch;
+    window.fetch = async function(...args) {
+        const resp = await _origFetch.apply(this, args);
+        if (resp.status === 401) {
+            const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+            if (!url.includes('/api/status') && !url.includes('/api/captcha') && !url.includes('/api/login')) {
+                window.location.href = '/login';
+            }
+        }
+        return resp;
+    };
+
     // ---------- 权限控制常量与工具函数 ----------
     const ADMIN_DISPLAY_NAME = '崔艳梅';
     let _currentPid = '';

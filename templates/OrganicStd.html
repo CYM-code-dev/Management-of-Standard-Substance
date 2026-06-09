@@ -570,6 +570,19 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+    // 全局 fetch 拦截：session 过期(401)自动跳转登录页
+    const _origFetch = window.fetch;
+    window.fetch = async function(...args) {
+        const resp = await _origFetch.apply(this, args);
+        if (resp.status === 401) {
+            const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+            if (!url.includes('/api/status') && !url.includes('/api/captcha') && !url.includes('/api/login')) {
+                window.location.href = '/login';
+            }
+        }
+        return resp;
+    };
+
     // ---------- 全局变量 ----------
     let standardsData = [];
     let isFCMTemplate = false;
@@ -965,12 +978,7 @@ function filterData() {
             const resp = await fetch(url, { credentials: 'include' });
             const data = await resp.json();
             if (!data.success) {
-                if (data.message.includes('会话已失效') || data.message.includes('未登录')) {
-                    alert('登录已失效，请重新登录');
-                    showLoginModal();
-                } else {
-                    alert('查询失败: ' + data.message);
-                }
+                alert('查询失败: ' + data.message);
                 return;
             }
             const list = data.data || [];
