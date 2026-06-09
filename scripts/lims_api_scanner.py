@@ -184,7 +184,9 @@ def run_scan(output_json=False):
 
 def main():
     output_json = "--json" in sys.argv
-    run_scan(output_json=output_json)
+    result = run_scan(output_json=output_json)
+    if output_json:
+        print(json.dumps(result, ensure_ascii=False))
 
 
 if __name__ == "__main__":
