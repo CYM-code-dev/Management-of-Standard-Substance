@@ -1,0 +1,5421 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LIMS 实验室管理系统 API",
+    "description": "\n",
+    "version": "8.1.0",
+    "contact": {
+      "name": "实验室信息化组"
+    }
+  },
+  "tags": [
+    {
+      "name": "认证与用户"
+    },
+    {
+      "name": "耗材台账"
+    },
+    {
+      "name": "标准品管理"
+    },
+    {
+      "name": "耗材领用"
+    },
+    {
+      "name": "溶液配置"
+    },
+    {
+      "name": "检测数据录入"
+    },
+    {
+      "name": "审核与登记"
+    },
+    {
+      "name": "检测项目管理"
+    },
+    {
+      "name": "流程跟踪"
+    },
+    {
+      "name": "样品查询"
+    },
+    {
+      "name": "未审核项目"
+    },
+    {
+      "name": "统计分析"
+    }
+  ],
+  "paths": {
+    "/detectionManager/core/security/validatecodes": {
+      "get": {
+        "summary": "获取登录验证码图片",
+        "deprecated": false,
+        "description": "获取 LIMS 登录所需的验证码图片，返回图片二进制流。每次调用会创建独立 session，登录时需使用同一 session 以保持验证码一致性。",
+        "operationId": "getCaptcha",
+        "tags": [
+          "认证与用户"
+        ],
+        "parameters": [
+          {
+            "name": "ts",
+            "in": "query",
+            "description": "时间戳（毫秒）",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "r",
+            "in": "query",
+            "description": "随机数（同 ts）",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "验证码图片（PNG/JPEG 二进制流）",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/core/security/login": {
+      "post": {
+        "summary": "用户登录",
+        "deprecated": false,
+        "description": "使用账号、密码（MD5 哈希 1024 次）和验证码登录 LIMS。登录成功后 Cookie 中包含会话信息，后续请求需携带。",
+        "operationId": "login",
+        "tags": [
+          "认证与用户"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "account": {
+                    "type": "string",
+                    "description": "用户名",
+                    "example": ""
+                  },
+                  "password": {
+                    "type": "string",
+                    "description": "密码（MD5 哈希 1024 次后的十六进制字符串）",
+                    "example": ""
+                  },
+                  "validCode": {
+                    "type": "string",
+                    "description": "验证码",
+                    "example": ""
+                  }
+                },
+                "required": [
+                  "account",
+                  "password",
+                  "validCode"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "登录结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "是否成功"
+                    },
+                    "errorCtx": {
+                      "type": "object",
+                      "properties": {
+                        "errorMsg": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "resultData": {
+                      "type": "object",
+                      "properties": {
+                        "nickName": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/core/users/info": {
+      "get": {
+        "summary": "获取用户详情（备用）",
+        "deprecated": false,
+        "description": "当 getLoginUser 返回的用户信息不完整时，使用此接口获取用户的 PID 和真实姓名。",
+        "operationId": "getUserInfo",
+        "tags": [
+          "认证与用户"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "用户详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "resultData": {
+                      "type": "object",
+                      "properties": {
+                        "userInfo": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "integer"
+                            },
+                            "realName": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/core/security/getLoginUser": {
+      "get": {
+        "summary": "获取当前登录用户信息 / 会话保活",
+        "deprecated": false,
+        "description": "获取当前登录用户信息，同时用于会话保活心跳。建议每小时调用一次，20:00 后可停止。返回 200 且 success=true 表示会话有效。",
+        "operationId": "getLoginUser",
+        "tags": [
+          "认证与用户"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "用户信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "resultData": {
+                      "type": "object",
+                      "properties": {
+                        "userInfo": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "integer",
+                              "description": "用户 PID"
+                            },
+                            "realName": {
+                              "type": "string",
+                              "description": "用户真实姓名"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/consumableBill/pageObj": {
+      "get": {
+        "summary": "分页查询耗材台账",
+        "deprecated": false,
+        "description": "按条件分页查询 LIMS 中的标准品耗材记录。支持按关键字、CAS号、机构名称、状态等条件筛选。",
+        "operationId": "queryConsumableBill",
+        "tags": [
+          "耗材台账"
+        ],
+        "parameters": [
+          {
+            "name": "_search",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "false"
+            }
+          },
+          {
+            "name": "nd",
+            "in": "query",
+            "description": "时间戳（毫秒）",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 30
+            }
+          },
+          {
+            "name": "pageNo",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "sidx",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": ""
+            }
+          },
+          {
+            "name": "sord",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "asc"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "耗材类型，固定值",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "description": "关键字（标品名称/实验室编号）",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "casNo",
+            "in": "query",
+            "description": "CAS号",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orgName",
+            "in": "query",
+            "description": "机构名称",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "状态：normal / history / overdue",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "normal"
+            }
+          },
+          {
+            "name": "receiveUserName",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "receiveStartDate",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "receiveEndDate",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "confirmUserName",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "confirmStartDate",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "confirmEndDate",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "invoiceNo",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "groupId",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "description": "用户 PID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pname",
+            "in": "query",
+            "description": "用户姓名",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loginId",
+            "in": "query",
+            "description": "用户 PID（同 pid）",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "resultData": {
+                      "type": "object",
+                      "properties": {
+                        "voList": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {}
+                          },
+                          "description": "耗材记录列表"
+                        },
+                        "records": {
+                          "type": "integer",
+                          "description": "总记录数"
+                        },
+                        "page": {
+                          "type": "integer",
+                          "description": "当前页码"
+                        },
+                        "total": {
+                          "type": "integer",
+                          "description": "总页数"
+                        },
+                        "totalPage": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/consumableBill/{recordId}": {
+      "get": {
+        "summary": "获取标准品详情",
+        "deprecated": false,
+        "description": "",
+        "operationId": "getStandardSubstanceDetail",
+        "tags": [
+          "标准品管理"
+        ],
+        "parameters": [
+          {
+            "name": "recordId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": 123456,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "example": "{{pid}}",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pname",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "example": "{{pname}}",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loginId",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "example": "{{loginId}}",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "_",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "example": "1704067200000",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                },
+                "example": {
+                  "success": true,
+                  "resultData": {
+                    "id": 123456,
+                    "name": "苯标准品",
+                    "validNum": 0.5,
+                    "numUnitName": "g",
+                    "validDate": "2030-02-15",
+                    "concentration": "99.5%"
+                  },
+                  "errorCtx": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "更新耗材记录（如浓度单位）",
+        "deprecated": false,
+        "description": "更新耗材台账中的字段，如修改浓度单位。使用 POST + _method=PUT 模拟 PUT 请求。",
+        "operationId": "updateConsumableBill",
+        "tags": [
+          "耗材台账"
+        ],
+        "parameters": [
+          {
+            "name": "recordId",
+            "in": "path",
+            "description": "耗材记录 ID",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "concentrationUnitName": {
+                    "type": "string",
+                    "description": "新浓度单位",
+                    "example": ""
+                  },
+                  "_method": {
+                    "type": "string",
+                    "default": "PUT",
+                    "description": "模拟 PUT",
+                    "example": "PUT"
+                  },
+                  "pid": {
+                    "type": "string",
+                    "example": ""
+                  },
+                  "pname": {
+                    "type": "string",
+                    "example": ""
+                  },
+                  "loginId": {
+                    "type": "string",
+                    "example": ""
+                  }
+                },
+                "required": [
+                  "_method"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "更新结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "errorDesc": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/consumableReceive/receive": {
+      "post": {
+        "summary": "领用标准品",
+        "deprecated": false,
+        "description": "",
+        "operationId": "receiveSubstance",
+        "tags": [
+          "标准品管理"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "num": {
+                    "type": "string",
+                    "examples": [
+                      "0.25"
+                    ],
+                    "example": "0.25"
+                  },
+                  "receiveDate": {
+                    "type": "string",
+                    "examples": [
+                      "2026-05-09 00:00:00"
+                    ],
+                    "example": "2026-05-09 00:00:00"
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "examples": [
+                      "配制储备液"
+                    ],
+                    "example": "配制储备液"
+                  },
+                  "receiveType": {
+                    "type": "string",
+                    "examples": [
+                      "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE"
+                    ],
+                    "example": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE"
+                  },
+                  "ids": {
+                    "type": "string",
+                    "examples": [
+                      "123456"
+                    ],
+                    "example": "123456"
+                  },
+                  "receiveUserName": {
+                    "type": "string",
+                    "examples": [
+                      "张三"
+                    ],
+                    "example": "张三"
+                  },
+                  "isLevelTwo": {
+                    "type": "string",
+                    "enum": [
+                      "YES",
+                      "NO"
+                    ],
+                    "examples": [
+                      "NO"
+                    ],
+                    "example": "NO"
+                  },
+                  "pid": {
+                    "type": "string",
+                    "examples": [
+                      "{{pid}}"
+                    ],
+                    "example": "{{pid}}"
+                  },
+                  "pname": {
+                    "type": "string",
+                    "examples": [
+                      "{{pname}}"
+                    ],
+                    "example": "{{pname}}"
+                  },
+                  "loginId": {
+                    "type": "string",
+                    "examples": [
+                      "{{loginId}}"
+                    ],
+                    "example": "{{loginId}}"
+                  }
+                },
+                "required": [
+                  "num",
+                  "receiveDate",
+                  "purpose",
+                  "receiveType",
+                  "ids",
+                  "receiveUserName",
+                  "isLevelTwo",
+                  "pid",
+                  "pname",
+                  "loginId"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "领用成功，返回领用记录ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                },
+                "example": {
+                  "success": true,
+                  "resultData": "789012"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/consumableReceive/record/{consumable_id}": {
+      "get": {
+        "summary": "查询领用记录",
+        "deprecated": false,
+        "description": "",
+        "tags": [
+          "标准品管理"
+        ],
+        "parameters": [
+          {
+            "name": "consumable_id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 9999
+            }
+          },
+          {
+            "name": "pageNo",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pname",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loginId",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "领用记录列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "resultData": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/consumableReceive/{receiveId}": {
+      "get": {
+        "summary": "获取单个领用记录详情",
+        "deprecated": false,
+        "description": "",
+        "operationId": "getReceiveRecordDetail",
+        "tags": [
+          "标准品管理"
+        ],
+        "parameters": [
+          {
+            "name": "receiveId",
+            "in": "path",
+            "description": "领用记录ID",
+            "required": true,
+            "example": 789012,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "example": "{{pid}}",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pname",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "example": "{{pname}}",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loginId",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "example": "{{loginId}}",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommonResponse"
+                },
+                "example": {
+                  "success": true,
+                  "resultData": {
+                    "id": 789012,
+                    "receiveDate": "2026-05-09 00:00:00",
+                    "receiveNum": 0.25,
+                    "receiveUserName": "张三",
+                    "purpose": "配制储备液"
+                  },
+                  "errorCtx": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/consumableReceive/record/{consumableId}": {
+      "get": {
+        "summary": "查询耗材的领用记录",
+        "deprecated": false,
+        "description": "根据耗材 ID 查询其领用记录列表，用于获取领用记录 ID。",
+        "operationId": "getReceiveRecords",
+        "tags": [
+          "耗材领用"
+        ],
+        "parameters": [
+          {
+            "name": "consumableId",
+            "in": "path",
+            "description": "耗材记录 ID",
+            "required": true,
+            "example": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "_search",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "false"
+            }
+          },
+          {
+            "name": "nd",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 9999
+            }
+          },
+          {
+            "name": "pageNo",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "sidx",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sord",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "asc"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pname",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loginId",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "领用记录列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "resultData": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/dtSolutionConfigure/saveSolutionConfigure": {
+      "post": {
+        "summary": "保存溶液配置",
+        "deprecated": false,
+        "description": "保存新的溶液配置记录（储备液/应用液/工作液）。Content-Type 为 JSON。payload 包含溶液基本信息、配置详情列表（saveDetailList）等。配置详情需 JSON.stringify 后传入 saveDetailList 字段。",
+        "operationId": "saveSolutionConfigure",
+        "tags": [
+          "溶液配置"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "solutionName",
+                  "solutionCode",
+                  "solutionType",
+                  "pid"
+                ],
+                "properties": {
+                  "solutionName": {
+                    "type": "string",
+                    "description": "溶液名称"
+                  },
+                  "solutionCode": {
+                    "type": "string",
+                    "description": "自编号"
+                  },
+                  "solutionType": {
+                    "type": "string",
+                    "description": "类型：SOLUTION_TYPE_B / SOLUTION_TYPE_C / SOLUTION_TYPE_D"
+                  },
+                  "pageType": {
+                    "type": "string",
+                    "description": "页面类型：SOLUTION_TYPE_A 等"
+                  },
+                  "configureDate": {
+                    "type": "string",
+                    "description": "配置日期 yyyy-MM-dd"
+                  },
+                  "validityDate": {
+                    "type": "string",
+                    "description": "有效期 yyyy-MM-dd"
+                  },
+                  "temperature": {
+                    "type": "string",
+                    "description": "温度"
+                  },
+                  "humidity": {
+                    "type": "string",
+                    "description": "湿度"
+                  },
+                  "storageCondition": {
+                    "type": "string",
+                    "description": "保存条件"
+                  },
+                  "concentration": {
+                    "type": "string",
+                    "description": "浓度描述"
+                  },
+                  "deviceNames": {
+                    "type": "string",
+                    "description": "配置设备"
+                  },
+                  "customType": {
+                    "type": "string",
+                    "description": "自定义类型"
+                  },
+                  "saveDetailList": {
+                    "type": "string",
+                    "description": "配置详情列表（JSON 字符串）"
+                  },
+                  "originalCode": {
+                    "type": "string",
+                    "description": "来源编号"
+                  },
+                  "controlledNo": {
+                    "type": "string",
+                    "description": "受控号"
+                  },
+                  "pid": {
+                    "type": "string"
+                  },
+                  "pname": {
+                    "type": "string"
+                  },
+                  "loginId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "保存结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "errorDesc": {
+                      "type": "string"
+                    },
+                    "errorCtx": {
+                      "type": "object",
+                      "properties": {}
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/ocExperiment/getDynamicColumns": {
+      "post": {
+        "summary": "原始计算界面进入",
+        "deprecated": false,
+        "description": "传入样品项目ID列表（逗号分隔），返回该项目组所需的动态字段配置（如空白浓度、体积等）。",
+        "operationId": "getDynamicColumns",
+        "tags": [
+          "检测数据录入"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sampleProjectIds": {
+                    "type": "string",
+                    "description": "样品项目ID列表，多个用英文逗号分隔",
+                    "examples": [
+                      "12345,12346,12347"
+                    ],
+                    "example": "12345,12346,12347"
+                  },
+                  "experimentCode": {
+                    "type": "string",
+                    "description": "实验代码（可选，通常传空字符串）",
+                    "examples": [
+                      ""
+                    ],
+                    "example": ""
+                  },
+                  "pid": {
+                    "type": "integer",
+                    "description": "登录用户的组织ID（项目ID）",
+                    "examples": [
+                      377
+                    ],
+                    "example": 377
+                  },
+                  "pname": {
+                    "type": "string",
+                    "description": "登录用户名",
+                    "examples": [
+                      "admin"
+                    ],
+                    "example": "admin"
+                  },
+                  "loginId": {
+                    "type": "integer",
+                    "description": "登录ID（通常与pid相同）",
+                    "examples": [
+                      377
+                    ],
+                    "example": 377
+                  }
+                },
+                "required": [
+                  "sampleProjectIds",
+                  "pid",
+                  "pname",
+                  "loginId"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "成功返回动态列配置列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetDynamicColumnsResponse"
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "请求参数错误",
+            "headers": {}
+          },
+          "401": {
+            "description": "未授权（未登录或会话失效）",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/ocExperiment/saveOcExperiment": {
+      "post": {
+        "summary": "提交实验数据",
+        "deprecated": false,
+        "description": "提交一批分析记录（支持多项目，同一实验代码）",
+        "operationId": "saveOcExperiment",
+        "tags": [
+          "检测数据录入"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OcExperimentSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "提交结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "是否成功"
+                    },
+                    "errorCtx": {
+                      "type": "object",
+                      "description": "错误上下文（失败时返回）",
+                      "properties": {
+                        "errorCode": {
+                          "type": "string"
+                        },
+                        "errorMsg": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/resultCheckIn/batchSaveObj": {
+      "post": {
+        "summary": "批量登记检测结果",
+        "deprecated": false,
+        "description": "对选定的未登记样品批量填写检测值。\n**注意**：登记成功后，还需要调用签名确认接口完成整个流程。\n",
+        "operationId": "batchCheckIn",
+        "tags": [
+          "审核与登记"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchSaveRequest"
+              },
+              "examples": {
+                "登记单个样品": {
+                  "value": {
+                    "beans": [
+                      {
+                        "id": 123456,
+                        "methodId": 789,
+                        "reportVal": "0.125",
+                        "meteringUnit": "mg/(m²·h)",
+                        "detectionLimit": "0.005",
+                        "remark": "养护天数28d"
+                      }
+                    ],
+                    "pid": "{{pid}}",
+                    "pname": "{{pname}}",
+                    "loginId": "{{loginId}}"
+                  },
+                  "summary": "登记一个释放速率样品"
+                },
+                "登记多个样品": {
+                  "value": {
+                    "beans": [
+                      {
+                        "id": 123456,
+                        "methodId": 789,
+                        "temperature": "25.0",
+                        "humidity": "50",
+                        "reportVal": "0.125",
+                        "meteringUnit": "mg/(m²·h)",
+                        "detectionLimit": "0.005"
+                      },
+                      {
+                        "id": 123457,
+                        "methodId": 790,
+                        "reportVal": "0.089",
+                        "meteringUnit": "mg/(m²·h)",
+                        "detectionLimit": "0.005"
+                      }
+                    ],
+                    "pid": "{{pid}}",
+                    "pname": "{{pname}}",
+                    "loginId": "{{loginId}}"
+                  },
+                  "summary": "登记多个样品（含完整字段）"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "登记结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                },
+                "example": {
+                  "success": true,
+                  "errorCtx": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未登录或会话过期",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/resultCheckIn/autograph": {
+      "post": {
+        "summary": "签名确认已登记的数据",
+        "deprecated": false,
+        "description": "对已经批量登记的数据进行电子签名确认。\n**前置条件**：必须先成功调用批量登记接口。\n",
+        "operationId": "autograph",
+        "tags": [
+          "审核与登记"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "string",
+                    "description": "需要确认的登记记录ID，多个ID用英文逗号分隔。\n**必须从查询未登记项目接口返回结果的 `id` 字段获取**。\n示例占位符：`{{ids}}`\n",
+                    "examples": [
+                      "{{ids}}"
+                    ],
+                    "example": "{{ids}}"
+                  },
+                  "_method": {
+                    "type": "string",
+                    "description": "覆盖HTTP方法，固定为 PUT",
+                    "default": "PUT",
+                    "examples": [
+                      "PUT"
+                    ],
+                    "example": "PUT"
+                  },
+                  "pid": {
+                    "type": "integer",
+                    "description": "用户PID，动态获取（同批量登记）",
+                    "examples": [
+                      "{{pid}}"
+                    ],
+                    "example": "{{pid}}"
+                  },
+                  "pname": {
+                    "type": "string",
+                    "description": "用户名，动态获取",
+                    "examples": [
+                      "{{pname}}"
+                    ],
+                    "example": "{{pname}}"
+                  },
+                  "loginId": {
+                    "type": "integer",
+                    "description": "登录ID，动态获取",
+                    "examples": [
+                      "{{loginId}}"
+                    ],
+                    "example": "{{loginId}}"
+                  }
+                },
+                "required": [
+                  "ids",
+                  "_method",
+                  "pid",
+                  "pname",
+                  "loginId"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "签名结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                },
+                "example": {
+                  "success": true,
+                  "errorCtx": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未登录或会话过期",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/detectionProject/pageObj": {
+      "get": {
+        "summary": "检测项目查询（支持关键词/CAS号）",
+        "deprecated": false,
+        "description": "根据关键词（如 CAS 号、项目名称）搜索检测方法。\n支持分页，返回匹配的项目列表。\n",
+        "tags": [
+          "检测项目管理"
+        ],
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "description": "搜索关键词，支持项目名称、CAS号等。采用模糊匹配。",
+            "required": true,
+            "example": "67-56-1",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页记录数，最大不超过 500（建议 100）",
+            "required": false,
+            "example": 100,
+            "schema": {
+              "type": "integer",
+              "default": 100
+            }
+          },
+          {
+            "name": "pageNo",
+            "in": "query",
+            "description": "页码，从 1 开始",
+            "required": false,
+            "example": 1,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "developStatus",
+            "in": "query",
+            "description": "开发状态，固定为 YES（已验证方法）",
+            "required": false,
+            "example": "YES",
+            "schema": {
+              "type": "string",
+              "default": "YES"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "检测方法状态，VALID 表示有效",
+            "required": false,
+            "example": "DETECTION_METHOD_STATUS_VALID",
+            "schema": {
+              "type": "string",
+              "default": "DETECTION_METHOD_STATUS_VALID"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "description": "项目所属部门/用户标识，示例值为 377",
+            "required": true,
+            "example": "377",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pname",
+            "in": "query",
+            "description": "项目所属人缩写，示例值为 cym",
+            "required": true,
+            "example": "cym",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loginId",
+            "in": "query",
+            "description": "登录用户 ID，通常与 pid 相同",
+            "required": true,
+            "example": "377",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "_search",
+            "in": "query",
+            "description": "是否为高级搜索模式，固定 false",
+            "required": false,
+            "example": "false",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "nd",
+            "in": "query",
+            "description": "时间戳（毫秒），用于防止缓存",
+            "required": false,
+            "example": 1715234567890,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "sidx",
+            "in": "query",
+            "description": "排序字段名，可为空字符串",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "default": ""
+            }
+          },
+          {
+            "name": "sord",
+            "in": "query",
+            "description": "排序方向（asc 升序 / desc 降序）",
+            "required": false,
+            "example": "asc",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回检测项目列表（可能包含多种数据结构）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "请求是否成功"
+                    },
+                    "errorMsg": {
+                      "type": "string",
+                      "description": "当 success 为 false 时的错误信息"
+                    },
+                    "resultData": {
+                      "type": "object",
+                      "description": "主要数据容器",
+                      "properties": {
+                        "voList": {
+                          "type": "array",
+                          "description": "项目列表（标准结构）",
+                          "items": {
+                            "$ref": "#/components/schemas/DetectionProject"
+                          }
+                        },
+                        "rows": {
+                          "type": "array",
+                          "description": "项目列表（兼容 jqGrid 风格）",
+                          "items": {
+                            "$ref": "#/components/schemas/DetectionProject"
+                          }
+                        },
+                        "total": {
+                          "type": "integer",
+                          "description": "总记录数"
+                        }
+                      }
+                    },
+                    "rows": {
+                      "type": "array",
+                      "description": "项目列表（直接返回，兼容旧版）",
+                      "items": {
+                        "$ref": "#/components/schemas/DetectionProject"
+                      }
+                    },
+                    "data": {
+                      "type": "array",
+                      "description": "项目列表（另一种兼容格式）",
+                      "items": {
+                        "$ref": "#/components/schemas/DetectionProject"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "resultData": {
+                    "voList": [
+                      {
+                        "id": "1001",
+                        "name": "甲醇含量测定",
+                        "standardNo": "GB/T 12345-2020",
+                        "detectionMethodInfo": {}
+                      }
+                    ],
+                    "total": 1
+                  }
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "请求参数错误（如缺少必填参数）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未认证或会话已过期，需重新登录",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "headers": {}
+          },
+          "500": {
+            "description": "服务器内部错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/process/listJson": {
+      "get": {
+        "summary": "流程查询",
+        "deprecated": false,
+        "description": "根据检测ID查询各阶段及步骤的状态与完成时间",
+        "operationId": "getProcessFlow",
+        "tags": [
+          "流程跟踪"
+        ],
+        "parameters": [
+          {
+            "name": "detectionId",
+            "in": "query",
+            "description": "检测项目ID",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "description": "用户PID（登录后获取）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pname",
+            "in": "query",
+            "description": "用户名",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loginId",
+            "in": "query",
+            "description": "登录ID（同pid）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "_",
+            "in": "query",
+            "description": "时间戳毫秒数，用于防缓存",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回流程阶段树",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "resultData": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ProcessStage"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "resultData": [
+                    {
+                      "name": "样品接收",
+                      "child": [
+                        {
+                          "name": "登记",
+                          "status": "已完成",
+                          "success_time": "2026-01-15 09:05:00"
+                        },
+                        {
+                          "name": "核对",
+                          "status": "已完成",
+                          "success_time": "2026-01-15 09:20:00"
+                        }
+                      ]
+                    },
+                    {
+                      "name": "检测任务分配",
+                      "child": [
+                        {
+                          "name": "分配人员",
+                          "status": "进行中",
+                          "success_time": null
+                        }
+                      ]
+                    },
+                    {
+                      "name": "数据审核",
+                      "child": [
+                        {
+                          "name": "一审",
+                          "status": "未开始",
+                          "success_time": null
+                        }
+                      ]
+                    }
+                  ],
+                  "errorCtx": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/resultCheckIn/pagePCObjAndSample": {
+      "get": {
+        "summary": "登记界面 查询样品及项目信息",
+        "deprecated": false,
+        "description": "该接口主要用于验证会话是否有效（通过传一个测试关键字 \"test\" 并检查返回 success）。\n实际查询样品信息时也使用此接口，参数更丰富。\n",
+        "operationId": "pagePCObjAndSampleForVerify",
+        "tags": [
+          "样品查询"
+        ],
+        "parameters": [
+          {
+            "name": "_search",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "false"
+            }
+          },
+          {
+            "name": "nd",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageNo",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "sidx",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": ""
+            }
+          },
+          {
+            "name": "sord",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            }
+          },
+          {
+            "name": "acceptStartDate",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "收样开始日期（会话验证时传当天）"
+            }
+          },
+          {
+            "name": "acceptEndDate",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "收样结束日期"
+            }
+          },
+          {
+            "name": "retrievalWay",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "decideProjectName"
+            }
+          },
+          {
+            "name": "decideProjectOrgId",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "23"
+            }
+          },
+          {
+            "name": "checkInStatus",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "CHECK_IN_STATUS_NO"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "查询关键字（会话验证时传 \"test\"）",
+              "examples": [
+                "test"
+              ]
+            }
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pname",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loginId",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "resultData": {
+                      "type": "object",
+                      "properties": {
+                        "voList": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {}
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/resultCheckIn/pageAuditAll": {
+      "get": {
+        "summary": "查询未审核项目列表",
+        "deprecated": false,
+        "description": "根据日期范围、分页及用户信息获取未登记的检测项目",
+        "operationId": "getUnauditedProjects",
+        "tags": [
+          "未审核项目"
+        ],
+        "parameters": [
+          {
+            "name": "_search",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "false"
+            }
+          },
+          {
+            "name": "nd",
+            "in": "query",
+            "description": "当前时间戳毫秒数",
+            "required": true,
+            "example": "1704067200000",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "default": 500
+            }
+          },
+          {
+            "name": "pageNo",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "sidx",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": ""
+            }
+          },
+          {
+            "name": "sord",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "asc"
+            }
+          },
+          {
+            "name": "requestStartDate",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "example": "2026-01-01",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "requestEndDate",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "example": "2026-01-31",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "auditStatus",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "AUDIT_UNREVIEWED"
+              ],
+              "default": "AUDIT_UNREVIEWED"
+            }
+          },
+          {
+            "name": "decideProjectOrgName",
+            "in": "query",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "default": "23"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "description": "用户PID（登录后获取）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pname",
+            "in": "query",
+            "description": "用户名",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loginId",
+            "in": "query",
+            "description": "登录ID（同pid）",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回项目列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "resultData": {
+                          "type": "object",
+                          "properties": {
+                            "totalCount": {
+                              "type": "integer"
+                            },
+                            "voList": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/components/schemas/UnauditedProjectItem"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "example": {
+                  "success": true,
+                  "resultData": {
+                    "totalCount": 2,
+                    "voList": [
+                      {
+                        "sampleProject": {
+                          "detectionNo": "D241201",
+                          "sampleName": "饮用水",
+                          "detectionProjectName": "重金属",
+                          "standardNo": "GB/T 5750-2023",
+                          "urgent": {
+                            "value": "否"
+                          },
+                          "requireTime": "2026-01-15 09:30:00",
+                          "detectionId": 123456
+                        },
+                        "processStatus": {
+                          "value": "未登记"
+                        }
+                      },
+                      {
+                        "sampleProject": {
+                          "detectionNo": "D241202",
+                          "sampleName": "废水",
+                          "detectionProjectName": "COD",
+                          "standardNo": "HJ 828-2017",
+                          "urgent": {
+                            "value": "是"
+                          },
+                          "requireTime": "2026-01-15 14:20:00",
+                          "detectionId": 123457
+                        },
+                        "processStatus": {
+                          "value": "未登记"
+                        }
+                      }
+                    ]
+                  },
+                  "errorCtx": null
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/statisticalAnalysis/pageCustomQueryStatistics": {
+      "get": {
+        "summary": "自定义查询-释放速率",
+        "deprecated": false,
+        "description": "根据查询条件获取统计结果，支持分页。\n**注意**：`query` 参数需要先 JSON 序列化，然后进行 URL 编码（UTF-8）。\n在 Apifox 中，可以使用预请求脚本进行编码，或直接手工填写编码后的字符串。\n",
+        "operationId": "pageCustomQueryStatistics",
+        "tags": [
+          "统计分析"
+        ],
+        "parameters": [
+          {
+            "name": "_search",
+            "in": "query",
+            "description": "固定值 false",
+            "required": false,
+            "example": "false",
+            "schema": {
+              "type": "string",
+              "default": "false"
+            }
+          },
+          {
+            "name": "nd",
+            "in": "query",
+            "description": "时间戳毫秒数",
+            "required": true,
+            "example": "1704067200000",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "每页条数",
+            "required": true,
+            "example": 100,
+            "schema": {
+              "type": "integer",
+              "default": 100
+            }
+          },
+          {
+            "name": "pageNo",
+            "in": "query",
+            "description": "页码（从1开始）",
+            "required": true,
+            "example": 1,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "sidx",
+            "in": "query",
+            "description": "排序字段",
+            "required": false,
+            "example": "",
+            "schema": {
+              "type": "string",
+              "default": ""
+            }
+          },
+          {
+            "name": "sord",
+            "in": "query",
+            "description": "排序方向",
+            "required": false,
+            "example": "asc",
+            "schema": {
+              "type": "string",
+              "default": "asc"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "URL 编码的 JSON 字符串。原始 JSON 示例：`{\"acceptStartTime\":\"2026-04-09\",\"acceptEndTime\":\"2026-05-09\"}`\n编码后为：`%7B%22acceptStartTime%22%3A%222026-04-09%22%2C%22acceptEndTime%22%3A%222026-05-09%22%7D`\n",
+            "required": true,
+            "example": "%7B%22acceptStartTime%22%3A%222026-04-09%22%2C%22acceptEndTime%22%3A%222026-05-09%22%7D",
+            "schema": {
+              "type": "string",
+              "description": "URL 编码后的 JSON 查询条件字符串"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "查询名称",
+            "required": true,
+            "example": "自定义查询",
+            "schema": {
+              "type": "string",
+              "default": "自定义查询"
+            }
+          },
+          {
+            "name": "deputyName",
+            "in": "query",
+            "description": "副名称/统计分类",
+            "required": true,
+            "example": "轻工-释放项目统计",
+            "schema": {
+              "type": "string",
+              "default": "轻工-释放项目统计"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "description": "用户PID，**必须从登录会话动态获取**",
+            "required": true,
+            "example": "{{pid}}",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pname",
+            "in": "query",
+            "description": "用户名，**必须从登录会话动态获取**",
+            "required": true,
+            "example": "{{pname}}",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loginId",
+            "in": "query",
+            "description": "登录ID，**必须从登录会话动态获取**",
+            "required": true,
+            "example": "{{loginId}}",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                },
+                "example": {
+                  "success": true,
+                  "resultData": {
+                    "voList": [
+                      {
+                        "detectionNo": "D240501",
+                        "sampleName": "地板样品",
+                        "detectionMethod": "GB/T 43565-2023",
+                        "urgent": "否",
+                        "acceptTime": "2026-04-10 09:00:00",
+                        "inventoryTime": "2026-04-11 14:30:00",
+                        "requireTime": "2026-05-01",
+                        "projectName": "释放速率"
+                      }
+                    ],
+                    "hasNext": false,
+                    "totalCount": 1
+                  },
+                  "errorCtx": null
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "未登录或会话过期",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/consumableReceive": {
+      "post": {
+        "summary": "确认领用耗材",
+        "deprecated": false,
+        "description": "确认领用标准品耗材，创建领用记录。Content-Type 为 form-urlencoded。",
+        "operationId": "receiveConsumable",
+        "tags": [
+          "耗材领用"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "string",
+                    "description": "耗材记录 ID",
+                    "example": ""
+                  },
+                  "num": {
+                    "type": "string",
+                    "description": "领用数量",
+                    "example": ""
+                  },
+                  "receiveDate": {
+                    "type": "string",
+                    "description": "领用日期，格式 yyyy-MM-dd HH:mm:ss",
+                    "example": ""
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "description": "用途",
+                    "example": ""
+                  },
+                  "receiveType": {
+                    "type": "string",
+                    "default": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE",
+                    "example": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE"
+                  },
+                  "receiveUserName": {
+                    "type": "string",
+                    "description": "领用人姓名",
+                    "example": ""
+                  },
+                  "isLevelTwo": {
+                    "type": "string",
+                    "default": "NO",
+                    "example": "NO"
+                  },
+                  "pid": {
+                    "type": "string",
+                    "example": ""
+                  },
+                  "pname": {
+                    "type": "string",
+                    "example": ""
+                  },
+                  "loginId": {
+                    "type": "string",
+                    "example": ""
+                  }
+                },
+                "required": [
+                  "ids",
+                  "num"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "领用结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "errorDesc": {
+                      "type": "string"
+                    },
+                    "errorCtx": {
+                      "type": "object",
+                      "properties": {}
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "x-apifox-delete": {
+          "summary": "删除领用记录",
+          "description": "使用 POST + _method=DELETE 模拟删除领用记录。ids 为领用记录 ID（逗号分隔）。",
+          "requestBody": {
+            "content": {
+              "application/x-www-form-urlencoded": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ids": {
+                      "type": "string",
+                      "description": "领用记录 ID（逗号分隔）"
+                    },
+                    "_method": {
+                      "type": "string",
+                      "default": "DELETE"
+                    },
+                    "pid": {
+                      "type": "string"
+                    },
+                    "pname": {
+                      "type": "string"
+                    },
+                    "loginId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/detectionManager/manager/dtSolutionConfigure/getSolutionAdata": {
+      "get": {
+        "summary": "分页查询已配置溶液",
+        "deprecated": false,
+        "description": "按类型、名称、编号、操作人、审核状态等条件分页查询已配置的溶液记录。type 参数区分溶液类型：SOLUTION_TYPE_B(储备液)、SOLUTION_TYPE_C(应用液)、SOLUTION_TYPE_D(工作液)、SOLUTION_TYPE_E(混合查询)。",
+        "operationId": "listSolutionConfig",
+        "tags": [
+          "溶液配置"
+        ],
+        "parameters": [
+          {
+            "name": "_search",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "false"
+            }
+          },
+          {
+            "name": "nd",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageNo",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "sidx",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sord",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "asc"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "溶液类型：SOLUTION_TYPE_B / SOLUTION_TYPE_C / SOLUTION_TYPE_D / SOLUTION_TYPE_E",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "solutionName",
+            "in": "query",
+            "description": "溶液名称（模糊匹配）",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "solutionCode",
+            "in": "query",
+            "description": "自编号（精确匹配）",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "customType",
+            "in": "query",
+            "description": "自定义类型（如 TSCA）",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "configStatus",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "0"
+            }
+          },
+          {
+            "name": "controlledNo",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "storageLocation",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "configureStartDate",
+            "in": "query",
+            "description": "配置日期起（yyyy-MM-dd）",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "configureEndDate",
+            "in": "query",
+            "description": "配置日期止（yyyy-MM-dd）",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "configureUserName",
+            "in": "query",
+            "description": "配置人",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "receiveUserName",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "auditStatus",
+            "in": "query",
+            "description": "审核状态：1=已审核，0=未审核",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "1"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pname",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loginId",
+            "in": "query",
+            "description": "",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "溶液列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "resultData": {
+                      "type": "object",
+                      "properties": {
+                        "voList": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {}
+                          }
+                        },
+                        "totalCount": {
+                          "type": "integer"
+                        },
+                        "hasNext": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/dtSolutionConfigure/viewDtSolutionConfigure": {
+      "get": {
+        "summary": "查看溶液配置详情",
+        "deprecated": false,
+        "description": "根据 ID 和类型获取溶液配置的完整详情，包括 detailList。type 参数：B/C 类用 SOLUTION_TYPE_E，D 类用 SOLUTION_TYPE_D。",
+        "operationId": "viewSolutionDetail",
+        "tags": [
+          "溶液配置"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "溶液配置记录 ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "类型：SOLUTION_TYPE_E(B/C) / SOLUTION_TYPE_D(D)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "配置详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "resultData": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "solutionName": {
+                          "type": "string"
+                        },
+                        "solutionCode": {
+                          "type": "string"
+                        },
+                        "configureOrder": {
+                          "type": "string"
+                        },
+                        "configureDate": {
+                          "type": "string"
+                        },
+                        "validityDate": {
+                          "type": "string"
+                        },
+                        "detailList": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {}
+                          },
+                          "description": "配置详情列表"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/dtSolutionConfigure/detail": {
+      "get": {
+        "summary": "获取溶液配置详情（备用）",
+        "deprecated": false,
+        "description": "通过 detail 接口获取配置详情。当 viewDtSolutionConfigure 返回的 detailList 为空时作为备用。",
+        "operationId": "getSolutionDetailFallback",
+        "tags": [
+          "溶液配置"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "溶液配置记录 ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "详情数据（结构同 viewDtSolutionConfigure）",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/dtSolutionConfigure/updateObj1": {
+      "post": {
+        "summary": "修改溶液配置",
+        "deprecated": false,
+        "description": "修改已保存的溶液配置记录。需传入完整 payload（包含 id），系统校验权限：只有配置人本人且未审核的记录才可修改（管理员除外）。",
+        "operationId": "updateSolution",
+        "tags": [
+          "溶液配置"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "integer",
+                    "description": "溶液配置记录 ID"
+                  },
+                  "solutionName": {
+                    "type": "string"
+                  },
+                  "solutionCode": {
+                    "type": "string"
+                  },
+                  "configureOrder": {
+                    "type": "string"
+                  },
+                  "saveDetailList": {
+                    "type": "string",
+                    "description": "配置详情列表（JSON 字符串）"
+                  },
+                  "pid": {
+                    "type": "string"
+                  },
+                  "pname": {
+                    "type": "string"
+                  },
+                  "loginId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "修改结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "errorDesc": {
+                      "type": "string"
+                    },
+                    "errorCtx": {
+                      "type": "object",
+                      "properties": {}
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/dtSolutionConfigure/delById": {
+      "post": {
+        "summary": "删除溶液配置",
+        "deprecated": false,
+        "description": "根据 ID 删除溶液配置记录。使用 form-urlencoded 格式，ids 可逗号分隔删除多条。",
+        "operationId": "deleteSolution",
+        "tags": [
+          "溶液配置"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "string",
+                    "description": "记录 ID（逗号分隔）",
+                    "example": ""
+                  },
+                  "type": {
+                    "type": "string",
+                    "description": "溶液类型",
+                    "example": ""
+                  },
+                  "pid": {
+                    "type": "string",
+                    "example": ""
+                  },
+                  "pname": {
+                    "type": "string",
+                    "example": ""
+                  },
+                  "loginId": {
+                    "type": "string",
+                    "example": ""
+                  }
+                },
+                "required": [
+                  "ids",
+                  "type"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "删除结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "errorDesc": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/detectionManager/manager/dtSolutionConfigure/solutionCodeCheck": {
+      "get": {
+        "summary": "检查自编号唯一性",
+        "deprecated": false,
+        "description": "检查溶液自编号是否已存在，用于保存前的唯一性校验。",
+        "operationId": "checkSolutionCode",
+        "tags": [
+          "溶液配置"
+        ],
+        "parameters": [
+          {
+            "name": "solutionCode",
+            "in": "query",
+            "description": "待检查的自编号",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "检查结果",
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "webhooks": {},
+  "components": {
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "业务是否成功"
+          },
+          "errorCtx": {
+            "$ref": "#/components/schemas/ErrorContext"
+          },
+          "resultData": {
+            "type": "object",
+            "description": "业务数据（具体结构视接口而定）",
+            "properties": {}
+          }
+        }
+      },
+      "UserInfoResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "resultData": {
+            "type": "object",
+            "properties": {
+              "userInfo": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "realName": {
+                    "type": "string"
+                  },
+                  "nickName": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "OcExperimentSaveRequest": {
+        "type": "object",
+        "required": [
+          "experimentCode",
+          "sampleProjectIds2",
+          "newSampleProjectIds",
+          "fileCode",
+          "temperature",
+          "humidity",
+          "detectionMethod",
+          "startTime",
+          "endTime",
+          "ocAnalysisRecordSaveList",
+          "pid",
+          "pname",
+          "loginId"
+        ],
+        "properties": {
+          "experimentCode": {
+            "type": "string",
+            "description": "实验唯一编号（同一批次的多个项目共用）",
+            "examples": [
+              "admin20250509143022"
+            ]
+          },
+          "sampleProjectIds2": {
+            "type": "string",
+            "description": "样品项目ID（逗号分隔字符串）",
+            "examples": [
+              "12345"
+            ]
+          },
+          "newSampleProjectIds": {
+            "type": "string",
+            "description": "新项目ID（通常与 sampleProjectIds2 相同）",
+            "examples": [
+              "12345"
+            ]
+          },
+          "fileCode": {
+            "type": "string",
+            "description": "样品编号（样品唯一标识）",
+            "examples": [
+              "TS25100593011"
+            ]
+          },
+          "temperature": {
+            "type": "number",
+            "format": "float",
+            "description": "温度（℃）",
+            "examples": [
+              25
+            ]
+          },
+          "humidity": {
+            "type": "number",
+            "format": "float",
+            "description": "湿度（%RH）",
+            "examples": [
+              50
+            ]
+          },
+          "startTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "实验开始时间",
+            "examples": [
+              "2025-05-09 09:00:00"
+            ]
+          },
+          "endTime": {
+            "type": "string",
+            "format": "date-time",
+            "description": "实验结束时间",
+            "examples": [
+              "2025-05-09 18:00:00"
+            ]
+          },
+          "detectionMethod": {
+            "type": "object",
+            "required": [
+              "standardNo",
+              "id"
+            ],
+            "properties": {
+              "standardNo": {
+                "type": "string",
+                "description": "检测方法标准号",
+                "examples": [
+                  "GB/T 12345-2020"
+                ]
+              },
+              "id": {
+                "type": "integer",
+                "description": "检测方法ID",
+                "examples": [
+                  2431
+                ]
+              },
+              "subMethodName": {
+                "type": "string",
+                "description": "子方法名称（可选）",
+                "examples": [
+                  null
+                ]
+              }
+            }
+          },
+          "referenceMaterial": {
+            "type": "string",
+            "description": "参考物质",
+            "examples": [
+              "邻苯二甲酸酯混合标准溶液"
+            ]
+          },
+          "standardStrain": {
+            "type": "string",
+            "description": "标准菌株",
+            "examples": [
+              "大肠埃希氏菌 ATCC 25922"
+            ]
+          },
+          "reagent": {
+            "type": "string",
+            "description": "试剂",
+            "examples": [
+              null
+            ]
+          },
+          "cultureMedium": {
+            "type": "string",
+            "description": "培养基",
+            "examples": [
+              null
+            ]
+          },
+          "reagentId": {
+            "type": "string",
+            "description": "试剂ID",
+            "examples": [
+              ""
+            ]
+          },
+          "titrationSolution": {
+            "type": "string",
+            "description": "滴定溶液",
+            "examples": [
+              null
+            ]
+          },
+          "computingFormula": {
+            "type": "string",
+            "description": "计算公式",
+            "examples": [
+              "X=(C1-C0)*V*F/(m*10000)"
+            ]
+          },
+          "weighingEquipment": {
+            "type": "object",
+            "description": "称量设备",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "examples": [
+              {
+                "name": ""
+              }
+            ]
+          },
+          "weighingEquipmentJson": {
+            "type": "string",
+            "description": "称量设备JSON",
+            "examples": [
+              null
+            ]
+          },
+          "cultivationEquipment": {
+            "type": "string",
+            "description": "培养设备",
+            "examples": [
+              ""
+            ]
+          },
+          "cultivationEquipmentJson": {
+            "type": "string",
+            "examples": [
+              ""
+            ]
+          },
+          "titrationEquipment": {
+            "type": "string",
+            "description": "滴定设备",
+            "examples": [
+              ""
+            ]
+          },
+          "titrationEquipmentJson": {
+            "type": "string",
+            "examples": [
+              ""
+            ]
+          },
+          "mainEquipment": {
+            "type": "string",
+            "description": "主要设备（JSON数组字符串）",
+            "examples": [
+              "[]"
+            ]
+          },
+          "mainEquipmentNames": {
+            "type": "string",
+            "description": "主要设备名称",
+            "examples": [
+              ""
+            ]
+          },
+          "mainEquipmentIds": {
+            "type": "string",
+            "description": "主要设备ID",
+            "examples": [
+              ""
+            ]
+          },
+          "ocCurve": {
+            "type": "object",
+            "description": "标准曲线信息",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "equation": {
+                "type": "string"
+              },
+              "correlationCoefficient": {
+                "type": "string"
+              },
+              "slope": {
+                "type": "string"
+              },
+              "intercept": {
+                "type": "string"
+              }
+            },
+            "examples": [
+              {
+                "id": "",
+                "equation": "",
+                "correlationCoefficient": "",
+                "slope": "",
+                "intercept": ""
+              }
+            ]
+          },
+          "ocCurveSaveList": {
+            "type": "string",
+            "description": "曲线保存列表（JSON字符串）",
+            "examples": [
+              "[]"
+            ]
+          },
+          "ocMethodSettings": {
+            "type": "object",
+            "description": "OC方法设置",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "curveCalcMethod": {
+                "type": "string"
+              },
+              "curveXCalc": {
+                "type": "string"
+              },
+              "curveYCalc": {
+                "type": "string"
+              },
+              "curveCalcXyReverse": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "isCalculatedValue": {
+                "type": "integer"
+              },
+              "sampleEvaluate": {
+                "type": "integer"
+              },
+              "reportUnit": {
+                "type": "integer"
+              },
+              "isOptionalTable": {
+                "type": "integer"
+              },
+              "calculatedValueWidth": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "calculatedUnitWidth": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "reportValueWidth": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "reportUnitWidth": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "isRepeatabilityLimit": {
+                "type": "integer"
+              },
+              "associatedRecords": {
+                "type": "integer"
+              }
+            },
+            "examples": [
+              {
+                "id": 2438,
+                "curveCalcMethod": "STANDARD_CALC",
+                "curveXCalc": "X_CALC_AVG",
+                "curveYCalc": "Y_CALC_AVG",
+                "curveCalcXyReverse": null,
+                "isCalculatedValue": 1,
+                "sampleEvaluate": 0,
+                "reportUnit": 1,
+                "isOptionalTable": 0,
+                "calculatedValueWidth": null,
+                "calculatedUnitWidth": null,
+                "reportValueWidth": null,
+                "reportUnitWidth": null,
+                "isRepeatabilityLimit": 0,
+                "associatedRecords": 0
+              }
+            ]
+          },
+          "roundMethod": {
+            "type": "string",
+            "description": "修约方法",
+            "examples": [
+              "ROUND_METHOD_ENUM_2,3,ROUND_KEEP_ENUM_2"
+            ]
+          },
+          "roundMethodLevelJson": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "examples": [
+              null
+            ]
+          },
+          "calcMethod": {
+            "type": "string",
+            "description": "计算方法",
+            "examples": [
+              "CALC_METHOD_ENUM_AVG"
+            ]
+          },
+          "resultRoundMethod": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resultRoundMethodLevelJson": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "spectrumJsonList": {
+            "type": "string",
+            "description": "谱图文件列表（JSON字符串）",
+            "examples": [
+              ""
+            ]
+          },
+          "recoverySpectrumJsonList": {
+            "type": "string",
+            "examples": [
+              ""
+            ]
+          },
+          "fileIds": {
+            "type": "string",
+            "description": "文件ID列表",
+            "examples": [
+              ""
+            ]
+          },
+          "dynamicColumns": {
+            "type": "string",
+            "description": "动态列配置（JSON字符串）",
+            "examples": [
+              "[{\"fieldName\":\"空白浓度\",\"fieldCode\":\"dynamic3579\"}]"
+            ]
+          },
+          "ocAnalysisRecordSaveList": {
+            "type": "string",
+            "description": "分析记录列表的JSON字符串，结构见 OcAnalysisRecord 定义",
+            "examples": [
+              "[{\"id\":1,\"sampleCode\":\"TS25100593011\",\"projectName\":\"邻苯二甲酸酯\",...}]"
+            ]
+          },
+          "experimentProcess": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "methodDescription": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "otherDescription": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "userId": {
+            "type": "string"
+          },
+          "detectionMethodEquipmentBills": {
+            "type": "array",
+            "items": {}
+          },
+          "consumableReceiveIds": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "titrationConsumableReceiveIds": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "emptyColonyCountList": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "compareColonyCountList": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "selfColonyCountList": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "emptySampleColonyCountList": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "negativeColonyCountList": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "keepSampleColonyCountList": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "curveCheckColonyCountList": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "jcxTestColonyCountList": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "materialColonyCountList": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "methodCheckCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "configureJsonList": {
+            "type": "string",
+            "examples": [
+              "[]"
+            ]
+          },
+          "configureDJsonList": {
+            "type": "string",
+            "examples": [
+              "[]"
+            ]
+          },
+          "configureSJsonList": {
+            "type": "string",
+            "examples": [
+              "[]"
+            ]
+          },
+          "selfRecoverySaveList": {
+            "type": "string",
+            "examples": [
+              "[]"
+            ]
+          },
+          "emptyRecoverySaveList": {
+            "type": "string",
+            "examples": [
+              "[]"
+            ]
+          },
+          "negativeRecoverySaveList": {
+            "type": "string",
+            "examples": [
+              "[]"
+            ]
+          },
+          "npecompareRecoverySaveList": {
+            "type": "string",
+            "examples": [
+              "[]"
+            ]
+          },
+          "materialRecoverySaveList": {
+            "type": "string",
+            "examples": [
+              "[]"
+            ]
+          },
+          "curveCheckRecoverySaveList": {
+            "type": "string",
+            "examples": [
+              "[]"
+            ]
+          },
+          "emptyTestRecoverySaveList": {
+            "type": "string",
+            "examples": [
+              "[]"
+            ]
+          },
+          "keepSampleRecoverySaveList": {
+            "type": "string",
+            "examples": [
+              "[]"
+            ]
+          },
+          "jcxTestRecoverySaveList": {
+            "type": "string",
+            "examples": [
+              "[]"
+            ]
+          },
+          "oldSampleProjectId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "原样品项目ID（注销复测时使用）"
+          },
+          "detectionProjectName": {
+            "type": "string",
+            "description": "检测项目名称"
+          },
+          "KeyTime": {
+            "type": "string",
+            "examples": [
+              ""
+            ]
+          },
+          "pid": {
+            "type": "integer",
+            "description": "创建人ID（组织ID）"
+          },
+          "pname": {
+            "type": "string",
+            "description": "创建人姓名"
+          },
+          "loginId": {
+            "type": "integer",
+            "description": "登录ID（通常同pid）"
+          }
+        }
+      },
+      "GetDynamicColumnsRequest": {
+        "type": "object",
+        "required": [
+          "sampleProjectIds",
+          "pid",
+          "pname",
+          "loginId"
+        ],
+        "properties": {
+          "sampleProjectIds": {
+            "type": "string",
+            "description": "样品项目ID列表，多个用英文逗号分隔",
+            "examples": [
+              "12345,12346,12347"
+            ]
+          },
+          "experimentCode": {
+            "type": "string",
+            "description": "实验代码（可选，通常传空字符串）",
+            "examples": [
+              ""
+            ]
+          },
+          "pid": {
+            "type": "integer",
+            "description": "登录用户的组织ID（项目ID）",
+            "examples": [
+              377
+            ]
+          },
+          "pname": {
+            "type": "string",
+            "description": "登录用户名",
+            "examples": [
+              "admin"
+            ]
+          },
+          "loginId": {
+            "type": "integer",
+            "description": "登录ID（通常与pid相同）",
+            "examples": [
+              377
+            ]
+          }
+        }
+      },
+      "SampleProjectVo": {
+        "type": "object",
+        "description": "样品检测项目视图对象（一条记录代表一个样品下的一个检测项目）",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "记录ID（即样品项目ID sampleProjectId）"
+          },
+          "sampleId": {
+            "type": "string",
+            "description": "样品ID"
+          },
+          "detectionNo": {
+            "type": "string",
+            "description": "检测编号"
+          },
+          "smallNo": {
+            "type": "string",
+            "description": "样品小号"
+          },
+          "sampleName": {
+            "type": "string",
+            "description": "样品名称"
+          },
+          "decideProjectName": {
+            "type": "string",
+            "description": "检测项目名称"
+          },
+          "standardNo": {
+            "type": "string",
+            "description": "检测方法标准号"
+          },
+          "laboratoryNo": {
+            "type": "string",
+            "description": "实验室编号"
+          },
+          "oldSampleProjectId": {
+            "type": "string",
+            "description": "原样品项目ID（用于注销复测）"
+          },
+          "acceptDate": {
+            "type": "string",
+            "format": "date-time",
+            "description": "收样日期"
+          },
+          "checkInStatus": {
+            "type": "string",
+            "description": "录入状态"
+          }
+        }
+      },
+      "DetectionProject": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "项目唯一标识",
+            "examples": [
+              "1001"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "检测项目名称",
+            "examples": [
+              "甲醇含量测定"
+            ]
+          },
+          "standardNo": {
+            "type": "string",
+            "description": "检测标准编号",
+            "examples": [
+              "GB/T 12345-2020"
+            ]
+          },
+          "detectionMethodInfo": {
+            "type": "object",
+            "description": "检测方法详细信息（扩展字段，具体结构依业务而定）",
+            "properties": {}
+          }
+        },
+        "additionalProperties": true
+      },
+      "BaseResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "请求是否成功"
+          },
+          "errorCtx": {
+            "type": "object",
+            "properties": {
+              "errorMsg": {
+                "type": "string"
+              },
+              "errorCode": {
+                "type": "string"
+              }
+            }
+          },
+          "resultData": {
+            "type": "object",
+            "description": "分页数据",
+            "properties": {
+              "voList": {
+                "type": "array",
+                "description": "数据列表",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {}
+                }
+              },
+              "hasNext": {
+                "type": "boolean",
+                "description": "是否有下一页"
+              },
+              "totalCount": {
+                "type": "integer",
+                "description": "总记录数"
+              }
+            }
+          }
+        }
+      },
+      "CommonResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "resultData": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {}
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "errorCtx": {
+            "type": "object",
+            "properties": {
+              "errorMsg": {
+                "type": "string"
+              },
+              "errorCode": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "ErrorContext": {
+        "type": "object",
+        "properties": {
+          "errorCode": {
+            "type": "string"
+          },
+          "errorMsg": {
+            "type": "string"
+          }
+        }
+      },
+      "OcAnalysisRecord": {
+        "type": "object",
+        "description": "单个分析记录（ocAnalysisRecordSaveList 数组元素）",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "记录ID（临时序号）",
+            "examples": [
+              1
+            ]
+          },
+          "createDatetime": {
+            "type": "string",
+            "format": "date-time",
+            "examples": [
+              "2025-05-09 14:30:00"
+            ]
+          },
+          "ocExperiment": {
+            "type": "null"
+          },
+          "serialNumber": {
+            "type": "integer",
+            "examples": [
+              1
+            ]
+          },
+          "sampleId": {
+            "type": "integer",
+            "description": "样品ID",
+            "examples": [
+              10086
+            ]
+          },
+          "sampleCode": {
+            "type": "string",
+            "examples": [
+              "TS25100593011"
+            ]
+          },
+          "sampleName": {
+            "type": "string",
+            "examples": [
+              "PVC粒料"
+            ]
+          },
+          "projectId": {
+            "type": "integer",
+            "description": "项目ID",
+            "examples": [
+              200
+            ]
+          },
+          "projectCode": {
+            "type": "string",
+            "examples": [
+              "200"
+            ]
+          },
+          "projectName": {
+            "type": "string",
+            "examples": [
+              "邻苯二甲酸酯"
+            ]
+          },
+          "originalNumber": {
+            "type": "string",
+            "examples": [
+              "1"
+            ]
+          },
+          "detectionLimit": {
+            "type": "string",
+            "examples": [
+              "0.001"
+            ]
+          },
+          "standardValue": {
+            "type": "string",
+            "examples": [
+              "0.001"
+            ]
+          },
+          "reportValue": {
+            "type": "string",
+            "examples": [
+              "0.001"
+            ]
+          },
+          "reportUnit": {
+            "type": "integer",
+            "examples": [
+              1
+            ]
+          },
+          "reportUnitName": {
+            "type": "string",
+            "examples": [
+              "%"
+            ]
+          },
+          "other": {
+            "type": "string",
+            "examples": [
+              ""
+            ]
+          },
+          "spectrumId": {
+            "type": "null"
+          },
+          "description": {
+            "type": "string",
+            "description": "试样描述",
+            "examples": [
+              "样品溶液"
+            ]
+          },
+          "calculatedValue": {
+            "type": "string",
+            "examples": [
+              "0.001"
+            ]
+          },
+          "calculatedUnit": {
+            "type": "integer",
+            "examples": [
+              1
+            ]
+          },
+          "accuracy": {
+            "type": "string",
+            "examples": [
+              "STANDARD_DEVIATION"
+            ]
+          },
+          "remark": {
+            "type": "string",
+            "examples": [
+              ""
+            ]
+          },
+          "precisionCalcEnumMap": {
+            "type": "string",
+            "description": "JSON字符串，精度计算枚举映射",
+            "examples": [
+              "{\"PROCESS_STATUS_NEEDLESS\":\"不需要\",\"STANDARD_DEVIATION\":\"标准偏差\"}"
+            ]
+          },
+          "ocAnalysisExperimentList": {
+            "type": "null"
+          },
+          "ocCurve": {
+            "type": "null"
+          },
+          "ocCurveSave": {
+            "type": "null"
+          },
+          "ocCurveValueSaveList": {
+            "type": "null"
+          },
+          "sampleProjectId": {
+            "type": "integer",
+            "examples": [
+              200
+            ]
+          },
+          "detectionLimitType": {
+            "type": "string",
+            "examples": [
+              "检出限"
+            ]
+          },
+          "originalNo": {
+            "type": "null"
+          },
+          "standardAndWarningVal": {
+            "type": "null"
+          },
+          "creatorName": {
+            "type": "string",
+            "examples": [
+              "admin"
+            ]
+          },
+          "creatorId": {
+            "type": "integer",
+            "examples": [
+              377
+            ]
+          },
+          "modifierName": {
+            "type": "string",
+            "examples": [
+              "admin"
+            ]
+          },
+          "modifyDatetime": {
+            "type": "string",
+            "format": "date-time",
+            "examples": [
+              "2025-05-09 14:30:00"
+            ]
+          },
+          "dynamic3578": {
+            "type": "string",
+            "description": "试样描述（动态字段）",
+            "examples": [
+              "试样瓶1"
+            ]
+          },
+          "dynamic3579": {
+            "type": "string",
+            "description": "空白浓度C0(μg/mL)",
+            "examples": [
+              "<0.10"
+            ]
+          },
+          "dynamic3580": {
+            "type": "string",
+            "description": "样品浓度C1(μg/mL)",
+            "examples": [
+              "0.25"
+            ]
+          },
+          "dynamic3581": {
+            "type": "string",
+            "description": "体积V(mL)",
+            "examples": [
+              "25.0"
+            ]
+          },
+          "dynamic3582": {
+            "type": "string",
+            "description": "质量m(g)",
+            "examples": [
+              "0.5123"
+            ]
+          },
+          "dynamic3583": {
+            "type": "string",
+            "description": "乘积因子F",
+            "examples": [
+              "1"
+            ]
+          },
+          "selectmap": {
+            "type": "object",
+            "description": "动态字段下拉选项映射",
+            "examples": [
+              {
+                "dynamic3579": [
+                  {
+                    "selectValueName": "<0.10",
+                    "id": 1462
+                  }
+                ]
+              }
+            ],
+            "properties": {}
+          },
+          "detectionNo": {
+            "type": "string",
+            "description": "检测编号",
+            "examples": [
+              "TS25100593"
+            ]
+          },
+          "sampleSmallNo": {
+            "type": "string",
+            "description": "样品小号",
+            "examples": [
+              "011"
+            ]
+          },
+          "detectionProjectName": {
+            "type": "string",
+            "examples": [
+              "邻苯二甲酸酯"
+            ]
+          },
+          "standardNo": {
+            "type": "string",
+            "examples": [
+              "GB/T 12345-2020"
+            ]
+          },
+          "laboratoryNo": {
+            "type": "string",
+            "description": "实验室编号",
+            "examples": [
+              "LAB-01"
+            ]
+          },
+          "oldSampleProjectId": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "detectionNoAndSmallNo": {
+            "type": "string",
+            "examples": [
+              "TS25100593011"
+            ]
+          },
+          "samplePhotos": {
+            "type": "boolean",
+            "examples": [
+              false
+            ]
+          },
+          "sampleEvaluate": {
+            "type": "null"
+          },
+          "sampleRemarkContent": {
+            "type": "string",
+            "examples": [
+              ""
+            ]
+          },
+          "allSelectStatus": {
+            "type": "boolean",
+            "examples": [
+              false
+            ]
+          },
+          "picColorStatus": {
+            "type": "boolean",
+            "examples": [
+              false
+            ]
+          },
+          "cid": {
+            "type": "null"
+          },
+          "_X_ID": {
+            "type": "string",
+            "examples": [
+              "row_8"
+            ]
+          }
+        }
+      },
+      "GetDynamicColumnsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "请求是否成功",
+            "examples": [
+              true
+            ]
+          },
+          "resultData": {
+            "type": "array",
+            "description": "动态列配置列表",
+            "items": {
+              "$ref": "#/components/schemas/DynamicColumn"
+            }
+          },
+          "errorCtx": {
+            "type": "object",
+            "description": "错误上下文（失败时返回）",
+            "properties": {
+              "errorCode": {
+                "type": "string"
+              },
+              "errorMsg": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "固定为 false",
+            "examples": [
+              false
+            ]
+          },
+          "errorMsg": {
+            "type": "string",
+            "description": "错误详细描述",
+            "examples": [
+              "会话已过期，请重新登录"
+            ]
+          }
+        }
+      },
+      "UnauditedProjectItem": {
+        "type": "object",
+        "properties": {
+          "sampleProject": {
+            "type": "object",
+            "properties": {
+              "detectionNo": {
+                "type": "string"
+              },
+              "sampleName": {
+                "type": "string"
+              },
+              "sampleSmallNo": {
+                "type": "string"
+              },
+              "detectionProjectName": {
+                "type": "string"
+              },
+              "standardNo": {
+                "type": "string"
+              },
+              "methodName": {
+                "type": "string"
+              },
+              "urgent": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  }
+                }
+              },
+              "requireTime": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "detectionId": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "oldSampleProjectId": {
+                "type": "string"
+              }
+            }
+          },
+          "processStatus": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "BatchSaveBean": {
+        "type": "object",
+        "required": [
+          "id",
+          "methodId",
+          "reportVal",
+          "meteringUnit",
+          "detectionLimit"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "样品记录ID（从查询接口获取）",
+            "examples": [
+              123456
+            ]
+          },
+          "methodId": {
+            "type": "integer",
+            "description": "检测方法ID（从查询接口获取）",
+            "examples": [
+              789
+            ]
+          },
+          "temperature": {
+            "type": "string",
+            "description": "实验温度（可选）",
+            "examples": [
+              ""
+            ]
+          },
+          "humidity": {
+            "type": "string",
+            "description": "实验湿度（可选）",
+            "examples": [
+              ""
+            ]
+          },
+          "detectionEquipmentName": {
+            "type": "string",
+            "description": "检测设备名称（可选）",
+            "examples": [
+              ""
+            ]
+          },
+          "reportVal": {
+            "type": "string",
+            "description": "检测结果值（必填）",
+            "examples": [
+              "0.125"
+            ]
+          },
+          "meteringUnit": {
+            "type": "string",
+            "description": "计量单位（从查询接口获取或自定义）",
+            "examples": [
+              "mg/(m²·h)"
+            ]
+          },
+          "analyzeStartDate": {
+            "type": "string",
+            "description": "分析开始日期（可选）",
+            "examples": [
+              ""
+            ]
+          },
+          "analyzeEndDate": {
+            "type": "string",
+            "description": "分析结束日期（可选）",
+            "examples": [
+              ""
+            ]
+          },
+          "remark": {
+            "type": "string",
+            "description": "备注信息（如养护天数等）",
+            "examples": [
+              "养护天数28d"
+            ]
+          },
+          "detectionLimit": {
+            "type": "string",
+            "description": "检出限",
+            "examples": [
+              "0.005"
+            ]
+          },
+          "userIds": {
+            "type": "string",
+            "description": "关联的其他用户ID（可选）",
+            "examples": [
+              ""
+            ]
+          }
+        }
+      },
+      "QueryCondition": {
+        "type": "object",
+        "description": "查询条件对象（将被序列化为 JSON 并 URL 编码）",
+        "properties": {
+          "acceptStartTime": {
+            "type": "string",
+            "format": "date",
+            "description": "受理开始日期",
+            "examples": [
+              "2026-04-09"
+            ]
+          },
+          "acceptEndTime": {
+            "type": "string",
+            "format": "date",
+            "description": "受理结束日期",
+            "examples": [
+              "2026-05-09"
+            ]
+          },
+          "detectionProjectName": {
+            "type": "string",
+            "description": "检测项目名称（可选，用于进一步筛选）",
+            "examples": [
+              "释放速率"
+            ]
+          },
+          "sampleName": {
+            "type": "string",
+            "description": "样品名称（可选）",
+            "examples": [
+              "地板"
+            ]
+          }
+        },
+        "examples": [
+          {
+            "acceptStartTime": "2026-04-09",
+            "acceptEndTime": "2026-05-09"
+          }
+        ]
+      },
+      "StandardSubstance": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "validNum": {
+            "type": "number"
+          },
+          "numUnitName": {
+            "type": "string"
+          },
+          "validDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "concentration": {
+            "type": "string"
+          },
+          "purity": {
+            "type": "string"
+          },
+          "concentrationUnitName": {
+            "type": "string"
+          },
+          "batchNo": {
+            "type": "string"
+          },
+          "customNum": {
+            "type": "string"
+          },
+          "storagePositionName": {
+            "type": "string"
+          },
+          "expiryDate": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "UserInfo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "用户PID",
+            "x-alias": "pid"
+          },
+          "realName": {
+            "type": "string",
+            "description": "真实姓名"
+          },
+          "nickName": {
+            "type": "string",
+            "description": "昵称/显示名"
+          },
+          "account": {
+            "type": "string",
+            "description": "登录账号"
+          }
+        }
+      },
+      "DynamicColumn": {
+        "type": "object",
+        "description": "动态列配置项",
+        "properties": {
+          "fieldCode": {
+            "type": "string",
+            "description": "字段编码（如 dynamic3579）",
+            "examples": [
+              "dynamic3579"
+            ]
+          },
+          "fieldName": {
+            "type": "string",
+            "description": "字段显示名称",
+            "examples": [
+              "空白浓度C0(μg/mL)"
+            ]
+          },
+          "dataType": {
+            "type": "string",
+            "description": "数据类型（如 string, number, select）",
+            "examples": [
+              "string"
+            ]
+          },
+          "sort": {
+            "type": "integer",
+            "description": "排序序号",
+            "examples": [
+              1
+            ]
+          },
+          "isRequired": {
+            "type": "boolean",
+            "description": "是否必填",
+            "examples": [
+              false
+            ]
+          },
+          "defaultValue": {
+            "type": "string",
+            "description": "默认值",
+            "examples": [
+              "<0.10"
+            ]
+          },
+          "options": {
+            "type": "array",
+            "description": "选项列表（当 dataType 为 select 时使用）",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            },
+            "examples": [
+              [
+                {
+                  "label": "<0.10",
+                  "value": "<0.10"
+                },
+                {
+                  "label": "0.10-0.20",
+                  "value": "0.10-0.20"
+                }
+              ]
+            ]
+          }
+        }
+      },
+      "ProcessStage": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "child": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcessStep"
+            }
+          }
+        }
+      },
+      "BatchSaveRequest": {
+        "type": "object",
+        "required": [
+          "beans",
+          "pid",
+          "pname",
+          "loginId"
+        ],
+        "properties": {
+          "beans": {
+            "type": "array",
+            "description": "待登记的样品列表",
+            "items": {
+              "$ref": "#/components/schemas/BatchSaveBean"
+            }
+          },
+          "pid": {
+            "type": "integer",
+            "description": "用户PID，**必须从当前登录会话中动态获取**。\n不可硬编码，示例中的 `{{pid}}` 仅为占位符，实际使用时替换为真实值。\n",
+            "examples": [
+              "{{pid}}"
+            ]
+          },
+          "pname": {
+            "type": "string",
+            "description": "用户名，**必须从当前登录会话中动态获取**。\n示例占位符：`{{pname}}`\n",
+            "examples": [
+              "{{pname}}"
+            ]
+          },
+          "loginId": {
+            "type": "integer",
+            "description": "登录ID（通常与 pid 相同），**必须动态获取**。\n示例占位符：`{{loginId}}`\n",
+            "examples": [
+              "{{loginId}}"
+            ]
+          }
+        }
+      },
+      "SaveSolutionRequest": {
+        "type": "object",
+        "required": [
+          "solutionName",
+          "solutionCode",
+          "configureDate",
+          "validityDate",
+          "storageLocation",
+          "solutionType",
+          "pageType",
+          "saveDetailList",
+          "pid",
+          "pname",
+          "loginId"
+        ],
+        "properties": {
+          "solutionName": {
+            "type": "string"
+          },
+          "solutionCode": {
+            "type": "string"
+          },
+          "deviceNames": {
+            "type": "string"
+          },
+          "configureDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "validityDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "storageCondition": {
+            "type": "string"
+          },
+          "storageLocation": {
+            "type": "string"
+          },
+          "concentration": {
+            "type": "string"
+          },
+          "concentrationCount": {
+            "type": "string"
+          },
+          "originalCode": {
+            "type": "string"
+          },
+          "controlledNo": {
+            "type": "string"
+          },
+          "solutionType": {
+            "type": "string",
+            "enum": [
+              "SOLUTION_TYPE_B",
+              "SOLUTION_TYPE_C",
+              "SOLUTION_TYPE_D"
+            ]
+          },
+          "pageType": {
+            "type": "string",
+            "enum": [
+              "SOLUTION_TYPE_A",
+              "SOLUTION_TYPE_B",
+              "SOLUTION_TYPE_C"
+            ]
+          },
+          "saveDetailList": {
+            "type": "string",
+            "description": "JSON 字符串，数组包含 SaveDetailItem"
+          },
+          "originalValidityDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "temperature": {
+            "type": "string"
+          },
+          "humidity": {
+            "type": "string"
+          },
+          "receivedUint": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "string"
+          },
+          "pname": {
+            "type": "string"
+          },
+          "loginId": {
+            "type": "string"
+          }
+        }
+      },
+      "ReceiveRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "receiveDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "receiveNum": {
+            "type": "number"
+          },
+          "receiveUserName": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "numUnitName": {
+            "type": "string"
+          }
+        }
+      },
+      "ConsumableItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "validNum": {
+            "type": "number",
+            "description": "剩余库存量"
+          },
+          "numUnitName": {
+            "type": "string",
+            "description": "库存单位（g / mL）"
+          },
+          "concentration": {
+            "type": "string",
+            "description": "纯度或浓度数值"
+          },
+          "concentrationUnitName": {
+            "type": "string",
+            "description": "纯度单位（% / μg/mL / mg/L）"
+          },
+          "batchNo": {
+            "type": "string"
+          },
+          "validDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "customNum": {
+            "type": "string",
+            "description": "内部编号"
+          },
+          "storagePositionName": {
+            "type": "string"
+          }
+        }
+      },
+      "ProcessStep": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "未开始",
+              "进行中",
+              "已完成"
+            ]
+          },
+          "success_time": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SaveDetailItem": {
+        "type": "object",
+        "description": "配置详情项（saveDetailList 中的一项）",
+        "properties": {
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "originalId": {
+            "type": "string"
+          },
+          "originalCode": {
+            "type": "string"
+          },
+          "originalName": {
+            "type": "string"
+          },
+          "originalConcentration": {
+            "type": "string"
+          },
+          "concentrationCount": {
+            "type": "string"
+          },
+          "originalUnit": {
+            "type": "string"
+          },
+          "receivedQuantity": {
+            "type": "string"
+          },
+          "receivedUint": {
+            "type": "string"
+          },
+          "useUantity": {
+            "type": "string"
+          },
+          "useUnit": {
+            "type": "string"
+          },
+          "medium": {
+            "type": "string"
+          },
+          "volume": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "configurationConcentration": {
+            "type": "string"
+          },
+          "configurationUnit": {
+            "type": "string"
+          },
+          "originalNo": {
+            "type": "string"
+          }
+        }
+      },
+      "PageResult": {
+        "type": "object",
+        "properties": {
+          "voList": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConsumableItem"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "description": "总记录数"
+          },
+          "pageNo": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "responses": {},
+    "securitySchemes": {
+      "SessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "JSESSIONID",
+        "description": "登录后自动设置的Session Cookie"
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "JSESSIONID",
+        "description": "LIMS 登录成功后返回的 Cookie，所有接口需携带"
+      }
+    },
+    "parameters": {
+      "CommonQueryParams": {
+        "_search": {
+          "name": "_search",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "default": "false"
+          }
+        },
+        "nd": {
+          "name": "nd",
+          "in": "query",
+          "schema": {
+            "type": "string"
+          },
+          "description": "时间戳毫秒（自动填充）"
+        },
+        "pageSize": {
+          "name": "pageSize",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "default": 30
+          }
+        },
+        "pageNo": {
+          "name": "pageNo",
+          "in": "query",
+          "schema": {
+            "type": "integer",
+            "default": 1
+          }
+        },
+        "sidx": {
+          "name": "sidx",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "default": ""
+          }
+        },
+        "sord": {
+          "name": "sord",
+          "in": "query",
+          "schema": {
+            "type": "string",
+            "default": "asc",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          }
+        }
+      },
+      "PidParam": {
+        "name": "pid",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "用户PID（登录后获取）"
+      },
+      "PnameParam": {
+        "name": "pname",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "用户名"
+      },
+      "LoginIdParam": {
+        "name": "loginId",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "登录ID（同pid）"
+      },
+      "TimestampParam": {
+        "name": "_",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "description": "时间戳毫秒数，用于防缓存"
+      },
+      "DetectionIdParam": {
+        "name": "detectionId",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "integer"
+        },
+        "description": "检测项目ID"
+      }
+    }
+  },
+  "servers": [],
+  "security": [
+    {
+      "cookieAuth": []
+    }
+  ]
+}
