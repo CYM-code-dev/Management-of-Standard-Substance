@@ -6217,8 +6217,11 @@
             status.textContent = '扫描中...'; status.className = 'small text-warning';
             const dFolders = [];
             for await (const entry of dirHandle.values()) {
-                if (entry.kind === 'directory' && entry.name.toUpperCase().endsWith('.D')) {
-                    dFolders.push({ name: entry.name, handle: entry });
+                if (entry.kind === 'directory' && entry.name.toUpperCase().endsWith('.D') && /C\d+/i.test(entry.name)) {
+                    try {
+                        await entry.getFileHandle('epatemp.txt');
+                        dFolders.push({ name: entry.name, handle: entry });
+                    } catch (_) { /* 无 epatemp.txt，跳过 */ }
                 }
             }
             if (!dFolders.length) { status.textContent = '未找到.D文件夹'; status.className = 'small text-muted'; return; }
@@ -6269,7 +6272,14 @@
             const folderNames = Object.keys(folderMap);
             if (!folderNames.length) { status.textContent = '未找到.D文件夹'; status.className = 'small text-muted'; return; }
             // 转为与 native 方案相同的数据结构（handle 改为 files 数组）
-            const dFolders = folderNames.map(name => ({ name, files: folderMap[name] }));
+            // 只保留名称含 C+数字 且含 epatemp.txt 的 .D 文件夹
+            const dFolders = folderNames
+                .filter(name => /C\d+/i.test(name))
+                .filter(name => folderMap[name].some(f => {
+                    const parts = f.webkitRelativePath.split('/');
+                    return parts[parts.length - 1].toLowerCase() === 'epatemp.txt';
+                }))
+                .map(name => ({ name, files: folderMap[name] }));
             // 弹出复选框列表
             const listDiv = document.getElementById('verifyDFolderList');
             listDiv.innerHTML = '<div class="border rounded p-2 bg-light mb-1">' +
