@@ -3188,10 +3188,13 @@ def lims_export_bbcd_docx():
     doc.save(buf)
     buf.seek(0)
     from flask import send_file
+    from urllib.parse import quote as _urlquote
     dl_name = (f"{solution_code}_配制记录.docx" if solution_code else "配制记录.docx") \
               .replace('/', '-').replace('\\', '-')
-    return send_file(buf, as_attachment=True, download_name=dl_name,
+    resp = send_file(buf, as_attachment=True, download_name=dl_name,
                      mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    resp.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{_urlquote(dl_name)}"
+    return resp
 
 
 # ==================== 修复版：更新 Excel 使用情况（动态检测表头） ====================
@@ -3409,11 +3412,13 @@ def _build_concentration_point_code(record, point):
     code = str(record.get('solutionCode', '')).strip()
     date = str(record.get('configureDate', ''))[:10].replace('-', '')
     conc_str = point.get('conc_str') or _format_conc_value(point['concentration'])
+    mx_match = re.match(r'.*-\d{8}-(.+)$', code)
+    mx = mx_match.group(1) if mx_match else ''
     parts = code.split('-')
     if len(parts) >= 3:
         base = '-'.join(parts[:3])
-        return f"{base}-{conc_str}-{date}"
-    return f"{code}-{conc_str}-{date}"
+        return f"{base}-{conc_str}-{date}" + (f"-{mx}" if mx else "")
+    return f"{code}-{conc_str}-{date}" + (f"-{mx}" if mx else "")
 
 
 @app.route('/api/lims/get_verification_info', methods=['POST'])

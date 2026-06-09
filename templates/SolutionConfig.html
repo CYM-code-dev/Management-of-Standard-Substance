@@ -874,6 +874,11 @@
               <input type="checkbox" class="onoffswitch-checkbox" id="bbcdUVMode">
               <span class="onoffswitch-switch"></span>
             </label>
+            <label class="form-label mb-0 fw-bold ms-3">基体</label>
+            <label class="onoffswitch">
+              <input type="checkbox" class="onoffswitch-checkbox" id="bbcdMatrixMode">
+              <span class="onoffswitch-switch"></span>
+            </label>
             <button type="button" class="btn btn-sm btn-outline-secondary ms-2" id="bbcdResetWorkingSolutionBtn" title="重置">
               <i class="fas fa-undo"></i>
             </button>
@@ -2512,6 +2517,10 @@
         const srcList = rows.map(tr => tr._src).filter(Boolean);
         const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
 
+        // 基体模式：从 bbcdMediumD 读取基体值
+        const matrixMode = document.getElementById('bbcdMatrixMode')?.checked || false;
+        const matrixVal = matrixMode ? (document.getElementById('bbcdMediumD')?.value.trim() || '') : '';
+
         if (srcList.length === 0) {
             codeEl.value = '';
             codeEl.classList.remove('bbcd-code-confirm');
@@ -2564,17 +2573,17 @@
                 const prefix = bbcdDominantPrefix(uniqueSources.map(s => s.solutionCode).filter(Boolean)) || 'CK-CG';
                 if (!customType) {
                     if (customTypeEl) customTypeEl.classList.add('is-invalid');
-                    codeEl.value = `${prefix}-${sourceCount}XX-[${concRange}]-${today}`;
+                    codeEl.value = `${prefix}-${sourceCount}XX-[${concRange}]-${today}${matrixVal ? '-' + matrixVal : ''}`;
                 } else {
                     if (customTypeEl) customTypeEl.classList.remove('is-invalid');
-                    codeEl.value = `${prefix}-${sourceCount}${customType}-[${concRange}]-${today}`;
+                    codeEl.value = `${prefix}-${sourceCount}${customType}-[${concRange}]-${today}${matrixVal ? '-' + matrixVal : ''}`;
                 }
                 codeEl.classList.add('bbcd-code-confirm');
                 return;
             }
 
             const sc = (uniqueSources[0].solutionCode || '').replace(/-[\d.\[\]]+?-\d{8}$/, '');
-            codeEl.value = `${sc}-[${concRange}]-${today}`;
+            codeEl.value = `${sc}-[${concRange}]-${today}${matrixVal ? '-' + matrixVal : ''}`;
             codeEl.classList.remove('bbcd-code-confirm');
         } else {
             // 多源：计算每个稀释点的平均浓度
@@ -2605,12 +2614,12 @@
             if (!customType) {
                 // 类型为空，标红提示
                 if (customTypeEl) customTypeEl.classList.add('is-invalid');
-                codeEl.value = `${prefix}-${effectiveCount}XX-[${concRange}]-${today}`;
+                codeEl.value = `${prefix}-${effectiveCount}XX-[${concRange}]-${today}${matrixVal ? '-' + matrixVal : ''}`;
                 codeEl.classList.add('bbcd-code-confirm');
             } else {
                 // 类型不为空，移除标红
                 if (customTypeEl) customTypeEl.classList.remove('is-invalid');
-                codeEl.value = `${prefix}-${effectiveCount}${customType}-[${concRange}]-${today}`;
+                codeEl.value = `${prefix}-${effectiveCount}${customType}-[${concRange}]-${today}${matrixVal ? '-' + matrixVal : ''}`;
                 codeEl.classList.add('bbcd-code-confirm');
             }
         }
@@ -2797,6 +2806,9 @@
 
         bbcdCodeAuto = true;
         bbcdNameAuto = true;
+        // 重置基体开关
+        const matrixCb = document.getElementById('bbcdMatrixMode');
+        if (matrixCb) matrixCb.checked = false;
         const customTypes = [...new Set(items.map(it => it.customType).filter(Boolean))];
         document.getElementById('bbcdCustomType').value = customTypes.length === 1 ? customTypes[0] : '';
         document.getElementById('bbcdSolutionName').value = '';
@@ -3078,6 +3090,14 @@
         if (uvCb) {
             const name = (rec.solutionName || '').toUpperCase();
             uvCb.checked = name.includes('甲醛') || name.includes('六价铬');
+        }
+
+        // 基体开关：从自编号末尾检测是否有基体后缀
+        const matrixCb = document.getElementById('bbcdMatrixMode');
+        if (matrixCb && solType === 'SOLUTION_TYPE_D') {
+            const code = rec.solutionCode || '';
+            const hasMatrix = /-\d{8}-.+$/.test(code);
+            matrixCb.checked = hasMatrix;
         }
 
         const isD = (solType === 'SOLUTION_TYPE_D');
@@ -6655,6 +6675,22 @@
             }
         });
 
+        // 基体开关：切换时重新生成自编号
+        document.getElementById('bbcdMatrixMode')?.addEventListener('change', () => {
+            if (document.getElementById('bbcdSolType').value === 'SOLUTION_TYPE_D') {
+                bbcdCodeAuto = true;
+                bbcdUpdateCode();
+            }
+        });
+        // 基体值变化时也重新生成
+        document.getElementById('bbcdMediumD')?.addEventListener('input', () => {
+            if (document.getElementById('bbcdMatrixMode')?.checked &&
+                document.getElementById('bbcdSolType').value === 'SOLUTION_TYPE_D') {
+                bbcdCodeAuto = true;
+                bbcdUpdateCode();
+            }
+        });
+
         document.querySelector('#bbcdConfigTable tbody').addEventListener('blur', e => {
             const t = e.target;
             const v = parseFloat(t.value);
@@ -7363,15 +7399,17 @@
                 const count = parseInt(document.getElementById('bbcdDilutionCount').value) || (window.bbcdCurrentDilutionCount || 5);
                 const today = configureDate ? configureDate.replace(/-/g, '') : new Date().toISOString().slice(0,10).replace(/-/g,'');
 
-                // 从 solutionCode 提取前缀（去掉浓度范围和日期部分）
-                const baseCode = solutionCode.replace(/-\[[^\]]+\]-\d{8}$/, '');
+                // 从 solutionCode 提取前缀（去掉浓度范围和日期部分），保留基体
+                const mxMatch = solutionCode.match(/-\d{8}-(.+)$/);
+                const mx = mxMatch ? mxMatch[1] : '';
+                const baseCode = solutionCode.replace(/-\[[^\]]+\]-\d{8}(?:-.+)?$/, '');
 
                 for (let i = 0; i < count; i++) {
                     const avg = bbcdGetPointMeanConc(i);
                     if (avg === null) continue;
                     const concStr = bbcdFmtConc(bbcdRoundConc(avg));
 
-                    const labelCode = `${baseCode}-${concStr}-${today}`;
+                    const labelCode = `${baseCode}-${concStr}-${today}${mx ? '-' + mx : ''}`;
                     const firstUnit = rows[0]._src?.concUnit || 'μg/mL';
                     const concentration = `${concStr}${firstUnit}`;
 
@@ -7496,7 +7534,9 @@
 
             if (solType === 'SOLUTION_TYPE_D' && rec.detailList) {
                 const solutionCode = rec.solutionCode || '';
-                const baseCode = solutionCode.replace(/-\[[^\]]+\]-\d{8}$/, '');
+                const mxMatch = solutionCode.match(/-\d{8}-(.+)$/);
+                const mx = mxMatch ? mxMatch[1] : '';
+                const baseCode = solutionCode.replace(/-\[[^\]]+\]-\d{8}(?:-.+)?$/, '');
                 const detailList = Array.isArray(rec.detailList) ? rec.detailList : JSON.parse(rec.detailList || '[]');
 
                 // 收集每个稀释点的浓度
@@ -7509,7 +7549,7 @@
                     const avg = concs.reduce((a, b) => a + b, 0) / concs.length;
                     const concStr = avg < 0.10 ? avg.toFixed(3) : avg.toFixed(2);
                     const unit = detailList[0]?.groupUnit || 'μg/mL';
-                    const labelCode = `${baseCode}-${concStr}-${today}`;
+                    const labelCode = `${baseCode}-${concStr}-${today}${mx ? '-' + mx : ''}`;
                     const concentration = `${concStr}${unit}`;
 
                     const printResp = await fetch('/api/lims/print_label', {
