@@ -62,15 +62,15 @@ def _fmt_vol(val):
 
 
 def _round_qty(val, unit):
-    return round(val, 2) if unit == 'mL' else round(val, 4)
+    if unit == 'mL':
+        return round(val, 3) if val < 0.1 else round(val, 2)
+    return round(val, 4)
 
 
 def _fmt_qty(val, unit):
     if unit == 'mL':
-        return f"{val:.2f}"
-    if val == int(val):
-        return str(int(val))
-    return f"{val:.4f}".rstrip('0').rstrip('.')
+        return f"{val:.3f}" if val < 0.1 else f"{val:.2f}"
+    return f"{val:.4f}"
 
 
 def _round_conc(val, conc_unit):
@@ -845,6 +845,7 @@ def lims_receive():
     data = request.get_json()
     consumable_id = str(data.get('consumable_id', ''))
     quantity = data.get('quantity')
+    unit = data.get('unit', 'g')
     receive_date = data.get('receive_date') or datetime.datetime.now().strftime("%Y-%m-%d 00:00:00")
     if not consumable_id or quantity is None:
         return jsonify({"success": False, "message": "缺少参数"}), 400
@@ -858,8 +859,16 @@ def lims_receive():
     pname = session.get('display_name') or system.current_real_name or username
     if not pid:
         return jsonify({"success": False, "message": "无法获取用户PID，请重新登录"}), 401
+    try:
+        qty_val = float(quantity)
+        if unit == 'g':
+            formatted_qty = f"{qty_val:.4f}"
+        else:  # mL
+            formatted_qty = f"{qty_val:.3f}" if qty_val < 0.1 else f"{qty_val:.2f}"
+    except (ValueError, TypeError):
+        formatted_qty = str(quantity)
     form_data = {
-        "num": str(quantity),
+        "num": formatted_qty,
         "receiveDate": receive_date,
         "purpose": "",
         "receiveType": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE",
@@ -874,6 +883,7 @@ def lims_receive():
         "Referer": f"{system.base_url}/web/consumablesReceiveListMgt.html?menuId=289",
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
     }
+    url = f"{system.base_url}/detectionManager/manager/consumableReceive/receive"
     try:
         resp = system.session.post(url, data=form_data, headers=headers)
         resp.raise_for_status()

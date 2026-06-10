@@ -86,7 +86,34 @@
       "Bash(tasklist /FI \"IMAGENAME eq letwareks37*\" /V /FO LIST)",
       "Bash(tasklist /FI \"IMAGENAME eq letwareks37*\" /V /FO CSV)",
       "Bash(wmic process *)",
-      "Bash(powershell -Command 'Get-Process | Where-Object { $_.Name -like '\\\\''*letwareks*'\\\\'' } | Select-Object Id, Name, Path, Company, Description, StartTime | Format-List')"
+      "Bash(powershell -Command 'Get-Process | Where-Object { $_.Name -like '\\\\''*letwareks*'\\\\'' } | Select-Object Id, Name, Path, Company, Description, StartTime | Format-List')",
+      "Bash(npx -y @wangmhaha/apifox-mcp-server --help)",
+      "Bash(npm info *)",
+      "Bash(apifox-mcp-server --help)",
+      "Bash(echo \"EXIT_CODE: $?\")",
+      "Bash(APIFOX_ACCESS_TOKEN=\"afxp_73fe16bEnfNLB5vgKJf2Lqu8AtJVzm0hQmh2\" APIFOX_PROJECT_ID=\"8238274\" timeout 8 apifox-mcp-server)",
+      "Bash(npm root *)",
+      "Bash(APIFOX_API_KEY=\"afxp_73fe16bEnfNLB5vgKJf2Lqu8AtJVzm0hQmh2\" PROJECT_ID=\"8238274\" timeout 8 apifox-mcp-server)",
+      "Bash(where apifox-mcp-server *)",
+      "Bash(APIFOX_API_KEY=\"afxp_73fe16bEnfNLB5vgKJf2Lqu8AtJVzm0hQmh2\" PROJECT_ID=\"8238274\" apifox-mcp-server)",
+      "Bash(kill %1)",
+      "Bash(APIFOX_API_KEY=\"afxp_73fe16bEnfNLB5vgKJf2Lqu8AtJVzm0hQmh2\" PROJECT_ID=\"8238274\" apifox-mcp-server --help)",
+      "mcp__apifox-mcp-server__get-interface",
+      "Bash(git add *)",
+      "Bash(git commit -m 'feat: Apifox API 文档管理 - 同步脚本 + MCP 配置 + GitHub Actions 扫描 *)",
+      "Bash(git push *)",
+      "Bash(gh run *)",
+      "Bash(where gh *)",
+      "Bash(git commit -m 'fix: 修复 GitHub Actions 扫描工作流 *)",
+      "Bash(git rm *)",
+      "Bash(echo \".claude/worktrees/\")",
+      "Bash(git commit -m 'fix: 移除错误的 gitlink 条目，修复 GitHub Actions checkout 失败 *)",
+      "Bash(.venv/Scripts/python scripts/lims_api_scanner.py)",
+      "Bash(git commit -m 'fix: 修复扫描器 --json 模式无输出的问题 *)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "apifox-mcp-server"
+  ]
 }

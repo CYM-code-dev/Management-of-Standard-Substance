@@ -2023,7 +2023,7 @@
                 // 1. 领用
                 const recResp = await fetch('/api/lims/receive', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({consumable_id: String(item.id), quantity: qty})
+                    body: JSON.stringify({consumable_id: String(item.id), quantity: qty, unit: item.numUnitName || 'g'})
                 });
                 const recData = await recResp.json();
                 if (!recData.success) { alert(`第${idx+1}条领用失败: ${recData.message}`); continue; }
@@ -2062,6 +2062,9 @@
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
         let exported = false;
+        // 单条导出时用自编号命名
+        const solSingleCode = solItems.length === 1
+            ? (document.querySelector('.sol-row-code')?.value || '').trim() : '';
         try {
             // 分组：g/% 类型合并导出，其余单独导出
             const mergeItems = [];
@@ -2103,7 +2106,10 @@
                         const a = document.createElement('a');
                         const cd = resp.headers.get('Content-Disposition') || '';
                         const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)/i);
-                        a.download = m ? decodeURIComponent(m[1]) : '配制记录_合并.docx';
+                        const defaultName = itemsList.length === 1 && solSingleCode
+                            ? `${solSingleCode}_配制记录.docx`
+                            : (m ? decodeURIComponent(m[1]) : '配制记录_合并.docx');
+                        a.download = defaultName;
                         a.href = url;
                         a.click();
                         URL.revokeObjectURL(url);
@@ -2134,7 +2140,10 @@
                 const a = document.createElement('a');
                 const cd = resp.headers.get('Content-Disposition') || '';
                 const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)/i);
-                a.download = m ? decodeURIComponent(m[1]) : `配制记录_${idx+1}.docx`;
+                const solDefaultName = solSingleCode
+                    ? `${solSingleCode}_配制记录.docx`
+                    : (m ? decodeURIComponent(m[1]) : `配制记录_${idx+1}.docx`);
+                a.download = solDefaultName;
                 a.href = url;
                 a.click();
                 URL.revokeObjectURL(url);
@@ -2225,7 +2234,11 @@
 
     // 修约规则（与 A-B μg/mL 时一致）
     function bbcdRoundQty(v, decimals) { decimals = decimals || 2; const f = Math.pow(10, decimals); return Math.round(v * f) / f; }
-    function bbcdFmtQty(v, decimals) { decimals = decimals || 2; return v.toFixed(decimals); }
+    function bbcdFmtQty(v, decimals) {
+        if (decimals != null) return v.toFixed(decimals);
+        // mL 默认规则: >= 0.1 → 2 位, < 0.1 → 3 位
+        return v < 0.1 ? v.toFixed(3) : v.toFixed(2);
+    }
     function bbcdRoundVol(v) {
         if (!isFinite(v) || v <= 0) return v;
         const n = v >= 10 ? 4 : 3;
@@ -2796,7 +2809,7 @@
     // 标志：用户已选择类型，等待类型选择弹窗关闭后打开配置弹窗
     let bbcdPendingTypeSelection = false;
 
-    function bbcdOpenConfig() {
+    async function bbcdOpenConfig() {
         let selectedIdx, items;
         // If bbcdSelectedItems was pre-populated (e.g., from dTab), use it directly
         if (window.bbcdSelectedItems && window.bbcdSelectedItems.length > 0) {
@@ -2814,6 +2827,29 @@
             items = selectedIdx.map(i => bbcdLastResults[i]);
             window.bbcdSelectedItems = items;
         }
+
+        // 刷新选中项的库存量（constantVolume / totalConstantVolume）
+        try {
+            const refreshIds = items.map(it => it.id).filter(Boolean);
+            if (refreshIds.length) {
+                const params = new URLSearchParams({
+                    page_size: 9999, page_no: 1, config_status: '0', status: '1'
+                });
+                const resp = await fetch('/api/lims/list_configured_solutions?' + params.toString());
+                const data = await resp.json();
+                if (data.success && data.data) {
+                    const latestMap = {};
+                    data.data.forEach(r => { if (r.id) latestMap[r.id] = r; });
+                    items.forEach(it => {
+                        const fresh = latestMap[it.id];
+                        if (fresh) {
+                            it.constantVolume = fresh.constantVolume;
+                            it.totalConstantVolume = fresh.totalConstantVolume;
+                        }
+                    });
+                }
+            }
+        } catch (e) { console.warn('刷新库存量异常:', e); }
         // 保存选中状态
         bbcdSelectedIndices = selectedIdx;
 
@@ -4821,7 +4857,11 @@
         try {
             const solType = document.getElementById('bbcdSolType').value;
 
-            async function doExportOne(payload) {
+            const singleCode = (window.bbcdSelectedItems?.length === 1)
+                    ? (document.getElementById('bbcdSolutionCode')?.value || '').trim()
+                    : '';
+
+            async function doExportOne(payload, customName) {
                 const resp = await fetch('/api/lims/export_bbcd_docx', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -4836,7 +4876,7 @@
                 const a = document.createElement('a');
                 const cd = resp.headers.get('Content-Disposition') || '';
                 const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)/i);
-                a.download = m ? decodeURIComponent(m[1]) : '配制记录.docx';
+                a.download = customName || (m ? decodeURIComponent(m[1]) : '配制记录.docx');
                 a.href = url;
                 a.click();
                 URL.revokeObjectURL(url);
@@ -4863,14 +4903,15 @@
                         await doExportOne(mergedPayload);
                     } else {
                         // Single export
-                        await doExportOne(payload);
+                        await doExportOne(payload, singleCode ? `${singleCode}_配制记录.docx` : '');
                     }
                 } else {
-                    await doExportOne(payload);
+                    await doExportOne(payload, singleCode ? `${singleCode}_配制记录.docx` : '');
                 }
                 ok = true;
             } else {
                 // B/C type: check for % source (A-type weighing) first
+                const singleFileName = singleCode ? `${singleCode}_配制记录.docx` : '';
                 const stockPayload = bbcdBuildStockExportPayload();
                 if (stockPayload) {
                     const resp = await fetch('/api/lims/export_docx', {
@@ -4887,14 +4928,14 @@
                     const a = document.createElement('a');
                     const cd = resp.headers.get('Content-Disposition') || '';
                     const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)/i);
-                    a.download = m ? decodeURIComponent(m[1]) : '配制记录.docx';
+                    a.download = singleFileName || (m ? decodeURIComponent(m[1]) : '配制记录.docx');
                     a.href = url;
                     a.click();
                     URL.revokeObjectURL(url);
                 } else {
                     const payload = bbcdBuildExportPayload();
                     if (!payload) { alert('导出失败：定容体积无效'); return; }
-                    await doExportOne(payload);
+                    await doExportOne(payload, singleFileName);
                 }
                 ok = true;
             }
@@ -5463,6 +5504,13 @@
                 } catch (e) { alert('删除领用记录异常: ' + e.message); }
             }
             bbcdLastResults.splice(idx, 1);
+            // splice 后所有 > idx 的索引下移 1，需同步调整 bbcdSelectedIds
+            const newSelectedIds = new Set();
+            bbcdSelectedIds.forEach(i => {
+                if (i < idx) newSelectedIds.add(i);
+                else if (i > idx) newSelectedIds.add(i - 1);
+            });
+            bbcdSelectedIds = newSelectedIds;
             bbcdFilteredResults = bbcdLastResults.filter(it => {
                 const typeFilter = document.getElementById('bbcdFilterSolType').value;
                 if (typeFilter) {
@@ -5475,7 +5523,6 @@
                 }
                 return true;
             });
-            bbcdSelectedIds.delete(idx);
             bbcdRenderCurrentPage();
         } catch (e) { alert('删除异常: ' + e.message); }
     }
@@ -6877,10 +6924,29 @@
             document.querySelectorAll('.sol-result-check').forEach(c => c.checked = e.target.checked);
             solResultUpdateSelection();
         });
-        document.getElementById('solResultAddBtn').addEventListener('click', () => {
+        document.getElementById('solResultAddBtn').addEventListener('click', async () => {
             const idxs = [...document.querySelectorAll('.sol-result-check:checked')]
                 .map(c => parseInt(c.dataset.idx, 10));
             if (!idxs.length) return;
+            // 刷新选中标准品的库存量
+            try {
+                const selectedItems = idxs.map(i => solLastResults[i]).filter(Boolean);
+                const refreshIds = selectedItems.map(it => it.id).filter(Boolean);
+                if (refreshIds.length) {
+                    const resp = await fetch(`/api/query?pageSize=9999&pageNo=1&status=normal`);
+                    const data = await resp.json();
+                    if (data.success && data.data) {
+                        const latestMap = {};
+                        data.data.forEach(r => { if (r.id) latestMap[r.id] = r; });
+                        selectedItems.forEach(it => {
+                            const fresh = latestMap[it.id];
+                            if (fresh && fresh.validNum != null) {
+                                it.validNum = fresh.validNum;
+                            }
+                        });
+                    }
+                }
+            } catch (e) { console.warn('刷新库存量异常:', e); }
             idxs.forEach(i => { if (solLastResults[i]) solAddItem(solLastResults[i]); });
             bootstrap.Modal.getOrCreateInstance(document.getElementById('solConfigModal')).show();
         });
@@ -6986,7 +7052,7 @@
 
                 // 等待 Modal 动画完成（Bootstrap 默认 300ms）
                 setTimeout(() => {
-                    bbcdOpenConfig();
+                    bbcdOpenConfig();  // async: 内部 await 刷新库存量后再渲染
                 }, 350);
             }
         });
@@ -7126,7 +7192,7 @@
         document.getElementById('qqOperator').value = displayUserNameSpan?.textContent || '';
         const today = new Date().toISOString().slice(0, 10);
         document.getElementById('qqDateFrom').value = qqPrevWorkday(today);
-        document.getElementById('qqDateTo').value = qqNextWorkday(today);
+        document.getElementById('qqDateTo').value = today;
         modal.show();
         qqDoQuery(1);
     }
@@ -7656,12 +7722,41 @@
         const label = item.configureOrder || item.solutionName || item.id;
         if (!confirm(`确定要删除记录 [${label}] 吗？此操作不可恢复。`)) return;
         try {
+            // B类储备液：先查询详情获取领用ID，再先删储备液，最后删领用
+            let receiveIds = [];
+            if (solType === 'SOLUTION_TYPE_B') {
+                try {
+                    const detailResp = await fetch('/api/lims/get_solution_detail', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ id: item.id, configure_order: item.configureOrder })
+                    });
+                    const detailData = await detailResp.json();
+                    if (detailData.success && detailData.data) {
+                        receiveIds = (detailData.data.detailList || [])
+                            .map(dl => String(dl.originalId || '').trim())
+                            .filter(Boolean);
+                    }
+                } catch (e) { console.warn('查询详情异常:', e); }
+            }
             const resp = await fetch('/api/lims/delete_solution', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ id: item.id, type: solType })
             });
             const data = await resp.json();
             if (!data.success) { alert('删除失败: ' + (data.message || '未知错误')); return; }
+            // 储备液已删除，现在删除关联的领用记录
+            if (receiveIds.length > 0) {
+                try {
+                    const delRecvResp = await fetch('/api/lims/delete_receive', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ ids: receiveIds })
+                    });
+                    const delRecvData = await delRecvResp.json();
+                    if (!delRecvData.success) {
+                        alert('删除领用记录失败: ' + (delRecvData.message || '未知错误'));
+                    }
+                } catch (e) { alert('删除领用记录异常: ' + e.message); }
+            }
             qqLastResults.splice(idx, 1);
             qqFilteredResults = [...qqLastResults];
             qqTotalRecords = qqFilteredResults.length;
