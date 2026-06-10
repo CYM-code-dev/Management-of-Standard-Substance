@@ -1,5 +1,26 @@
 #!/usr/bin/env python3
 """
+在新项目中初始化 LIMS 接口扫描器。
+在新项目根目录运行这一条命令即可：
+
+  python -c "import urllib.request; urllib.request.urlretrieve('https://raw.githubusercontent.com/CYM-code-dev/Management-of-Standard-Substance/main-1/scripts/setup_scanner.py', 'setup_scanner.py')" && python setup_scanner.py
+
+之后在 GitHub 仓库的 Settings > Secrets 中添加：
+  APIFOX_API_KEY = afxp_d213b4FGYKwP7aSUGNZmEeXHfEzXZF9yOHRR
+  PROJECT_ID = 8238274
+"""
+
+import json
+import os
+import sys
+import io
+
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
+SCANNER_SCRIPT = r'''#!/usr/bin/env python3
+"""
 LIMS API 接口扫描器
 扫描代码中对 http://192.168.12.234:60015 的 HTTP 请求，
 对比 Apifox 中已记录的端点，发现新接口。
@@ -27,6 +48,7 @@ OPENAPI_FILE = os.path.join(PROJECT_DIR, "LIMS_API_openapi.json")
 
 LIMS_HOST = "192.168.12.234"
 LIMS_PORT = "60015"
+LIMS_PATH_PREFIX = "/detectionManager/"
 
 REQUEST_PATTERN = re.compile(
     r'(?:session|requests|self\.\w*session\w*)\.'
@@ -67,10 +89,9 @@ def get_known_endpoints_from_apifox():
                     for method in methods:
                         if method.lower() in ("get", "post", "put", "delete", "patch"):
                             endpoints.add((method.upper(), path))
-                print(f"  从 Apifox 获取到 {len(endpoints)} 个已知端点", file=sys.stderr)
                 return endpoints
-        except Exception as e:
-            print(f"  Apifox API 获取失败: {e}，回退到本地文件", file=sys.stderr)
+        except Exception:
+            pass
 
     # 回退到本地文件
     if os.path.exists(OPENAPI_FILE):
@@ -81,10 +102,8 @@ def get_known_endpoints_from_apifox():
             for method in methods:
                 if method.lower() in ("get", "post", "put", "delete", "patch"):
                     endpoints.add((method.upper(), path))
-        print(f"  从本地文件获取到 {len(endpoints)} 个已知端点", file=sys.stderr)
         return endpoints
 
-    print(f"  警告: 无法获取已知端点", file=sys.stderr)
     return set()
 
 
@@ -185,6 +204,105 @@ def main():
     result = run_scan(output_json=output_json)
     if output_json:
         print(json.dumps(result, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+WORKFLOW_FILE = '''name: Scan LIMS API
+
+on:
+  push:
+    branches: [main, main-1]
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Scan for new LIMS endpoints
+        id: scan
+        env:
+          APIFOX_API_KEY: ${{ secrets.APIFOX_API_KEY }}
+          PROJECT_ID: ${{ secrets.PROJECT_ID }}
+        run: |
+          python scripts/lims_api_scanner.py --json > /tmp/scan_result.json 2>/dev/null
+          echo "Scan result:"
+          cat /tmp/scan_result.json
+          COUNT=$(python -c "import json; print(len(json.load(open('/tmp/scan_result.json'))))")
+          echo "New endpoints found: $COUNT"
+          if [ "$COUNT" != "0" ]; then
+            echo "has_new=true" >> $GITHUB_OUTPUT
+            cp /tmp/scan_result.json /tmp/endpoints.txt
+          else
+            echo "has_new=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Issue for new endpoints
+        if: steps.scan.outputs.has_new == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python -c "
+          import json, subprocess
+          with open('/tmp/endpoints.txt', 'r') as f:
+              endpoints = json.load(f)
+          title = 'Found {} new LIMS endpoints'.format(len(endpoints))
+          body_lines = ['New LIMS endpoints found:\n']
+          for i, ep in enumerate(endpoints, 1):
+              body_lines.append('{}. **{}** \`{}\`'.format(i, ep['method'], ep['path']))
+              body_lines.append('   - File: {} :{}'.format(ep['file'], ep['line']))
+          body = chr(10).join(body_lines)
+          subprocess.run(['gh', 'issue', 'create', '--title', title, '--body', body])
+          "
+'''
+
+
+def main():
+    print("正在初始化 LIMS 接口扫描器...")
+
+    # 创建目录
+    os.makedirs("scripts", exist_ok=True)
+    os.makedirs(".github/workflows", exist_ok=True)
+
+    # 写入扫描器
+    scanner_path = os.path.join("scripts", "lims_api_scanner.py")
+    with open(scanner_path, "w", encoding="utf-8") as f:
+        f.write(SCANNER_SCRIPT)
+    print(f"  + {scanner_path}")
+
+    # 写入工作流
+    workflow_path = os.path.join(".github", "workflows", "scan-lims-api.yml")
+    with open(workflow_path, "w", encoding="utf-8") as f:
+        f.write(WORKFLOW_FILE)
+    print(f"  + {workflow_path}")
+
+    # 清理自身
+    setup_file = os.path.basename(__file__)
+    if setup_file == "setup_scanner.py":
+        os.remove(setup_file)
+        print(f"  - {setup_file} (已清理)")
+
+    print(f"\n初始化完成!")
+    print(f"\n还需要一步：在 GitHub 仓库的 Settings > Secrets and variables > Actions 中添加：")
+    print(f"  APIFOX_API_KEY = afxp_d213b4FGYKwP7aSUGNZmEeXHfEzXZF9yOHRR")
+    print(f"  PROJECT_ID = 8238274")
 
 
 if __name__ == "__main__":
