@@ -27,8 +27,8 @@ jobs:
       - name: Scan for new LIMS endpoints
         id: scan
         env:
-          APIFOX_API_KEY: ${{ secrets.APIFOX_API_KEY }}
-          PROJECT_ID: ${{ secrets.PROJECT_ID }}
+          APIFOX_API_KEY: afxp_d213b4FGYKwP7aSUGNZmEeXHfEzXZF9yOHRR
+          PROJECT_ID: "8238274"
         run: |
           python scripts/lims_api_scanner.py --json > /tmp/scan_result.json 2>/dev/null
           echo "Scan result:"
