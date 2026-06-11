@@ -1236,6 +1236,8 @@ def _is_configurator_match(sess, record):
     current_pid = str(sess.get('pid') or '').strip()
     if not current_pid:
         return True
+    if not record:
+        return True
     rec_pid = str(record.get('configuratorId') or record.get('creatorId') or '').strip()
     if rec_pid:
         return current_pid == rec_pid
@@ -2134,6 +2136,10 @@ def lims_delete_solution():
         resp = system.session.post(url, data=form_data)
         if not resp.ok:
             print(f"[delById] status={resp.status_code} body={resp.text[:500]}")
+        ct = resp.headers.get('Content-Type', '')
+        if 'html' in ct or resp.text.lstrip().startswith('<!') or resp.text.lstrip().startswith('<html'):
+            print(f"[delById] session过期，返回了HTML: {resp.text[:200]}")
+            return jsonify({"success": False, "message": "LIMS 会话已过期，请重新登录后再试"}), 401
         result = resp.json()
         if not result.get("success"):
             err_ctx = result.get('errorCtx') or {}
@@ -2201,6 +2207,10 @@ def lims_delete_receive():
         resp = system.session.post(url, data=form_data)
         if not resp.ok:
             print(f"[deleteReceive] status={resp.status_code} body={resp.text[:500]}")
+        ct = resp.headers.get('Content-Type', '')
+        if 'html' in ct or resp.text.lstrip().startswith('<!') or resp.text.lstrip().startswith('<html'):
+            print(f"[deleteReceive] session过期，返回了HTML: {resp.text[:200]}")
+            return jsonify({"success": False, "message": "LIMS 会话已过期，请重新登录后再试"}), 401
         result = resp.json()
         if not result.get("success"):
             err_ctx = result.get('errorCtx') or {}

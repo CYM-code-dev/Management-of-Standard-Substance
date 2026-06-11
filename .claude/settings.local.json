@@ -109,7 +109,13 @@
       "Bash(echo \".claude/worktrees/\")",
       "Bash(git commit -m 'fix: 移除错误的 gitlink 条目，修复 GitHub Actions checkout 失败 *)",
       "Bash(.venv/Scripts/python scripts/lims_api_scanner.py)",
-      "Bash(git commit -m 'fix: 修复扫描器 --json 模式无输出的问题 *)"
+      "Bash(git commit -m 'fix: 修复扫描器 --json 模式无输出的问题 *)",
+      "Bash(git commit -m 'fix: 工作流直接写入凭据，新增双击即用的 setup_scanner.bat *)",
+      "Read(//c/Users/admin/.claude/**)",
+      "Bash(rm -f .mcp.json)",
+      "Bash(rm -f 'C:\\\\Users\\\\admin/.claude/mcp.json')",
+      "Bash(APIFOX_API_KEY=\"afxp_d213b4FGYKwP7aSUGNZmEeXHfEzXZF9yOHRR\" PROJECT_ID=\"8238274\" npx -y @wangmhaha/apifox-mcp-server --local)",
+      "mcp__apifox__get-interface"
     ]
   },
   "enableAllProjectMcpServers": true,

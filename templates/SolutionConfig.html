@@ -2294,6 +2294,9 @@
         if (!bbcdNameAuto) return;
         const nameEl = document.getElementById('bbcdSolutionName');
         if (!nameEl) return;
+        const solType = document.getElementById('bbcdSolType')?.value || '';
+        const matrixMode = document.getElementById('bbcdMatrixMode')?.checked || false;
+        const matrixVal = matrixMode ? (document.getElementById('bbcdMediumD')?.value.trim() || '') : '';
         const uniqueSources = bbcdGetUniqueSourcesFromRows();
         if (!uniqueSources.length) {
             const selectedItems = window.bbcdSelectedItems || [];
@@ -2303,20 +2306,20 @@
             }
             const effectiveCount = bbcdGetEffectiveSourceCount(selectedItems);
             if (effectiveCount <= 1) {
-                nameEl.value = selectedItems[0]?.solutionName || '';
+                nameEl.value = (selectedItems[0]?.solutionName || '') + (matrixVal && solType === 'SOLUTION_TYPE_D' ? '-' + matrixVal : '');
                 return;
             }
             const customType = document.getElementById('bbcdCustomType')?.value.trim() || '';
-            nameEl.value = customType ? `${effectiveCount}${customType}` : '';
+            nameEl.value = customType ? `${effectiveCount}${customType}` + (matrixVal && solType === 'SOLUTION_TYPE_D' ? '-' + matrixVal : '') : '';
             return;
         }
         const effectiveCount = bbcdGetEffectiveSourceCount(uniqueSources);
         if (effectiveCount <= 1) {
-            nameEl.value = uniqueSources[0].solutionName || '';
+            nameEl.value = (uniqueSources[0].solutionName || '') + (matrixVal && solType === 'SOLUTION_TYPE_D' ? '-' + matrixVal : '');
             return;
         }
         const customType = document.getElementById('bbcdCustomType')?.value.trim() || '';
-        nameEl.value = customType ? `${effectiveCount}${customType}` : '';
+        nameEl.value = customType ? `${effectiveCount}${customType}` + (matrixVal && solType === 'SOLUTION_TYPE_D' ? '-' + matrixVal : '') : '';
     }
 
     // 从多个 solutionCode 中提取出现最多的"CK-XX"前缀（取最后一个 - 之前的部分）
@@ -5379,7 +5382,7 @@
             <tr>
                 <td><input type="checkbox" class="dtab-row-check" data-idx="${realIdx}" ${checked}></td>
                 <td>${bbcdEsc(item.configureOrder)}</td>
-                <td class="text-wrap" style="min-width:120px;" title="${bbcdEsc(item.solutionCode)}">${bbcdEsc(item.solutionCode)}</td>
+                <td class="text-wrap" style="min-width:80px;max-width:200px;word-break:break-all;" title="${bbcdEsc(item.solutionCode)}">${bbcdEsc(item.solutionCode)}</td>
                 <td class="text-truncate" style="max-width:200px;" title="${bbcdEsc(item.solutionName)}">${bbcdEsc(item.solutionName)}</td>
                 <td class="text-truncate" style="max-width:240px;" title="${bbcdEsc(item.concentrationCount || item.concentration)}">${bbcdEsc(item.concentration)}</td>
                 <td>${bbcdEsc(item.configuratorName || item.creatorName || '—')}</td>
@@ -6200,6 +6203,52 @@
         verifyRecalcResults();
     }
 
+    /**
+     * 智能匹配 .D 文件夹 ↔ 浓度点：按化合物实测值与理论值的最小平均偏差配对，
+     * 避免依赖用户勾选顺序导致配反。
+     */
+    function _matchFoldersToPoints(groups, checkedPoints) {
+        const pairs = [];
+        const folderKeys = Object.keys(groups).map(Number);
+        for (const fidx of folderKeys) {
+            const compounds = groups[fidx];
+            for (let pi = 0; pi < checkedPoints.length; pi++) {
+                const pt = checkedPoints[pi];
+                const sc = pt.sub_concs || {};
+                let totalDev = 0, matchCount = 0;
+                for (const c of compounds) {
+                    const cName = (c.name || '').trim();
+                    const cPrefix = cName.replace(/[-–]\d{2,4}$/, '');
+                    let theo = null;
+                    if (sc[cName] !== undefined) theo = sc[cName];
+                    else if (cPrefix !== cName && sc[cPrefix] !== undefined) theo = sc[cPrefix];
+                    else {
+                        for (const k of Object.keys(sc)) {
+                            if (k && (cName.includes(k) || k.includes(cName) || (cPrefix && (cPrefix.includes(k) || k.includes(cPrefix))))) {
+                                theo = sc[k]; break;
+                            }
+                        }
+                    }
+                    if (theo !== null && theo > 0) {
+                        totalDev += Math.abs(c.measured_value - theo) / theo;
+                        matchCount++;
+                    }
+                }
+                const avgDev = matchCount > 0 ? totalDev / matchCount : Infinity;
+                pairs.push({ fidx, pidx: pi, matchCount, avgDev });
+            }
+        }
+        // 贪心分配：优先匹配数多、偏差小的配对
+        pairs.sort((a, b) => b.matchCount !== a.matchCount ? b.matchCount - a.matchCount : a.avgDev - b.avgDev);
+        const usedF = new Set(), usedP = new Set(), result = [];
+        for (const p of pairs) {
+            if (usedF.has(p.fidx) || usedP.has(p.pidx)) continue;
+            result.push({ folderIdx: p.fidx, pointIdx: p.pidx });
+            usedF.add(p.fidx); usedP.add(p.pidx);
+        }
+        return result;
+    }
+
     function verifyBuildResultTable() {
         if (!_verifyMeasured.length) return;
         const checkedPoints = _getCheckedConcPoints();
@@ -6228,13 +6277,17 @@
             var tabsHtml = '', panesHtml = '';
             var tabIdx = 0;
             var allRows = [];
-            for (var gi = 0; gi < files.length && gi < checkedPoints.length; gi++) {
+            // 智能匹配：按实测值/理论值偏差配对，而非下标顺序
+            var matchPairs = _matchFoldersToPoints(groups, checkedPoints);
+            for (var mi = 0; mi < matchPairs.length; mi++) {
+                var gi = matchPairs[mi].folderIdx;
+                var pi = matchPairs[mi].pointIdx;
                 if (!groups[gi] || !groups[gi].length) continue;
-                var tabLabel = files[gi].name + ' / ' + checkedPoints[gi].code;
+                var tabLabel = files[gi].name + ' / ' + checkedPoints[pi].code;
                 var active = tabIdx === 0 ? ' active' : '';
                 tabsHtml += '<li class="nav-item"><a class="nav-link small' + active + '" data-bs-toggle="tab" href="#verifyTabPane' + tabIdx + '">' + bbcdEsc(tabLabel) + '</a></li>';
 
-                var matched = verifyMatchResults(groups[gi], [checkedPoints[gi]]);
+                var matched = verifyMatchResults(groups[gi], [checkedPoints[pi]]);
                 allRows.push(...matched);
 
                 var rowsHtml = matched.map(function(row, ri) {
@@ -6735,11 +6788,13 @@
             }
         });
 
-        // 基体开关：切换时重新生成自编号
+        // 基体开关：切换时重新生成自编号和名称
         document.getElementById('bbcdMatrixMode')?.addEventListener('change', () => {
             if (document.getElementById('bbcdSolType').value === 'SOLUTION_TYPE_D') {
                 bbcdCodeAuto = true;
+                bbcdNameAuto = true;
                 bbcdUpdateCode();
+                bbcdUpdateName();
             }
         });
         // 基体值变化时也重新生成
@@ -6747,7 +6802,9 @@
             if (document.getElementById('bbcdMatrixMode')?.checked &&
                 document.getElementById('bbcdSolType').value === 'SOLUTION_TYPE_D') {
                 bbcdCodeAuto = true;
+                bbcdNameAuto = true;
                 bbcdUpdateCode();
+                bbcdUpdateName();
             }
         });
 
