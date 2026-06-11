@@ -7335,7 +7335,7 @@
             icon.addEventListener('click', () => qqExportRecord(parseInt(icon.dataset.idx)));
         });
         tbody.querySelectorAll('.qq-print-btn').forEach(icon => {
-            icon.addEventListener('click', () => qqPrintLabel(parseInt(icon.dataset.idx)));
+            icon.addEventListener('click', (e) => qqPrintLabel(parseInt(icon.dataset.idx), icon));
         });
         tbody.querySelectorAll('.qq-delete-btn').forEach(icon => {
             icon.addEventListener('click', () => qqDeleteRecord(parseInt(icon.dataset.idx)));
@@ -7646,10 +7646,18 @@
         }
     }
 
-    async function qqPrintLabel(idx) {
+    async function qqPrintLabel(idx, btn) {
         const item = qqLastResults[idx];
         if (!item) return;
         const solType = qqDetectType(item);
+        const origClass = btn.className;
+        const origColor = btn.style.color;
+        const setBtn = (iconClass, color, title) => {
+            btn.className = 'fas solution-config-icon qq-print-btn ' + iconClass;
+            btn.style.color = color;
+            if (title) btn.title = title;
+        };
+        setBtn('fa-spinner fa-spin', '#6366f1', '正在打印...');
         try {
             const resp = await fetch('/api/lims/get_solution_detail', {
                 method: 'POST',
@@ -7737,12 +7745,19 @@
                 images.push({ code: rec.solutionCode, preview: printData.preview, image: printData.image });
             }
 
-            if (images.length === 0) { alert('未找到可打印的标签数据'); return; }
+            if (images.length === 0) { alert('未找到可打印的标签数据'); setBtn('fa-tag', origColor, '标签打印'); return; }
 
             // 快速查询：不预览，直接打印
-            await _printImagesDirect(images);
+            const ok = await _printImagesDirect(images);
+            if (ok) {
+                setBtn('fa-check', '#22c55e', '打印成功');
+                setTimeout(() => setBtn('fa-tag', origColor, '标签打印'), 2000);
+            } else {
+                setBtn('fa-tag', origColor, '标签打印');
+            }
         } catch (e) {
             alert('生成标签失败: ' + e.message);
+            setBtn('fa-tag', origColor, '标签打印');
         }
     }
 
