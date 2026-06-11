@@ -6,8 +6,21 @@ echo.
 
 cd /d "%~dp0"
 
+REM -- try to stop common NSSM service names --
+echo [0/5] Stopping NSSM service ...
+nssm stop StandardSubstance 2>nul
+nssm stop flask_app 2>nul
+nssm stop FlaskService 2>nul
+echo   Waiting 3 seconds ...
+timeout /t 3 /nobreak >nul
+echo.
+
 echo [1/5] Installing all dependencies ...
-.venv\Scripts\pip install pywin32 reportlab pypdfium2 python-docx Pillow --force-reinstall
+.venv\Scripts\pip install pywin32 reportlab pypdfium2 python-docx Pillow
+if %errorlevel% neq 0 (
+    echo [WARN] pip install had errors, retrying without force-reinstall ...
+    .venv\Scripts\pip install pywin32 reportlab pypdfium2 python-docx Pillow --no-deps
+)
 echo.
 
 echo [2/5] Copying pywin32 DLLs to venv Scripts ...
@@ -54,6 +67,13 @@ if %errorlevel% neq 0 (
 )
 echo.
 echo ============================================
-echo   All done! Restart NSSM service now.
+echo   All done! Starting NSSM service ...
 echo ============================================
+nssm start StandardSubstance 2>nul
+nssm start flask_app 2>nul
+nssm start FlaskService 2>nul
+echo.
+echo   If service did not start, run manually:
+echo   nssm start YOUR_SERVICE_NAME
+echo.
 pause
