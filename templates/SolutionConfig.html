@@ -7739,36 +7739,32 @@
 
             if (images.length === 0) { alert('未找到可打印的标签数据'); return; }
 
-            const modalId = 'qqLabelPreviewModal';
-            let modal = document.getElementById(modalId);
-            if (modal) modal.remove();
-
-            window._qqLabelImages = images;
-
-            const imgHTML = images.map((img, i) => {
-                const label = img.conc ? `稀释点 ${i + 1}: ${img.conc}` : '';
-                return `<div class="mb-3">${label ? `<div class="small text-muted mb-1">${label}</div>` : ''}
-                    <img src="${img.preview}" style="border:1px solid #dee2e6;max-width:100%;" alt="标签预览">
-                </div>`;
-            }).join('');
-
-            document.body.insertAdjacentHTML('beforeend', `
-                <div class="modal fade" id="${modalId}" tabindex="-1">
-                  <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                      <div class="modal-header"><h5 class="modal-title">标签预览</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                      <div class="modal-body">${imgHTML}</div>
-                      <div class="modal-footer">
-                        <button type="button" class="btn btn-sm btn-primary" id="qqDoPrintBtn" onclick="doActualPrint('qqLabelImages')"><i class="fas fa-print me-1"></i>确认打印</button>
-                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">关闭</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-            `);
-            bootstrap.Modal.getOrCreateInstance(document.getElementById(modalId)).show();
+            // 快速查询：不预览，直接打印
+            await _printImagesDirect(images);
         } catch (e) {
             alert('生成标签失败: ' + e.message);
+        }
+    }
+
+    // 直接打印（无预览弹窗），返回是否成功
+    async function _printImagesDirect(images) {
+        try {
+            for (let i = 0; i < images.length; i++) {
+                const img = images[i];
+                if (!img.image) continue;
+                const resp = await fetch('/api/lims/do_print', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ image_base64: img.image, quantity: 1 })
+                });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.message || '打印失败');
+                if (images.length > 1) await new Promise(r => setTimeout(r, 1000));
+            }
+            return true;
+        } catch (e) {
+            alert('打印失败: ' + e.message);
+            return false;
         }
     }
 
