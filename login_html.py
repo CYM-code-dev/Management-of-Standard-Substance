@@ -2829,6 +2829,8 @@ def _docx_to_pdf_bytes(docx_bytes):
         word_app.Visible = False
         word_app.DisplayAlerts = False
         com_doc = word_app.Documents.Open(os.path.abspath(tmp_docx.name))
+        if com_doc is None:
+            raise RuntimeError("Word.Documents.Open returned None - service profile missing Desktop folder")
         com_doc.SaveAs(os.path.abspath(tmp_pdf.name), FileFormat=17)  # wdFormatPDF
         com_doc.Close(False)
 
