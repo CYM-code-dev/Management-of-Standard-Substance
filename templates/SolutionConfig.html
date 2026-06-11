@@ -7751,7 +7751,6 @@
             const ok = await _printImagesDirect(images);
             if (ok) {
                 setBtn('fa-check', '#22c55e', '打印成功');
-                setTimeout(() => setBtn('fa-tag', origColor, '标签打印'), 2000);
             } else {
                 setBtn('fa-tag', origColor, '标签打印');
             }
