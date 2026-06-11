@@ -2804,6 +2804,11 @@ def _epatemp_txt_to_pdf_bytes(text_content):
 def _docx_to_pdf_bytes(docx_bytes):
     """用 Word COM 将 docx 字节转为 PDF 字节。"""
     import tempfile
+    import sys, os
+    # NSSM 服务环境下 pywintypes DLL 可能不在 PATH 中，手动加入
+    _pywin32_sysdir = os.path.join(os.path.dirname(sys.executable), '..', 'Lib', 'site-packages', 'pywin32_system32')
+    if os.path.isdir(_pywin32_sysdir) and _pywin32_sysdir not in sys.path:
+        sys.path.insert(0, os.path.abspath(_pywin32_sysdir))
     import win32com.client
     import pythoncom
 
@@ -3957,6 +3962,27 @@ def lims_export_verification_docx():
         else:
             # 有 .D 文件夹 → docx 转 PDF + epatemp PDF 合并
             import base64 as _b64
+
+            # 检测 win32com 是否可用
+            _has_win32com = False
+            try:
+                import win32com.client  # noqa: F401
+                _has_win32com = True
+            except ImportError:
+                pass
+
+            if not _has_win32com:
+                # 无 win32com：降级为 docx 导出（不合并 epatemp PDF）
+                buf = io.BytesIO()
+                doc.save(buf)
+                buf.seek(0)
+                download_name = (new_code + '期间核查.docx') if new_code else '标准物质期间核查记录.docx'
+                from flask import send_file
+                from urllib.parse import quote as _urlquote
+                resp = send_file(buf, as_attachment=True, download_name=download_name,
+                                 mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+                resp.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{_urlquote(download_name)}"
+                return resp
 
             # 1. docx → PDF（Word COM）
             docx_buf = io.BytesIO()
