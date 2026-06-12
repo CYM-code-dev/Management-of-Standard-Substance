@@ -1959,7 +1959,8 @@
         concEl.value = concStr;
 
         const baseNum = item.customNum || item.no || 'CK-CG-UNKNOWN';
-        const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+        const _solDate = (document.getElementById('solConfigureDate')?.value || '').trim();
+        const today = _solDate ? _solDate.replace(/-/g,'') : new Date().toISOString().slice(0,10).replace(/-/g,'');
         codeEl.value = concEl.value ? `${baseNum}-${concStr}-${today}` : '';
         codeEl.title = codeEl.value;
 
@@ -2168,7 +2169,9 @@
         const nameEl = tbody.querySelector(`.sol-row-name[data-idx="${idx}"]`);
         const validEl = tbody.querySelector(`.sol-row-validity[data-idx="${idx}"]`);
         const storEl = tbody.querySelector(`.sol-row-storage[data-idx="${idx}"]`);
-        const rowCode = codeEl ? codeEl.value.trim() : `${baseNum}-${concVal}-${new Date().toISOString().slice(0,10).replace(/-/g,'')}`;
+        const _solDate = (document.getElementById('solConfigureDate')?.value || '').trim();
+        const today = _solDate ? _solDate.replace(/-/g,'') : new Date().toISOString().slice(0,10).replace(/-/g,'');
+        const rowCode = codeEl ? codeEl.value.trim() : `${baseNum}-${concVal}-${today}`;
         const rowName = nameEl ? nameEl.value.trim() : (item.name || '');
         const rowValidity = validEl ? validEl.value : '';
         const rowStorage = storEl ? storEl.value : '-4℃冰箱';
@@ -2254,8 +2257,22 @@
         const decimals = Math.max(0, n - 1 - mag);
         return v.toFixed(decimals);
     }
-    function bbcdRoundConc(v) { return v < 0.10 ? Math.round(v * 1000) / 1000 : Math.round(v * 100) / 100; }
-    function bbcdFmtConc(v) { return v < 0.10 ? v.toFixed(3) : v.toFixed(2); }
+    // 四舍六入五留双 (GB/T 8170 数字修约 / round half to even)。
+    // toPrecision(15) 去浮点噪声后再判半值留双，避免 IEEE-754 把 4.635 存成 4.63499.. 导致误判。
+    function bbcdRoundEven(v, decimals) {
+        if (!isFinite(v)) return NaN;
+        const f = Math.pow(10, decimals);
+        const scaled = parseFloat((v * f).toPrecision(15));
+        const floor = Math.floor(scaled);
+        const frac = scaled - floor;
+        let r;
+        if (frac < 0.5) r = floor;
+        else if (frac > 0.5) r = floor + 1;
+        else r = (floor % 2 === 0) ? floor : floor + 1; // 恰好5 → 留双
+        return r / f;
+    }
+    function bbcdRoundConc(v) { return bbcdRoundEven(v, v < 0.10 ? 3 : 2); }
+    function bbcdFmtConc(v) { const d = v < 0.10 ? 3 : 2; return bbcdRoundEven(v, d).toFixed(d); }
 
     // 读取指定稀释点所有组分的计算浓度，返回均值（无有效值返回 null）
     function bbcdGetPointMeanConc(dilutionIdx) {
@@ -2485,7 +2502,8 @@
 
         const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
         const srcList = rows.map(tr => tr._src).filter(Boolean);
-        const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+        const configureDate = (document.getElementById('bbcdConfigureDate')?.value || '').trim();
+        const today = configureDate ? configureDate.replace(/-/g,'') : new Date().toISOString().slice(0,10).replace(/-/g,'');
         if (srcList.length === 0) { codeEl.value = ''; codeEl.classList.remove('bbcd-code-confirm'); return; }
 
         // 按唯一源溶液分组（多组分行共享同一个源）
@@ -2544,7 +2562,8 @@
 
         const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')].filter(tr => tr._src);
         const srcList = rows.map(tr => tr._src).filter(Boolean);
-        const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+        const configureDate = (document.getElementById('bbcdConfigureDate')?.value || '').trim();
+        const today = configureDate ? configureDate.replace(/-/g,'') : new Date().toISOString().slice(0,10).replace(/-/g,'');
 
         // 基体模式：从 bbcdMediumD 读取基体值
         const matrixMode = document.getElementById('bbcdMatrixMode')?.checked || false;
@@ -3917,7 +3936,7 @@
                         if (isGradual) {
                             const conc = prevConc * qty / vol;
                             el.value = bbcdFmtConc(conc);
-                            prevConc = conc;
+                            prevConc = bbcdRoundConc(conc);
                         } else {
                             const conc = src.concValue * qty / vol;
                             el.value = bbcdFmtConc(conc);
@@ -4632,7 +4651,7 @@
             } else {
                 const c = srcConc * firstQty / vol;
                 chainConcs.push(bbcdRoundConc(c));
-                prevConc = c;
+                prevConc = chainConcs[i];
             }
         }
 
@@ -5620,6 +5639,31 @@
         return n < 0.10 ? n.toFixed(3) : n.toFixed(2);
     }
 
+    /** 将编号中的 [min-max] 浓度区间展开为全部点位；混合源取各点组分均值。
+     *  所有点位统一经 bbcdFmtConc(bbcdRoundEven) 做「四舍六入5留双」修约，
+     *  与自编号端点的修约方式一致；无区间或无点位则原样返回。 */
+    function _expandVerifyCodePoints(code, points) {
+        if (!code || !points || !points.length) return code || '';
+        if (code.indexOf('[') < 0) return code;                 // 无区间则原样返回
+        const items = points.map(function (p) {
+            var sc = p.sub_concs || {};
+            var comps = Object.keys(sc);
+            var num;
+            if (comps.length > 1) {                             // 混合源：组分算术均值
+                var sum = comps.reduce(function (s, k) { return s + (sc[k] || 0); }, 0);
+                num = sum / comps.length;
+            } else {                                            // 单组分：用现成浓度
+                num = (p.concentration !== undefined && p.concentration !== null)
+                      ? p.concentration : (comps.length ? sc[comps[0]] : 0);
+            }
+            return { num: num, str: bbcdFmtConc(num) };         // 统一四舍六入5留双修约
+        });
+        items.sort(function (a, b) { return a.num - b.num; });  // 升序
+        var seen = {}, uniq = [];
+        items.forEach(function (it) { if (!seen[it.str]) { seen[it.str] = 1; uniq.push(it.str); } });  // 去重
+        return code.replace(/\[[^\]]*\]/, '[' + uniq.join('-') + ']');
+    }
+
     function _renderCodeCheckboxes(containerId, points) {
         // 按浓度值从小到大排序去重
         const seen = new Set();
@@ -5651,12 +5695,12 @@
         const threshold = document.getElementById('verifyThreshold').value;
         let methodDesc = '';
         if (mode === 'new_verifies_old') {
-            document.getElementById('verifyTargetCodeArea').innerHTML = '<span>'+bbcdEsc(newSol.solutionCode || '')+'</span>';
+            document.getElementById('verifyTargetCodeArea').innerHTML = '<span>'+bbcdEsc(_expandVerifyCodePoints(newSol.solutionCode, newSol.concentrationPoints || []))+'</span>';
             _renderCodeCheckboxes('verifySourceCodeArea', oldSol.concentrationPoints || []);
             methodDesc = '用新配制的标液作标准曲线，测定原来配制的标液点的浓度，比较其浓度值相对偏差在' + threshold + '%以内';
         } else {
             _renderCodeCheckboxes('verifyTargetCodeArea', newSol.concentrationPoints || []);
-            document.getElementById('verifySourceCodeArea').innerHTML = '<span>'+bbcdEsc(oldSol.solutionCode || '')+'</span>';
+            document.getElementById('verifySourceCodeArea').innerHTML = '<span>'+bbcdEsc(_expandVerifyCodePoints(oldSol.solutionCode, oldSol.concentrationPoints || []))+'</span>';
             methodDesc = '用原来配制的标液作标准曲线，测定新配制的标液点的浓度，比较其浓度值相对偏差在' + threshold + '%以内';
         }
         document.getElementById('verifyMethodDesc').value = methodDesc;
