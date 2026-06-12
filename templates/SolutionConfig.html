@@ -1526,6 +1526,7 @@
     let solTotalPages = 1;
     let solTotalRecords = 0;
     let solPageSize = 30;
+    let solSelectedMap = new Map(); // 跨页选中：id -> item 对象（服务端分页，按 id 存对象）
 
     function solSetBtnSaved(done) {
         const btn = document.getElementById('solSaveBtn');
@@ -1656,6 +1657,7 @@
         // 重置弹窗
         solCurrentItem = null;
         solItems = [];
+        solSelectedMap.clear();
         solRenderItemsTable();
         document.getElementById('solSearchName').value = '';
         document.getElementById('solSearchCas').value = '';
@@ -1747,9 +1749,10 @@
                 const pdfIcon = (labNo && labNo !== '/' && labNo !== '—')
                     ? `<i class="fas fa-file-pdf cert-icon ms-1" data-labno="${escapeAttr(labNo)}" title="打开证书"></i>` : '';
                 const realIdx = list.indexOf(item);
+                const selChecked = (item.id != null && solSelectedMap.has(item.id)) ? 'checked' : '';
                 return `
                 <tr>
-                    <td><input type="checkbox" class="sol-result-check" data-idx="${realIdx}"></td>
+                    <td><input type="checkbox" class="sol-result-check" data-idx="${realIdx}" ${selChecked}></td>
                     <td><div class="d-flex justify-content-between align-items-center">${escapeHtml(labNo)}${pdfIcon}</div></td>
                     <td class="text-truncate" style="max-width:200px;" title="${escapeHtml(item.name||'')}">${escapeHtml(item.name||'')}</td>
                     <td>${escapeHtml(solFindLocalStock(item))}</td>
@@ -1779,14 +1782,26 @@
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-search"></i>';
+            // 同步跨页选中计数（覆盖 loading 占位 0；空/异常页也反映 solSelectedMap.size）
+            solResultUpdateSelection();
         }
     }
 
     function solResultUpdateSelection() {
         const checks = document.querySelectorAll('.sol-result-check');
         const checked = [...checks].filter(c => c.checked);
-        document.getElementById('solResultSelectedCount').textContent = checked.length;
-        document.getElementById('solResultAddBtn').disabled = checked.length === 0;
+        // 当前页勾选状态同步进跨页选中集合（按 id 存对象）
+        checks.forEach(c => {
+            const item = solLastResults[parseInt(c.dataset.idx, 10)];
+            if (!item || item.id == null) return;
+            if (c.checked) solSelectedMap.set(item.id, item);
+            else solSelectedMap.delete(item.id);
+        });
+        // 计数/按钮读跨页总数
+        const count = solSelectedMap.size;
+        document.getElementById('solResultSelectedCount').textContent = count;
+        document.getElementById('solResultAddBtn').disabled = count === 0;
+        // 表头全选仅反映当前页
         const all = document.getElementById('solResultCheckAll');
         all.checked = checks.length > 0 && checked.length === checks.length;
         all.indeterminate = checked.length > 0 && checked.length < checks.length;
@@ -2856,8 +2871,8 @@
             // Restore after short delay to allow async operations
             setTimeout(() => { bbcdLastResults = savedBbcdLastResults; }, 500);
         } else {
-            selectedIdx = [...document.querySelectorAll('.bbcd-row-check')]
-                .filter(c => c.checked).map(c => parseInt(c.dataset.idx, 10));
+            // 从跨页选择状态读取：bbcdSelectedIds 保存所有页选中项在 bbcdLastResults 中的下标
+            selectedIdx = [...bbcdSelectedIds];
             if (!selectedIdx.length) return;
             items = selectedIdx.map(i => bbcdLastResults[i]);
             window.bbcdSelectedItems = items;
@@ -7034,9 +7049,9 @@
     });
 
     document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('solSearchBtn').addEventListener('click', () => solSearchLims(1));
+        document.getElementById('solSearchBtn').addEventListener('click', () => { solSelectedMap.clear(); solSearchLims(1); });
         ['solSearchName','solSearchCas','solSearchLabNo','solSearchOrg'].forEach(id => {
-            document.getElementById(id).addEventListener('keypress', e => { if(e.key==='Enter') solSearchLims(1); });
+            document.getElementById(id).addEventListener('keypress', e => { if(e.key==='Enter') { solSelectedMap.clear(); solSearchLims(1); } });
         });
         document.getElementById('solResetBtn').addEventListener('click', () => {
             document.getElementById('solSearchName').value = '';
@@ -7052,18 +7067,17 @@
             document.getElementById('solResultAddBtn').disabled = true;
             document.getElementById('solPaginationBar').style.display = 'none';
             solLastResults = [];
+            solSelectedMap.clear();
         });
         document.getElementById('solResultCheckAll').addEventListener('change', e => {
             document.querySelectorAll('.sol-result-check').forEach(c => c.checked = e.target.checked);
             solResultUpdateSelection();
         });
         document.getElementById('solResultAddBtn').addEventListener('click', async () => {
-            const idxs = [...document.querySelectorAll('.sol-result-check:checked')]
-                .map(c => parseInt(c.dataset.idx, 10));
-            if (!idxs.length) return;
+            const selectedItems = [...solSelectedMap.values()];
+            if (!selectedItems.length) return;
             // 刷新选中标准品的库存量
             try {
-                const selectedItems = idxs.map(i => solLastResults[i]).filter(Boolean);
                 const refreshIds = selectedItems.map(it => it.id).filter(Boolean);
                 if (refreshIds.length) {
                     const resp = await fetch(`/api/query?pageSize=9999&pageNo=1&status=normal`);
@@ -7080,7 +7094,7 @@
                     }
                 }
             } catch (e) { console.warn('刷新库存量异常:', e); }
-            idxs.forEach(i => { if (solLastResults[i]) solAddItem(solLastResults[i]); });
+            selectedItems.forEach(it => solAddItem(it));
             bootstrap.Modal.getOrCreateInstance(document.getElementById('solConfigModal')).show();
         });
         document.getElementById('solConfigModal').addEventListener('hidden.bs.modal', () => {
