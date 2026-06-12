@@ -3357,6 +3357,127 @@ def update_excel_usage():
         return jsonify({"success": False, "message": f"更新失败: {str(e)}"}), 500
 
 
+@app.route('/api/update_excel_record', methods=['POST'])
+def update_excel_record():
+    """编辑标准品：按实验室编号原地更新该行全部字段（不新增）。"""
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    try:
+        data = request.get_json(silent=True) or {}
+        record = data.get('record') or {}
+        lab_no = str(record.get('labNo', '')).strip()
+        if not lab_no:
+            return jsonify({"success": False, "message": "缺少实验室编号"}), 400
+
+        # 字段 -> 表头（精确匹配定位列，避免“编号”误匹配“实验室编号”）
+        field_headers = [
+            ('originalId', '编号'), ('group', '组别'), ('labNo', '实验室编号'),
+            ('name', '标品名称'), ('cas', 'CAS号'), ('spec', '规格/浓度'),
+            ('manufacturer', '生产商'), ('expiry', '有效期'), ('location', '存放地点'),
+            ('storageDate', '入库日期'), ('usage', '使用情况'), ('remarks', '备注'),
+        ]
+
+        excel_path, _ = get_user_paths(session.get('display_name', ''))
+        excel_path = excel_path.strip()
+        if not excel_path:
+            return jsonify({"success": False, "message": "未配置 Excel 路径"}), 400
+        ext = os.path.splitext(excel_path)[1].lower()
+
+        if ext == '.xlsx':
+            wb = openpyxl.load_workbook(excel_path)
+            sheet_name = detect_sheet_name(wb)
+            if not sheet_name or sheet_name not in wb.sheetnames:
+                wb.close()
+                return jsonify({"success": False, "message": "工作表不存在"}), 400
+            ws = wb[sheet_name]
+
+            # 动态查找表头行 + 列映射（前 5 行中含“实验室编号”的行）
+            header_row = None
+            col_map = {}
+            for row_idx in range(1, min(6, ws.max_row + 1)):
+                cm = {}
+                for col_idx, cell in enumerate(ws[row_idx], 1):
+                    val = str(cell.value).strip() if cell.value is not None else ''
+                    for field, hdr in field_headers:
+                        if val == hdr and field not in cm:
+                            cm[field] = col_idx
+                if 'labNo' in cm:
+                    col_map, header_row = cm, row_idx
+                    break
+            if header_row is None:
+                wb.close()
+                return jsonify({"success": False, "message": "未找到含‘实验室编号’的表头行"}), 400
+
+            lab_col = col_map['labNo']
+            target_row = None
+            for row in ws.iter_rows(min_row=header_row + 1, values_only=False):
+                cv = row[lab_col - 1].value
+                if cv and str(cv).strip() == lab_no:
+                    target_row = row
+                    break
+            if target_row is None:
+                wb.close()
+                return jsonify({"success": True, "message": f"Excel 中未找到实验室编号 {lab_no}，跳过"})
+
+            for field, hdr in field_headers:
+                if field in col_map:
+                    target_row[col_map[field] - 1].value = record.get(field, '')
+            wb.save(excel_path)
+            wb.close()
+            return jsonify({"success": True, "message": "已更新到 Excel"})
+
+        elif ext == '.xls':
+            rb = xlrd.open_workbook(excel_path, formatting_info=True)
+            sheet_name = None
+            for name in _KNOWN_SHEET_NAMES:
+                if name in rb.sheet_names():
+                    sheet_name = name
+                    break
+            if not sheet_name and rb.sheet_names():
+                sheet_name = rb.sheet_names()[0]
+            if not sheet_name or sheet_name not in rb.sheet_names():
+                return jsonify({"success": False, "message": "工作表不存在"}), 400
+            sheet = rb.sheet_by_name(sheet_name)
+
+            header_row_idx = None
+            col_map = {}
+            for row_idx in range(min(5, sheet.nrows)):
+                cm = {}
+                for col_idx in range(sheet.ncols):
+                    val = str(sheet.cell_value(row_idx, col_idx)).strip()
+                    for field, hdr in field_headers:
+                        if val == hdr and field not in cm:
+                            cm[field] = col_idx
+                if 'labNo' in cm:
+                    col_map, header_row_idx = cm, row_idx
+                    break
+            if header_row_idx is None:
+                return jsonify({"success": False, "message": "未找到含‘实验室编号’的表头行"}), 400
+
+            lab_col = col_map['labNo']
+            target_row = None
+            for row_idx in range(header_row_idx + 1, sheet.nrows):
+                if str(sheet.cell_value(row_idx, lab_col)).strip() == lab_no:
+                    target_row = row_idx
+                    break
+            if target_row is None:
+                return jsonify({"success": True, "message": f"Excel 中未找到实验室编号 {lab_no}，跳过"})
+
+            wb = xl_copy(rb)
+            ws = wb.get_sheet(sheet_name)
+            for field, hdr in field_headers:
+                if field in col_map:
+                    ws.write(target_row, col_map[field], record.get(field, ''))
+            wb.save(excel_path)
+            return jsonify({"success": True, "message": "已更新到 Excel"})
+
+        else:
+            return jsonify({"success": False, "message": "仅支持 .xls 或 .xlsx"}), 400
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"更新 Excel 失败: {str(e)}"}), 500
+
+
 
 # ── 标液核查端点 ──
 

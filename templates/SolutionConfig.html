@@ -766,11 +766,12 @@
           <div>
             <label class="form-label mb-0 small fw-bold">批量保存条件</label>
             <div class="input-group input-group-sm">
-              <select id="solBatchStorage" class="form-select form-select-sm" style="background:#fffde7;">
-                <option value="-4℃冰箱">-4℃冰箱</option>
-                <option value="-18℃冰箱">-18℃冰箱</option>
-                <option value="干燥箱">干燥箱</option>
-              </select>
+              <input type="text" id="solBatchStorage" class="form-control form-control-sm" style="background:#fffde7;" list="solStorageOptions" placeholder="选择或输入" autocomplete="off">
+              <datalist id="solStorageOptions">
+                <option value="4℃冰箱">
+                <option value="-18℃冰箱">
+                <option value="干燥箱">
+              </datalist>
               <button class="btn btn-outline-secondary btn-sm" id="solBatchStorageBtn" title="应用到所有行">↓</button>
             </div>
           </div>
@@ -797,6 +798,13 @@
           <option value="二氯甲烷"></option>
           <option value="叔丁基甲醚"></option>
           <option value="环己烷"></option>
+          <option value="无声乙酸乙酯"></option>
+          <option value="四氢呋喃"></option>
+          <option value="丙酮"></option>
+          <option value="正己烷：丙酮=1:1"></option>
+          <option value="水"></option>
+          <option value="N,N-二甲基甲酰胺"></option>
+          <option value="异辛烷"></option>
         </datalist>
       </div>
       <div class="modal-footer gap-2">
@@ -841,7 +849,7 @@
           <label class="form-label mb-0 small fw-bold text-nowrap">保存条件 *</label>
           <input type="text" id="bbcdStorage" class="form-control form-control-sm" style="grid-column:span 3;" list="bbcdStorageOptions" placeholder="选择或输入" autocomplete="off">
           <datalist id="bbcdStorageOptions">
-            <option value="-4℃冰箱">
+            <option value="4℃冰箱">
             <option value="-18℃冰箱">
             <option value="4℃">
             <option value="干燥箱">
@@ -1862,7 +1870,7 @@
                         td.innerHTML = `<input type="date" class="form-control form-control-sm sol-row-validity" data-idx="${idx}">`;
                         break;
                     case 'storage':
-                        td.innerHTML = `<select class="form-select form-select-sm sol-row-storage" data-idx="${idx}"><option value="-4℃冰箱">-4℃冰箱</option><option value="-18℃冰箱">-18℃冰箱</option><option value="干燥箱">干燥箱</option></select>`;
+                        td.innerHTML = `<input type="text" class="form-control form-control-sm sol-row-storage" data-idx="${idx}" list="solStorageOptions" placeholder="选择或输入" autocomplete="off">`;
                         break;
                     case 'del':
                         td.innerHTML = `<button class="btn btn-outline-danger sol-row-del p-0" data-idx="${idx}" title="移除" style="width:16px;height:16px;font-size:0.5rem;line-height:1;"><i class="fas fa-times"></i></button>`;
@@ -2174,7 +2182,7 @@
         const rowCode = codeEl ? codeEl.value.trim() : `${baseNum}-${concVal}-${today}`;
         const rowName = nameEl ? nameEl.value.trim() : (item.name || '');
         const rowValidity = validEl ? validEl.value : '';
-        const rowStorage = storEl ? storEl.value : '-4℃冰箱';
+        const rowStorage = storEl ? storEl.value : '4℃冰箱';
         return {
             receive_id: receiveId,
             original_id: String(item.id),
@@ -2241,6 +2249,11 @@
         if (decimals != null) return v.toFixed(decimals);
         // mL 默认规则: >= 0.1 → 2 位, < 0.1 → 3 位
         return v < 0.1 ? v.toFixed(3) : v.toFixed(2);
+    }
+    // 移取体积保留位数：<0.1 保留 3 位，>=0.1 保留 2 位（mL 常规规则）。
+    // .bbcd-d-qty 失焦手动输入与批量填充共用，避免两处逻辑不一致导致回归。
+    function bbcdQtyDecimals(v) {
+        return v < 0.1 ? 3 : 2;
     }
     function bbcdRoundVol(v) {
         if (!isFinite(v) || v <= 0) return v;
@@ -3635,7 +3648,8 @@
             alert('请输入有效的移取体积');
             return;
         }
-        const formatted = bbcdFmtQty(bbcdRoundQty(v));
+        const useDec = bbcdQtyDecimals(v);
+        const formatted = bbcdFmtQty(bbcdRoundQty(v, useDec), useDec);
         // 填充该稀释点的所有源储备液的移取体积
         document.querySelectorAll(`.bbcd-d-qty[data-dilution="${dilutionIdx}"]`).forEach(qtyInput => {
             qtyInput.value = formatted;
@@ -3659,7 +3673,8 @@
             if (!isFinite(v) || v <= 0) continue;
 
             hasValue = true;
-            const formatted = bbcdFmtQty(bbcdRoundQty(v));
+            const useDec = bbcdQtyDecimals(v);
+            const formatted = bbcdFmtQty(bbcdRoundQty(v, useDec), useDec);
 
             // 填充该稀释点的所有源储备液的移取体积
             document.querySelectorAll(`.bbcd-d-qty[data-dilution="${i}"]`).forEach(qtyInput => {
@@ -3990,6 +4005,8 @@
     }
 
     function bbcdUpdateValidity() {
+        // 查看详情时保留记录原有效期，不按"今天"重算（否则历史记录的有效期会被覆盖）
+        if (window.bbcdViewDetailMode) return;
         const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')];
         if (!rows.length || !rows[0]._src) return;
 
@@ -4201,6 +4218,11 @@
         const concParts = [], orderParts = [], controlledParts = [];
         let hasMultiComponent = false;
 
+        // % 源（A型称量）领用量单位为 g，否则 mL；与 bbcdRecalcRow/bbcdPopulateBCConfigTable 保持一致
+        const qtyUnit = rows.some(tr => tr._src?.isPctSource) ? 'g' : 'mL';
+        // 详情模式下 % 源的浓度原值（显示侧用 rec.concentration，保存侧亦应保留而不重算）
+        const pctConcText = (window.bbcdViewDetailRecord && window.bbcdViewDetailRecord.concentration) || '';
+
         // 按源溶液分组
         const sourceGroups = [];
         rows.forEach(tr => {
@@ -4221,8 +4243,11 @@
             const firstTr = group.rows[0];
             const firstSrc = firstTr._src;
             const qtyEl = firstTr.querySelector('.bbcd-c-qty');
-            const qty = bbcdRoundQty(parseFloat(qtyEl?.value));
-            const qtyStr = bbcdFmtQty(qty);
+            // % 源（称量 g）保留输入框原始精度（如 0.0112），不按 mL 规则修约
+            const qtyStr = firstSrc.isPctSource
+                ? (qtyEl?.value || '')
+                : bbcdFmtQty(bbcdRoundQty(parseFloat(qtyEl?.value)));
+            const qty = parseFloat(qtyStr) || parseFloat(qtyEl?.value) || 0;
 
             orderParts.push(firstSrc.configureOrder);
             controlledParts.push(firstSrc.controlledNo || '');
@@ -4232,10 +4257,14 @@
                 const configConcParts = [];
                 group.rows.forEach(tr => {
                     const src = tr._src;
-                    const c = bbcdRoundConc(src.concValue * qty / volume);
-                    const concStr = bbcdFmtConc(c);
+                    // % 源（称量）不按稀释公式重算，保留原浓度（与显示侧一致）
+                    const concStr = src.isPctSource
+                        ? (pctConcText || '')
+                        : bbcdFmtConc(bbcdRoundConc(src.concValue * qty / volume));
                     configConcParts.push(`${src.componentName}:${concStr}`);
-                    concParts.push(`${src.componentName}:${concStr}(${src.concUnit})`);
+                    concParts.push(src.isPctSource
+                        ? `${src.componentName}:${concStr}`
+                        : `${src.componentName}:${concStr}(${src.concUnit})`);
                 });
                 const codeParts = (firstSrc.solutionCode || '').split('-');
                 const overallConc = codeParts.length >= 2 && /^[\d.]+$/.test(codeParts[codeParts.length - 2])
@@ -4251,8 +4280,8 @@
                     originalConcentration: origConc,
                     concentrationCount: firstSrc.concentrationRaw,
                     originalUnit: null,
-                    receivedQuantity: qtyStr, receivedUint: 'mL',
-                    useUantity: qtyStr, useUnit: 'mL',
+                    receivedQuantity: qtyStr, receivedUint: qtyUnit,
+                    useUantity: qtyStr, useUnit: qtyUnit,
                     medium: medium,
                     volume: volStr, unit: 'mL',
                     configurationConcentration: configConcParts.join(';'),
@@ -4268,9 +4297,13 @@
             } else {
                 // 单组分：保持现有逻辑
                 const src = firstSrc;
-                const c = bbcdRoundConc(src.concValue * qty / volume);
-                const concStr = bbcdFmtConc(c);
-                concParts.push(`${src.solutionName}:${concStr}(${src.concUnit})`);
+                // % 源（称量）不按稀释公式重算，保留原浓度（与显示侧一致）
+                const concStr = src.isPctSource
+                    ? (pctConcText || '')
+                    : bbcdFmtConc(bbcdRoundConc(src.concValue * qty / volume));
+                concParts.push(src.isPctSource
+                    ? `${src.solutionName}:${concStr}`
+                    : `${src.solutionName}:${concStr}(${src.concUnit})`);
                 const dlRec = src._detailRecord || null;
                 return {
                     id: dlRec ? dlRec.id : null, createDatetime: dlRec ? dlRec.createDatetime : nowStr, serialVersionUID: null,
@@ -4281,8 +4314,8 @@
                     originalConcentration: src.concentrationRaw,
                     concentrationCount: src.concentrationRaw,
                     originalUnit: null,
-                    receivedQuantity: qtyStr, receivedUint: 'mL',
-                    useUantity: qtyStr, useUnit: 'mL',
+                    receivedQuantity: qtyStr, receivedUint: qtyUnit,
+                    useUantity: qtyStr, useUnit: qtyUnit,
                     medium: medium,
                     volume: volStr, unit: 'mL',
                     configurationConcentration: concStr,
@@ -4311,36 +4344,37 @@
             serialVersionUID: null,
             solutionName: document.getElementById('bbcdSolutionName').value.trim(),
             solutionCode: document.getElementById('bbcdSolutionCode').value.trim(),
-            deviceIds: null, deviceNames: null,
+            deviceIds: _viewRec ? _viewRec.deviceIds : null,
+            deviceNames: document.getElementById('bbcdDevice')?.value.trim() || (_viewRec ? _viewRec.deviceNames : null) || null,
             configureDate: document.getElementById('bbcdConfigureDate').value,
             validityDate: document.getElementById('bbcdValidityDate').value,
             storageCondition: document.getElementById('bbcdStorage').value || null,
-            storageLocation: '4-1-华业4-1',
+            storageLocation: _viewRec ? _viewRec.storageLocation : '4-1-华业4-1',
             concentration: concParts.join(';'),
             concentrationCount: concParts.join(';'),
-            concentrationUnitName: null, uncertainty: null, configureOrder: null,
+            concentrationUnitName: _viewRec ? _viewRec.concentrationUnitName : null, uncertainty: null, configureOrder: _viewRec ? _viewRec.configureOrder : null,
             originalCode: orderParts.join(','),
             controlledNo: controlledParts.join(','),
-            medium: null, configuratorId: null,
+            medium: null, configuratorId: _viewRec ? _viewRec.configuratorId : null,
             solutionType: document.getElementById('bbcdSolType').value,
-            configuratorName: null,
-            constantVolume: 0, totalConstantVolume: 0, usedConstantVolume: 0,
+            configuratorName: _viewRec ? _viewRec.configuratorName : null,
+            constantVolume: _viewRec ? _viewRec.constantVolume : 0, totalConstantVolume: _viewRec ? _viewRec.totalConstantVolume : 0, usedConstantVolume: _viewRec ? _viewRec.usedConstantVolume : 0,
             remark: null, diluteStatus: false,
-            consumableReceive: null,
+            consumableReceive: _viewRec ? _viewRec.consumableReceive : null,
             customType: document.getElementById('bbcdCustomType').value.trim() || null,
-            auditUserName: null, auditTime: null,
-            diluteConcentrationControl: '[]',
+            auditUserName: _viewRec ? _viewRec.auditUserName : null, auditTime: _viewRec ? _viewRec.auditTime : null,
+            diluteConcentrationControl: _viewRec ? _viewRec.diluteConcentrationControl : '[]',
             pageType: hasMultiComponent ? 'SOLUTION_TYPE_E' : 'SOLUTION_TYPE_B',
             saveDetailList: JSON.stringify(detailList),
             originalValidityDate: earliestValidity,
-            configurationTemplateId: null, intermediateTemplateId: null,
+            configurationTemplateId: _viewRec ? _viewRec.configurationTemplateId : null, intermediateTemplateId: _viewRec ? _viewRec.intermediateTemplateId : null,
             temperature: document.getElementById('bbcdTemp').value.trim(),
             humidity: document.getElementById('bbcdHumid').value.trim(),
             computingFormula: null, configurationMethod: null,
             configurationProcess: null, nextAuditUserName: null,
             disposeUserName: null, disposeTime: null, disposeWay: null,
             configurationSolutionTemplateId: null, configurationRecordId: null,
-            receivedUint: 'mL',
+            receivedUint: qtyUnit,
         };
     }
 
@@ -4799,7 +4833,7 @@
             use_quantity: parseFloat(dl.receivedQuantity) || 0,
             solution_type: 'SOLUTION_TYPE_B',
             page_type: 'SOLUTION_TYPE_A',
-            storage_condition: rec.storageCondition || '-4℃冰箱',
+            storage_condition: rec.storageCondition || '4℃冰箱',
             temperature: rec.temperature || '',
             humidity: rec.humidity || '',
             device_names: deviceEl ? deviceEl.value.trim() : '',
@@ -6873,10 +6907,8 @@
                     bbcdCheckValidity();
                 }
             } else if (t.classList.contains('bbcd-d-qty')) {
-                // 工作液的移取体积：默认2位小数，用户输入3位时保留3位
-                const rawStr = t.value || '';
-                const decCount = rawStr.includes('.') ? rawStr.split('.')[1].length : 0;
-                const useDec = decCount >= 3 ? 3 : 2;
+                // 工作液的移取体积：<0.1 保留 3 位，>=0.1 保留 2 位
+                const useDec = bbcdQtyDecimals(v);
                 const rounded = bbcdRoundQty(v, useDec);
                 t.value = bbcdFmtQty(rounded, useDec);
                 if (document.getElementById('bbcdSolType').value === 'SOLUTION_TYPE_D') {

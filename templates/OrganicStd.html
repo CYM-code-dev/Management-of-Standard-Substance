@@ -1260,7 +1260,7 @@ function filterData() {
             saveBtn.disabled = true;
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 同步 Excel...';
             try {
-                const resp = await fetch('/api/add_to_excel', {
+                const resp = await fetch(id ? '/api/update_excel_record' : '/api/add_to_excel', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ record: newRecord }),
