@@ -2852,18 +2852,22 @@ def _docx_to_pdf_bytes(docx_bytes):
 
 
 def _merge_pdfs(pdf_pages):
-    """用 pypdfium2 合并多个 PDF 字节，返回合并后的 PDF 字节。"""
-    import pypdfium2 as pdfium
+    """合并多个 PDF 字节，返回合并后的 PDF 字节。
 
-    merged = pdfium.PdfDocument.new()
+    用 PyPDF2 字节级搬运，保留各页原始字体子集不变。pypdfium2 的
+    import_pages 会重新序列化页面、扰动 reportlab 子集字体的 cmap/ToUnicode
+    编码，曾导致合并后的定量报告页在 XP 打印时数字 5/6 乱码。
+    """
+    from PyPDF2 import PdfReader, PdfWriter
+
+    writer = PdfWriter()
     for pdf_bytes in pdf_pages:
-        src = pdfium.PdfDocument(pdf_bytes)
-        merged.import_pages(src)
-        src.close()
+        reader = PdfReader(BytesIO(pdf_bytes))
+        for page in reader.pages:
+            writer.add_page(page)
 
     buf = BytesIO()
-    merged.save(buf)
-    merged.close()
+    writer.write(buf)
     buf.seek(0)
     return buf.read()
 
