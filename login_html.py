@@ -1820,10 +1820,10 @@ def lims_quick_query():
     base_params = {
         "_search": "false", "nd": str(int(time.time() * 1000)),
         "pageSize": 9999, "pageNo": 1, "sidx": "", "sord": "asc",
-        "solutionName": "", "solutionCode": "", "customType": "", "configStatus": "",
+        "solutionName": "", "solutionCode": "", "customType": "", "configStatus": request.args.get('config_status', ''),
         "controlledNo": "", "storageLocation": "",
         "configureStartDate": date_from, "configureEndDate": date_to,
-        "configureUserName": operator, "receiveUserName": "", "auditStatus": "",
+        "configureUserName": operator, "receiveUserName": "", "auditStatus": request.args.get('audit_status', ''),
         "status": "1", "pid": pid, "pname": pname, "loginId": pid,
     }
     headers = {"Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544"}
@@ -1855,24 +1855,6 @@ def lims_quick_query():
         items = f_e.result() + f_d.result()
 
     return jsonify({"success": True, "data": items, "total": len(items)})
-
-_holiday_cache = {}
-
-@app.route('/api/holidays')
-def get_holidays():
-    year = request.args.get('year', str(datetime.date.today().year))
-    if year in _holiday_cache:
-        return jsonify({"success": True, "data": _holiday_cache[year]})
-    try:
-        resp = requests.get(f'https://timor.tech/api/holiday/year/{year}', timeout=8)
-        resp.raise_for_status()
-        result = resp.json()
-        if result.get('code') == 0:
-            _holiday_cache[year] = result.get('holiday', {})
-            return jsonify({"success": True, "data": _holiday_cache[year]})
-        return jsonify({"success": False, "message": "节假日接口返回异常"})
-    except Exception as e:
-        return jsonify({"success": False, "message": f"获取节假日失败: {str(e)}"})
 
 
 @app.route('/api/lims/get_source_info', methods=['GET'])
@@ -2086,6 +2068,74 @@ def lims_update_solution():
     except Exception as e:
         print(f"[updateObj1] exception: {e}")
         return jsonify({"success": False, "message": f"修改异常: {str(e)}"}), 500
+
+
+@app.route('/api/lims/audit_solution', methods=['POST'])
+def lims_audit_solution():
+    """代理溶液配置审核（未审核→已审核）→ auditData"""
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    p = request.get_json() or {}
+    solution_id = p.get('id')
+    if not solution_id:
+        return jsonify({"success": False, "message": "缺少记录ID"})
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+    pid = session.get('pid') or system.current_pid or ''
+    pname = session.get('display_name') or system.current_real_name or username
+    try:
+        url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/auditData"
+        headers = {"Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544"}
+        resp = system.session.get(url, params={
+            "id": solution_id, "pid": pid, "pname": pname, "loginId": pid,
+        }, headers=headers)
+        if not resp.ok:
+            print(f"[auditData] status={resp.status_code} body={resp.text[:500]}")
+        resp.raise_for_status()
+        result = resp.json()
+        if not result.get("success"):
+            return jsonify({"success": False, "message": result.get('errorDesc') or str(result.get('errorCtx', '审核失败'))})
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"[auditData] exception: {e}")
+        return jsonify({"success": False, "message": f"审核异常: {str(e)}"}), 500
+
+
+@app.route('/api/lims/unaudit_solution', methods=['POST'])
+def lims_unaudit_solution():
+    """代理溶液配置取消审核（已审核→未审核）→ cancelAuditData"""
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    p = request.get_json() or {}
+    solution_id = p.get('id')
+    if not solution_id:
+        return jsonify({"success": False, "message": "缺少记录ID"})
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+    pid = session.get('pid') or system.current_pid or ''
+    pname = session.get('display_name') or system.current_real_name or username
+    try:
+        url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/cancelAuditData"
+        headers = {"Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544"}
+        resp = system.session.get(url, params={
+            "id": solution_id, "pid": pid, "pname": pname, "loginId": pid,
+        }, headers=headers)
+        if not resp.ok:
+            print(f"[cancelAuditData] status={resp.status_code} body={resp.text[:500]}")
+        resp.raise_for_status()
+        result = resp.json()
+        if not result.get("success"):
+            return jsonify({"success": False, "message": result.get('errorDesc') or str(result.get('errorCtx', '取消审核失败'))})
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"[cancelAuditData] exception: {e}")
+        return jsonify({"success": False, "message": f"取消审核异常: {str(e)}"}), 500
 
 
 @app.route('/api/lims/delete_solution', methods=['POST'])

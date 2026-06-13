@@ -10,6 +10,21 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <style>
         *,*::before,*::after { box-sizing: border-box; }
+
+        /* 紫色描边按钮（Bootstrap 无内置紫色 outline，按 5.3 的 --bs-btn-* 变量自定义） */
+        .btn-outline-purple {
+            --bs-btn-color: #6f42c1;
+            --bs-btn-border-color: #6f42c1;
+            --bs-btn-hover-bg: #6f42c1;
+            --bs-btn-hover-border-color: #6f42c1;
+            --bs-btn-hover-color: #fff;
+            --bs-btn-focus-shadow-rgb: 111, 66, 193;
+            --bs-btn-active-bg: #6f42c1;
+            --bs-btn-active-border-color: #6f42c1;
+            --bs-btn-active-color: #fff;
+            --bs-btn-disabled-color: #6f42c1;
+            --bs-btn-disabled-border-color: #6f42c1;
+        }
         body {
             min-height: 100vh;
             background: #eef2ff;
@@ -389,6 +404,7 @@
             <button class="ms-2" id="logoutBtn" title="退出登录"><i class="fas fa-sign-out-alt"></i></button>
         </div>
         <button class="btn btn-outline-primary" id="quickQueryBtn"><i class="fas fa-bolt me-1"></i>快速查询</button>
+        <button class="btn btn-outline-purple" id="pendingAuditBtn"><i class="fas fa-hourglass-half me-1"></i>待审核</button>
         <a href="/organic-std" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>有机标准品</a>
     </div>
 </div>
@@ -924,6 +940,7 @@
         <button class="btn btn-sm btn-outline-secondary" id="bbcdExportBtn" disabled><i class="fas fa-file-word me-1"></i>导出记录</button>
         <button class="btn btn-sm btn-outline-secondary" id="bbcdPrintLabelBtn" disabled><i class="fas fa-print me-1"></i>打印标签</button>
         <button class="btn btn-sm btn-primary" id="bbcdSaveBtn" disabled><i class="fas fa-save me-1"></i>保存配置</button>
+        <button class="btn btn-sm bg-secondary text-white border-0" id="bbcdAuditBtn" style="display:none;">未审核</button>
       </div>
     </div>
   </div>
@@ -1128,7 +1145,7 @@
   <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header bg-primary text-white py-2">
-        <h6 class="modal-title mb-0"><i class="fas fa-bolt me-1"></i>快速查询</h6>
+        <h6 class="modal-title mb-0" id="qqModalTitle"><i class="fas fa-bolt me-1"></i>快速查询</h6>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -1139,6 +1156,15 @@
               <div class="col-auto">
                 <span class="small fw-bold me-1">配置人</span>
                 <input type="text" id="qqOperator" class="form-control form-control-sm d-inline-block" style="width:110px;" placeholder="配置人姓名">
+                <datalist id="qqOperatorList"></datalist>
+              </div>
+              <div class="col-auto" id="qqStatusWrap" style="display:none;">
+                <span class="small fw-bold me-1">状态</span>
+                <select id="qqStatus" class="form-select form-select-sm d-inline-block" style="width:auto;">
+                  <option value="">全部</option>
+                  <option value="0">正常</option>
+                  <option value="1">过期</option>
+                </select>
               </div>
               <div class="col-auto">
                 <span class="small fw-bold me-1">日期 起</span>
@@ -3208,11 +3234,47 @@
         }
     }
 
+    // 刷新详情模态框的「保存/审核」按钮：按可编辑性 + 当前审核状态
+    // 在 populate 详情模式与审核切换成功后各调用一次，避免逻辑重复
+    function bbcdRefreshDetailButtons(rec) {
+        // 保存按钮：已审核/非本人配置 → 置灰为「无修改权限」
+        const editAllowed = canEditRecord(rec);
+        const denyReason = getEditDenyReason(rec);
+        const saveBtn = document.getElementById('bbcdSaveBtn');
+        if (editAllowed) {
+            saveBtn.disabled = false;
+            saveBtn.className = 'btn btn-sm btn-primary';
+            saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>保存修改';
+            saveBtn.title = '';
+        } else {
+            saveBtn.disabled = true;
+            saveBtn.className = 'btn btn-sm btn-secondary';
+            saveBtn.innerHTML = '<i class="fas fa-lock me-1"></i>无修改权限';
+            saveBtn.title = denyReason;
+        }
+        // 审核按钮：仅详情模式且有记录 id 时显示；文案按当前审核状态翻转
+        // 审核按钮：仅详情模式且有记录 id 时显示；样式与列表「审核」列徽标一致
+        const auditBtn = document.getElementById('bbcdAuditBtn');
+        if (auditBtn) {
+            if (window.bbcdViewDetailMode && rec && rec.id) {
+                const audited = !!rec.auditUserName;
+                auditBtn.style.display = '';
+                auditBtn.className = audited ? 'btn btn-sm bg-success text-white border-0' : 'btn btn-sm bg-secondary text-white border-0';
+                auditBtn.innerHTML = audited ? '已审核' : '未审核';
+                auditBtn.disabled = false;
+            } else {
+                auditBtn.style.display = 'none';
+            }
+        }
+    }
+
     function bbcdPopulateConfigModal(rec, solType) {
         // 1. Set solution type
         document.getElementById('bbcdSolType').value = solType;
         window.bbcdViewDetailRecord = rec;
         window.bbcdViewDetailMode = true;
+        // 本次详情会话尚未切换审核状态（切换成功后由 bbcdAuditToggle 置位）
+        window._bbcdAuditChanged = null;
 
         // 2. Modal title
         const titleMap = { 'SOLUTION_TYPE_B': '储备液配置详情', 'SOLUTION_TYPE_C': '应用液配置详情', 'SOLUTION_TYPE_D': '工作液配置详情' };
@@ -3258,22 +3320,9 @@
         const volumeCol = document.getElementById('bbcdVolume')?.closest('td');
         if (volumeCol) volumeCol.style.display = isD ? 'none' : '';
 
-        // 5. Buttons - 权限控制
+        // 5. Buttons - 权限控制 + 审核状态（保存/审核按钮）
         const editAllowed = canEditRecord(rec);
-        const denyReason = getEditDenyReason(rec);
-
-        const saveBtn = document.getElementById('bbcdSaveBtn');
-        if (editAllowed) {
-            saveBtn.disabled = false;
-            saveBtn.className = 'btn btn-sm btn-primary';
-            saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>保存修改';
-            saveBtn.title = '';
-        } else {
-            saveBtn.disabled = true;
-            saveBtn.className = 'btn btn-sm btn-secondary';
-            saveBtn.innerHTML = '<i class="fas fa-lock me-1"></i>无修改权限';
-            saveBtn.title = denyReason;
-        }
+        bbcdRefreshDetailButtons(rec);
         document.getElementById('bbcdExportBtn').disabled = false;
         document.getElementById('bbcdPrintLabelBtn').disabled = false;
         document.getElementById('bbcdExportBtn').className = 'btn btn-sm btn-outline-secondary';
@@ -5317,6 +5366,54 @@
         return um ? um[1] : '';
     }
 
+    // 详情模式：切换当前记录的审核状态（审核 ↔ 取消审核）
+    async function bbcdAuditToggle() {
+        const rec = window.bbcdViewDetailRecord;
+        if (!rec || !rec.id) return;
+        const wasAudited = !!rec.auditUserName;
+        const action = wasAudited ? '取消审核' : '审核';
+        const btn = document.getElementById('bbcdAuditBtn');
+        const orig = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>处理中...';
+        try {
+            const endpoint = wasAudited ? '/api/lims/unaudit_solution' : '/api/lims/audit_solution';
+            const resp = await fetch(endpoint, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id: rec.id })
+            });
+            const data = await resp.json();
+            if (!data.success) {
+                btn.innerHTML = orig; btn.disabled = false;
+                alert(`${action}失败: ` + (data.message || '未知错误'));
+                return;
+            }
+            // 本地翻转审核状态，联动刷新「保存/审核」按钮（精确值下次打开详情时由服务端返回）
+            if (wasAudited) {
+                rec.auditUserName = null;
+                rec.auditTime = null;
+            } else {
+                rec.auditUserName = (typeof _currentDisplayName !== 'undefined' && _currentDisplayName) ? _currentDisplayName : '已审核';
+                rec.auditTime = new Date().toISOString();
+            }
+            bbcdRefreshDetailButtons(rec);
+            // 标记本次详情会话切换过审核状态，供来源列表（如待审核窗口）关闭时就地刷新徽标
+            const nowAudited = !wasAudited;
+            let sourceCodes = [];
+            // 工作液审核时，LIMS 会向上溯源把相关 B/C 源记录一并审核，收集其编号供来源列表一并刷新（仅审核方向）
+            if (nowAudited && document.getElementById('bbcdSolType').value === 'SOLUTION_TYPE_D' && Array.isArray(rec.detailList)) {
+                sourceCodes = [...new Set(
+                    rec.detailList.flatMap(dl => String(dl.originalCode || '').split(/[,，;；\s]+/).map(s => s.trim()).filter(Boolean))
+                )];
+            }
+            window._bbcdAuditChanged = { id: rec.id, audited: nowAudited, sourceCodes };
+        } catch (e) {
+            btn.innerHTML = orig; btn.disabled = false;
+            alert(`${action}异常: ` + e.message);
+        }
+    }
+
     async function bbcdSave() {
         if (!bbcdValidate()) return;
         const btn = document.getElementById('bbcdSaveBtn');
@@ -7012,6 +7109,7 @@
             }
         }, true);
         document.getElementById('bbcdSaveBtn').addEventListener('click', bbcdSave);
+        document.getElementById('bbcdAuditBtn').addEventListener('click', bbcdAuditToggle);
         document.getElementById('bbcdExportBtn').addEventListener('click', bbcdExport);
         document.getElementById('bbcdPrintLabelBtn').addEventListener('click', bbcdPrintLabel);
         document.getElementById('bbcdConfigModal').addEventListener('click', (e) => {
@@ -7280,6 +7378,8 @@
             window.bbcdViewDetailMode = false;
             window.bbcdViewDetailRecord = null;
             window.bbcdDetailIds = null;
+            const _auditBtn = document.getElementById('bbcdAuditBtn');
+            if (_auditBtn) _auditBtn.style.display = 'none';
             const _devL = document.getElementById('bbcdDeviceLabel');
             const _devI = document.getElementById('bbcdDevice');
             if (_devL) _devL.style.display = 'none';
@@ -7344,25 +7444,34 @@
     let qqTotalPages = 1;
     let qqTotalRecords = 0;
     let qqPageSize = 30;
+    let qqAuditMode = false; // true=待审核模式(仅未审核)
 
-    // 节假日缓存: { 'YYYY-MM-DD': true(放假) / false(补班) }
-    let _holidayMap = {};
-    let _holidayLoaded = false;
-
-    async function loadHolidays() {
-        if (_holidayLoaded) return;
-        const year = new Date().getFullYear();
-        try {
-            const resp = await fetch(`/api/holidays?year=${year}`);
-            const data = await resp.json();
-            if (data.success && data.data) {
-                for (const [mmdd, info] of Object.entries(data.data)) {
-                    _holidayMap[`${year}-${mmdd}`] = info.holiday;
-                }
-            }
-        } catch (e) { /* 降级为仅周末判断 */ }
-        _holidayLoaded = true;
-    }
+    // 法定节假日安排（每年年初公布，直接内置，不再请求外部接口）
+    // _holidayMap: { 'YYYY-MM-DD': true(放假) | false(周末补班) }；未收录日期按周末判断
+    // 数据来源：国务院办公厅关于2026年部分节假日安排的通知（2025-11-04）
+    let _holidayMap = {
+        // 元旦：1/1–1/3 放假，1/4 补班
+        '2026-01-01': true, '2026-01-02': true, '2026-01-03': true, '2026-01-04': false,
+        // 春节：2/15–2/23 放假，2/14、2/28 补班
+        '2026-02-14': false,
+        '2026-02-15': true, '2026-02-16': true, '2026-02-17': true, '2026-02-18': true,
+        '2026-02-19': true, '2026-02-20': true, '2026-02-21': true, '2026-02-22': true, '2026-02-23': true,
+        '2026-02-28': false,
+        // 清明节：4/4–4/6 放假
+        '2026-04-04': true, '2026-04-05': true, '2026-04-06': true,
+        // 劳动节：5/1–5/5 放假，5/9 补班
+        '2026-05-01': true, '2026-05-02': true, '2026-05-03': true, '2026-05-04': true, '2026-05-05': true,
+        '2026-05-09': false,
+        // 端午节：6/19–6/21 放假
+        '2026-06-19': true, '2026-06-20': true, '2026-06-21': true,
+        // 中秋节：9/25–9/27 放假
+        '2026-09-25': true, '2026-09-26': true, '2026-09-27': true,
+        // 国庆节：10/1–10/7 放假，9/20、10/10 补班
+        '2026-09-20': false,
+        '2026-10-01': true, '2026-10-02': true, '2026-10-03': true, '2026-10-04': true,
+        '2026-10-05': true, '2026-10-06': true, '2026-10-07': true,
+        '2026-10-10': false,
+    };
 
     function qqIsWorkday(dateStr) {
         const d = new Date(dateStr + 'T00:00:00');
@@ -7405,9 +7514,16 @@
     }
 
     async function openQuickQueryModal() {
-        await loadHolidays();
+        qqAuditMode = false;
+        const op = document.getElementById('qqOperator');
+        op.removeAttribute('list'); op.removeAttribute('autocomplete');
+        document.getElementById('qqStatusWrap').style.display = 'none';
+        document.getElementById('qqStatus').value = '';
+        qqRenderHead();
+        const _t = document.getElementById('qqModalTitle');
+        if (_t) _t.innerHTML = '<i class="fas fa-bolt me-1"></i>快速查询';
         const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('quickQueryModal'));
-        document.getElementById('qqOperator').value = displayUserNameSpan?.textContent || '';
+        op.value = displayUserNameSpan?.textContent || '';
         const today = new Date().toISOString().slice(0, 10);
         document.getElementById('qqDateFrom').value = qqPrevWorkday(today);
         document.getElementById('qqDateTo').value = today;
@@ -7415,9 +7531,51 @@
         qqDoQuery(1);
     }
 
+    async function openPendingAuditModal() {
+        qqAuditMode = true;
+        const op = document.getElementById('qqOperator');
+        op.setAttribute('list', 'qqOperatorList'); op.setAttribute('autocomplete', 'off');
+        document.getElementById('qqStatusWrap').style.display = '';
+        document.getElementById('qqStatus').value = '';
+        qqRenderHead();
+        const today = new Date();
+        const dTo = today.toISOString().slice(0, 10);
+        const from = new Date(today); from.setMonth(from.getMonth() - 1);
+        op.value = '';
+        document.getElementById('qqDateFrom').value = from.toISOString().slice(0, 10);
+        document.getElementById('qqDateTo').value = dTo;
+        const title = document.getElementById('qqModalTitle');
+        if (title) title.innerHTML = '<i class="fas fa-hourglass-half me-1"></i>待审核';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('quickQueryModal')).show();
+        qqDoQuery(1);
+    }
+
+    function qqRenderHead() {
+        const head = document.querySelector('#qqResultTable thead');
+        if (!head) return;
+        head.innerHTML = qqAuditMode
+            ? `<tr><th>类型</th><th style="width:80px;">编号</th><th>自编号</th><th>名称</th><th>配置人</th><th>状态</th><th style="white-space:nowrap;">审核状态</th><th style="width:60px;">操作</th></tr>`
+            : `<tr><th>类型</th><th>编号</th><th>自编号</th><th>名称</th><th>审核状态</th><th style="width:90px;">操作</th></tr>`;
+    }
+
+    function qqStatusBadge(item) {
+        const v = item.validityDate ? String(item.validityDate).slice(0, 10) : '';
+        if (!v) return '<span class="badge bg-secondary">—</span>';
+        const today = new Date().toISOString().slice(0, 10);
+        return v < today ? '<span class="badge bg-danger">过期</span>' : '<span class="badge bg-success">正常</span>';
+    }
+
+    function qqRefreshOperatorOptions(list) {
+        const dl = document.getElementById('qqOperatorList');
+        if (!dl) return;
+        const operators = [...new Set(list.map(it => it.configuratorName || it.creatorName).filter(Boolean))].sort();
+        dl.innerHTML = operators.map(v => `<option value="${qqEsc(v)}"></option>`).join('');
+    }
+
     async function qqDoQuery(pageNo) {
         if (pageNo === undefined) pageNo = 1;
         qqPageNo = pageNo;
+        const ncol = qqAuditMode ? 8 : 6;
         const operator = document.getElementById('qqOperator').value.trim();
         const dateFrom = document.getElementById('qqDateFrom').value;
         const dateTo = document.getElementById('qqDateTo').value;
@@ -7425,24 +7583,25 @@
         const btn = document.getElementById('qqQueryBtn');
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>查询中';
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted small py-3"><i class="fas fa-spinner fa-spin me-1"></i>查询中...</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="${ncol}" class="text-center text-muted small py-3"><i class="fas fa-spinner fa-spin me-1"></i>查询中...</td></tr>`;
         document.getElementById('qqPaginationBar').style.display = 'none';
         try {
-            const params = new URLSearchParams({ operator, date_from: dateFrom, date_to: dateTo, page_no: pageNo, page_size: qqPageSize });
+            const params = new URLSearchParams({ operator, date_from: dateFrom, date_to: dateTo, audit_status: qqAuditMode ? '0' : '', config_status: qqAuditMode ? document.getElementById('qqStatus').value : '', page_no: pageNo, page_size: qqPageSize });
             const resp = await fetch('/api/lims/quick_query?' + params.toString());
             const data = await resp.json();
             if (!data.success) {
-                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger small py-3">查询失败: ${qqEsc(data.message)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="${ncol}" class="text-center text-danger small py-3">查询失败: ${qqEsc(data.message)}</td></tr>`;
                 return;
             }
             qqLastResults = data.data || [];
+            if (qqAuditMode && !operator) qqRefreshOperatorOptions(qqLastResults);
             qqTotalRecords = data.total || 0;
             qqFilteredResults = qqLastResults;
             qqTotalPages = Math.max(1, Math.ceil(qqFilteredResults.length / qqPageSize));
             document.getElementById('qqTotalCount').textContent = qqTotalRecords;
             qqRenderCurrentPage();
         } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger small py-3">查询异常: ${qqEsc(e.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${ncol}" class="text-center text-danger small py-3">查询异常: ${qqEsc(e.message)}</td></tr>`;
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-search me-1"></i>查询';
@@ -7455,9 +7614,10 @@
         const paginationBar = document.getElementById('qqPaginationBar');
         const total = list.length;
         const totalPages = Math.max(1, Math.ceil(total / qqPageSize));
+        const ncol = qqAuditMode ? 8 : 6;
         if (qqPageNo > totalPages) qqPageNo = totalPages;
         if (!total) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted small py-3">无匹配记录</td></tr>';
+            tbody.innerHTML = `<tr><td colspan="${ncol}" class="text-center text-muted small py-3">无匹配记录</td></tr>`;
             paginationBar.style.display = 'none';
             return;
         }
@@ -7471,20 +7631,27 @@
                 ? '<span class="badge bg-success">已审核</span>'
                 : '<span class="badge bg-secondary">未审核</span>';
             const realIdx = qqLastResults.indexOf(item);
+            const detailIcon = `<i class="fas fa-eye solution-config-icon qq-detail-btn" data-idx="${realIdx}" title="查看详情" style="color:#14b8a6;"></i>`;
+            const opIcons = qqAuditMode ? detailIcon
+                : `<i class="fas fa-tag solution-config-icon qq-print-btn" data-idx="${realIdx}" title="标签打印" style="color:#6366f1;"></i>`
+                + `<i class="fas fa-file-export solution-config-icon qq-export-btn" data-idx="${realIdx}" title="导出记录" style="color:#f59e0b;"></i>`
+                + detailIcon
+                + `<i class="fas fa-trash-alt solution-config-icon qq-delete-btn" data-idx="${realIdx}" title="删除" style="color:#ef4444;"></i>`;
+            const codeCell = qqAuditMode
+                ? `<td class="text-nowrap">${qqEsc(item.configureOrder)}</td>`
+                : `<td>${qqEsc(item.configureOrder)}</td>`;
+            const solCodeCell = `<td class="text-truncate" style="max-width:140px;" title="${qqEsc(item.solutionCode)}">${qqEsc(item.solutionCode)}</td>`;
+            const extraCells = qqAuditMode
+                ? `<td class="text-truncate" style="max-width:100px;" title="${qqEsc(item.configuratorName || item.creatorName || '')}">${qqEsc(item.configuratorName || item.creatorName || '—')}</td><td>${qqStatusBadge(item)}</td>`
+                : '';
             return `<tr>
                 <td>${qqTypeBadge(solType)}</td>
-                <td>${qqEsc(item.configureOrder)}</td>
-                <td class="text-wrap" style="min-width:120px;" title="${qqEsc(item.solutionCode)}">${qqEsc(item.solutionCode)}</td>
+                ${codeCell}
+                ${solCodeCell}
                 <td class="text-truncate" style="max-width:200px;" title="${qqEsc(item.solutionName)}">${qqEsc(item.solutionName)}</td>
+                ${extraCells}
                 <td>${auditHtml}</td>
-                <td>
-                    <div class="d-flex gap-2 justify-content-center">
-                        <i class="fas fa-tag solution-config-icon qq-print-btn" data-idx="${realIdx}" title="标签打印" style="color:#6366f1;"></i>
-                        <i class="fas fa-file-export solution-config-icon qq-export-btn" data-idx="${realIdx}" title="导出记录" style="color:#f59e0b;"></i>
-                        <i class="fas fa-eye solution-config-icon qq-detail-btn" data-idx="${realIdx}" title="查看详情" style="color:#14b8a6;"></i>
-                        <i class="fas fa-trash-alt solution-config-icon qq-delete-btn" data-idx="${realIdx}" title="删除" style="color:#ef4444;"></i>
-                    </div>
-                </td>
+                <td><div class="d-flex gap-2 justify-content-center">${opIcons}</div></td>
             </tr>`;
         }).join('');
         document.getElementById('qqPageInfo').textContent = `第 ${qqPageNo} / ${totalPages} 页`;
@@ -7492,15 +7659,17 @@
         tbody.querySelectorAll('.qq-detail-btn').forEach(icon => {
             icon.addEventListener('click', () => qqViewDetail(parseInt(icon.dataset.idx)));
         });
-        tbody.querySelectorAll('.qq-export-btn').forEach(icon => {
-            icon.addEventListener('click', () => qqExportRecord(parseInt(icon.dataset.idx)));
-        });
-        tbody.querySelectorAll('.qq-print-btn').forEach(icon => {
-            icon.addEventListener('click', (e) => qqPrintLabel(parseInt(icon.dataset.idx), icon));
-        });
-        tbody.querySelectorAll('.qq-delete-btn').forEach(icon => {
-            icon.addEventListener('click', () => qqDeleteRecord(parseInt(icon.dataset.idx)));
-        });
+        if (!qqAuditMode) {
+            tbody.querySelectorAll('.qq-export-btn').forEach(icon => {
+                icon.addEventListener('click', () => qqExportRecord(parseInt(icon.dataset.idx)));
+            });
+            tbody.querySelectorAll('.qq-print-btn').forEach(icon => {
+                icon.addEventListener('click', (e) => qqPrintLabel(parseInt(icon.dataset.idx), icon));
+            });
+            tbody.querySelectorAll('.qq-delete-btn').forEach(icon => {
+                icon.addEventListener('click', () => qqDeleteRecord(parseInt(icon.dataset.idx)));
+            });
+        }
     }
 
     async function qqViewDetail(idx) {
@@ -7535,6 +7704,28 @@
                     detailModal.style.zIndex = '';
                     document.querySelectorAll('.modal-backdrop').forEach(b => b.style.zIndex = '');
                     bootstrap.Modal.getOrCreateInstance(document.getElementById('quickQueryModal')).show();
+                    // 详情中切换过审核状态 → 就地刷新该行徽标（不重新查询，故条目保留至用户再次查询）
+                    if (window._bbcdAuditChanged) {
+                        const ch = window._bbcdAuditChanged;
+                        window._bbcdAuditChanged = null;
+                        let changed = false;
+                        const applyAudit = (it) => {
+                            it.auditUserName = ch.audited
+                                ? ((typeof _currentDisplayName !== 'undefined' && _currentDisplayName) ? _currentDisplayName : '已审核')
+                                : null;
+                            changed = true;
+                        };
+                        // 主记录
+                        const main = qqLastResults.find(it => String(it.id) === String(ch.id));
+                        if (main) applyAudit(main);
+                        // 工作液向上溯源：相关 B/C 源记录也已被审核（仅审核方向）
+                        if (ch.audited && Array.isArray(ch.sourceCodes) && ch.sourceCodes.length) {
+                            qqLastResults.forEach(it => {
+                                if (ch.sourceCodes.includes(String(it.configureOrder || '').trim())) applyAudit(it);
+                            });
+                        }
+                        if (changed) qqRenderCurrentPage();
+                    }
                 }, { once: true });
             }
         } catch (e) {
@@ -7997,6 +8188,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('quickQueryBtn').addEventListener('click', openQuickQueryModal);
+        document.getElementById('pendingAuditBtn').addEventListener('click', openPendingAuditModal);
         document.getElementById('qqQueryBtn').addEventListener('click', () => qqDoQuery(1));
         document.querySelectorAll('.qq-page-btn').forEach(btn => {
             btn.addEventListener('click', () => {
