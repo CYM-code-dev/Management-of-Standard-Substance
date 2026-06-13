@@ -2879,8 +2879,8 @@
     function bbcdRenderSpecRemain(item) {
         const total = item.totalConstantVolume != null ? Number(item.totalConstantVolume).toFixed(2) : null;
         const remain = item.constantVolume != null ? Number(item.constantVolume).toFixed(2) : null;
-        if (total && remain) return `${total}/${remain}`;
-        if (remain) return remain;
+        if (total && remain) return `${total}/${remain} mL`;
+        if (remain) return `${remain} mL`;
         return '—';
     }
 
