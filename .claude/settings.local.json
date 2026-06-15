@@ -115,7 +115,9 @@
       "Bash(rm -f .mcp.json)",
       "Bash(rm -f 'C:\\\\Users\\\\admin/.claude/mcp.json')",
       "Bash(APIFOX_API_KEY=\"afxp_d213b4FGYKwP7aSUGNZmEeXHfEzXZF9yOHRR\" PROJECT_ID=\"8238274\" npx -y @wangmhaha/apifox-mcp-server --local)",
-      "mcp__apifox__get-interface"
+      "mcp__apifox__get-interface",
+      "Bash(ls -1 *.html *.js)",
+      "Bash(ls -1 templates/ static/)"
     ]
   },
   "enableAllProjectMcpServers": true,

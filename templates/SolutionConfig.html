@@ -2307,6 +2307,36 @@
         return components.length > 1 ? components : null;
     }
 
+    // 从源名称解析"X种"混标的种数（如"5种阴离子混标"→5、"29种芳香族伯胺混标"→29），
+    // 用于多源均值加权。只匹配"数字+种"，浓度/标准号数字（1000μg/mL、GB 31604.52）后不跟"种"，天然不误匹配。
+    function bbcdParseSpeciesCount(name) {
+        const m = /(\d+)\s*种/.exec(String(name == null ? '' : name));
+        if (!m) return 1;
+        const n = parseInt(m[1], 10);
+        return Number.isFinite(n) && n > 0 ? n : 1;
+    }
+
+    // 多源均值的行权重：concentration 已展开的多组分行权重1（已隐式加权），单行用源名称种数。
+    function bbcdRowWeight(tr) {
+        const src = tr && tr._src;
+        if (!src) return 1;
+        if (src.isComponent) return 1;
+        return bbcdParseSpeciesCount(src.solutionName);
+    }
+
+    // 加权均值；权重项 0/NaN/非正 当 1；全权重1时退化为算术均值（与改造前一致）。
+    function bbcdWeightedMean(values, weights) {
+        if (!Array.isArray(values) || !values.length) return null;
+        let wv = 0, sw = 0;
+        for (let i = 0; i < values.length; i++) {
+            let w = weights[i];
+            if (!(typeof w === 'number' && isFinite(w) && w > 0)) w = 1;
+            wv += values[i] * w;
+            sw += w;
+        }
+        return sw > 0 ? wv / sw : null;
+    }
+
     function bbcdEsc(s) { return escapeHtml(s == null ? '' : String(s)); }
 
     // 修约规则（与 A-B μg/mL 时一致）
@@ -2368,15 +2398,19 @@
     // 读取指定稀释点所有组分的计算浓度，返回均值（无有效值返回 null）
     function bbcdGetPointMeanConc(dilutionIdx) {
         const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')].filter(tr => tr._src);
-        const concs = [];
+        const vals = [];
+        const ws = [];
         rows.forEach(tr => {
             const cell = tr.querySelector(`.bbcd-d-conc[data-dilution="${dilutionIdx}"]`);
             if (cell) {
                 const v = parseFloat(cell.value);
-                if (isFinite(v) && v > 0) concs.push(v);
+                if (isFinite(v) && v > 0) {
+                    vals.push(v);
+                    ws.push(bbcdRowWeight(tr));
+                }
             }
         });
-        return concs.length > 0 ? concs.reduce((a, b) => a + b, 0) / concs.length : null;
+        return bbcdWeightedMean(vals, ws);
     }
 
     // 自编号自动生成
@@ -2485,6 +2519,7 @@
         const vol = parseFloat(document.getElementById('bbcdVolume')?.value);
         if (!vol || vol <= 0) return '';
         const vals = [];
+        const ws = [];
         rows.forEach(tr => {
             let qtyInput = tr.querySelector('.bbcd-c-qty');
             if (!qtyInput && tr._src.isComponent && tr._src.componentIdx > 0) {
@@ -2497,7 +2532,7 @@
             if (!qty || qty <= 0) return;
             if (tr._src.isPctSource) {
                 const n = bbcdPctConcNum(tr._src, qty, vol);
-                if (!isNaN(n)) vals.push(n);
+                if (!isNaN(n)) { vals.push(n); ws.push(bbcdRowWeight(tr)); }
                 return;
             }
             let concValue = tr._src.concValue;
@@ -2511,9 +2546,11 @@
             }
             if (isNaN(concValue)) return;
             vals.push(concValue * qty / vol);
+            ws.push(bbcdRowWeight(tr));
         });
         if (!vals.length) return '';
-        const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+        const mean = bbcdWeightedMean(vals, ws);
+        if (mean === null) return '';
         return bbcdFmtConc(bbcdRoundConc(mean));
     }
 
@@ -4769,9 +4806,17 @@
         // Calculate serial chain concentrations per dilution point
         // chainConcs[i] = result concentration of dilution point i
         const isMultiSource = sourceGroups.length > 1;
-        // For multi-source: use overall mean across ALL individual source rows
-        const allConcVals = rows.map(tr => tr._src.concValue).filter(v => isFinite(v));
-        const overallMeanSrcConc = allConcVals.length ? allConcVals.reduce((a, b) => a + b, 0) / allConcVals.length : 0;
+        // For multi-source: weighted mean across ALL individual source rows (按种数加权)
+        const allConcVals = [];
+        const allWeights = [];
+        rows.forEach(tr => {
+            const v = tr._src.concValue;
+            if (isFinite(v)) {
+                allConcVals.push(v);
+                allWeights.push(bbcdRowWeight(tr));
+            }
+        });
+        const overallMeanSrcConc = bbcdWeightedMean(allConcVals, allWeights) || 0;
 
         const chainConcs = [];
         let prevConc = null;
