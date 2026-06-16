@@ -6856,6 +6856,10 @@
 
     async function verifyExportDocx() {
         if (!_verifyData) { alert('请先获取核查信息'); return; }
+        const btn = document.getElementById('verifyExportBtn');
+        const origBtnHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>导出中...';
         const table0Data = [];
         document.querySelectorAll('#verifyTable0 tbody tr').forEach((tr, i) => {
             const cells = tr.querySelectorAll('td');
@@ -6908,8 +6912,11 @@
                 ? (payload.new_solution_code ? payload.new_solution_code + '期间核查.pdf' : '标准物质期间核查记录.pdf')
                 : (payload.new_solution_code ? payload.new_solution_code + '期间核查.docx' : '标准物质期间核查记录.docx');
             a.click(); URL.revokeObjectURL(url);
-            alert('核查记录导出成功（' + (hasEpatemp ? 'PDF' : 'Word') + '格式）');
         } catch (e) { alert('导出异常: '+e.message); }
+        finally {
+            btn.disabled = false;
+            btn.innerHTML = origBtnHtml;
+        }
     }
 
 
