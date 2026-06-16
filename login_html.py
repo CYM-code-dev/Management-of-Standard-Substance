@@ -4175,6 +4175,13 @@ def lims_export_verification_docx():
         _docx_set_row_height(t1.rows[-2], row_height)  # 核查结论行
         _docx_set_row_height(t1.rows[-1], row_height)  # 备注行
 
+        # 为信息行（被核查对象编号、核查对象编号、核查方法、核查时间、核查方法描述）
+        # 设置可压缩行高，让表格更紧凑（R0-R3）
+        # 这些行内容不换行，可以使用较小行高
+        info_row_height = 300  # 15磅 = 300 twips，比数据行更小，节省空间
+        for row_idx in range(min(4, len(t1.rows))):  # R0-R3
+            _docx_set_row_height(t1.rows[row_idx], info_row_height)
+
         # 为最后3个数据行设置 keepNext，强制与结论行保持在同一页
         # 这样确保结论行不会单独成为新页第一行
         last_data_rows = min(3, len(table1_data))  # 至少3行，如果数据少于3行则全部设置
