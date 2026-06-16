@@ -4198,39 +4198,41 @@ def lims_export_verification_docx():
         # 备注
         t1.rows[-1].cells[0].text = '备注：' + str(p.get('备注', ''))
 
-        # 为表格后的段落（分析/日期、校核/日期）设置 keepNext，防止与表格分离
-        # 直接遍历文档的所有元素，找到表格1之后的段落
+        # 为表格后的所有段落设置 keepNext，包括空段落（换行符）
+        # 这样可以形成完整的链条，防止中间的空段落导致分页
         body = doc._element.body
         t1_elem = t1._element
         found_t1 = False
-        signature_paras = []  # 收集签名栏段落
+        paras_after_t1 = []  # 收集表格后的所有段落
+        signature_count = 0
+
         for elem in body:
             if elem == t1_elem:
                 found_t1 = True
                 continue
             # 在表格1之后，查找段落元素
             if found_t1 and elem.tag == _docx_qn('w:p'):
-                # 获取段落文本
+                paras_after_t1.append(elem)
+                # 检查是否为签名栏段落
                 para_text = ''.join(t.text for t in elem.findall('.//' + _docx_qn('w:t')) if t.text)
-                # 如果包含"分析"或"校核"，收集这些段落
                 if para_text and ('分析' in para_text or '校核' in para_text):
-                    signature_paras.append(elem)
-                # 找到2个签名栏段落后就停止（避免处理后续无关内容）
-                if len(signature_paras) >= 2:
+                    signature_count += 1
+                # 找到2个签名栏段落后就停止（包含之前的空段落）
+                if signature_count >= 2:
                     break
 
-        # 为所有签名栏段落设置 keepNext（除最后一个）
-        for i, elem in enumerate(signature_paras):
+        # 为表格后的所有段落（包括空段落和签名栏）设置 keepNext
+        for elem in paras_after_t1:
             pPr = elem.find(_docx_qn('w:pPr'))
             if pPr is None:
                 pPr = _docx_OxmlElement('w:pPr')
                 elem.insert(0, pPr)
-            # 所有签名栏段落都设置 keepNext（包括最后一个，防止与后续内容分离）
+            # 设置 keepNext
             keepNext = pPr.find(_docx_qn('w:keepNext'))
             if keepNext is None:
                 keepNext = _docx_OxmlElement('w:keepNext')
                 pPr.append(keepNext)
-            # 同时设置 keepLines（段落内容不分页）
+            # 设置 keepLines（段落内容不分页）
             keepLines = pPr.find(_docx_qn('w:keepLines'))
             if keepLines is None:
                 keepLines = _docx_OxmlElement('w:keepLines')
