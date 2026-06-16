@@ -4116,7 +4116,8 @@ def lims_export_verification_docx():
         # R5+: 组分数据 (行数不够时自动增加)
         table1_data = p.get('table1_data', [])
         data_start = 5   # R5 开始填数据
-        data_end = len(t1.rows) - 2  # 留出结论和备注行
+        # t1 尾部3行为 结论/备注/签名，数据行不能占用
+        data_end = len(t1.rows) - 3  # 留出结论、备注、签名3行
         max_data_rows = data_end - data_start
 
         if len(table1_data) > max_data_rows:
@@ -4124,7 +4125,7 @@ def lims_export_verification_docx():
             from copy import deepcopy
             # 以数据区第一行(R5)为模板克隆
             template_tr = t1.rows[data_start]._tr
-            conclusion_tr = t1.rows[-2]._tr
+            conclusion_tr = t1.rows[-3]._tr   # 结论行（倒数第3行）
             tbl_el = template_tr.getparent()
             extra_needed = len(table1_data) - max_data_rows
             for _ in range(extra_needed):
@@ -4140,7 +4141,7 @@ def lims_export_verification_docx():
 
         for ri, item in enumerate(table1_data):
             row_idx = ri + data_start
-            if row_idx >= len(t1.rows) - 2:
+            if row_idx >= len(t1.rows) - 3:
                 break
             row = t1.rows[row_idx]
             # 组分数据居中对齐
@@ -4165,17 +4166,18 @@ def lims_export_verification_docx():
             row_height = 400  # 20磅 = 400 twips
 
         # 收集所有需要统一设置行高的行索引：
-        # R0-R3 信息行 + 数据行 + 倒数2行（结论行、备注行）
+        # R0-R3 信息行 + 数据行 + 结论行 + 备注行 + 签名行（全部同一个行高）
         height_row_indices = set()
         for row_idx in range(min(4, len(t1.rows))):   # R0-R3 信息行
             height_row_indices.add(row_idx)
         for ri in range(num_data_rows):                 # 数据行
             row_idx = ri + data_start
-            if row_idx < len(t1.rows) - 2:
+            if row_idx < len(t1.rows) - 3:
                 height_row_indices.add(row_idx)
-        if len(t1.rows) >= 2:
-            height_row_indices.add(len(t1.rows) - 2)    # 结论行
-            height_row_indices.add(len(t1.rows) - 1)    # 备注行
+        if len(t1.rows) >= 3:
+            height_row_indices.add(len(t1.rows) - 3)    # 结论行
+            height_row_indices.add(len(t1.rows) - 2)    # 备注行
+            height_row_indices.add(len(t1.rows) - 1)    # 签名行
 
         # 统一应用同一个动态行高
         for row_idx in sorted(height_row_indices):
@@ -4186,63 +4188,25 @@ def lims_export_verification_docx():
         last_data_rows = min(3, len(table1_data))  # 至少3行，如果数据少于3行则全部设置
         for i in range(last_data_rows):
             row_idx = data_start + len(table1_data) - last_data_rows + i
-            if row_idx < len(t1.rows) - 2:
+            if row_idx < len(t1.rows) - 3:
                 _docx_set_row_keep_next(t1.rows[row_idx])
 
-        # 为核查结论行设置不跨页，并与备注行保持在一起
-        _docx_set_row_cant_split(t1.rows[-2])  # 核查结论
-        _docx_set_row_keep_next(t1.rows[-2])   # 与备注行保持在一起
-        _docx_set_row_cant_split(t1.rows[-1])  # 备注
-        # 备注行也设置 keepNext，与表格后的签名栏段落保持在一起
-        _docx_set_row_keep_next(t1.rows[-1])
+        # 核查结论行(-3)：不跨页，与备注行保持在一起
+        _docx_set_row_cant_split(t1.rows[-3])
+        _docx_set_row_keep_next(t1.rows[-3])
+        # 备注行(-2)：不跨页，与签名行保持在一起
+        _docx_set_row_cant_split(t1.rows[-2])
+        _docx_set_row_keep_next(t1.rows[-2])
+        # 签名行(-1)：不跨页（签名栏已在表格内，全在表格内可靠控制分页）
+        _docx_set_row_cant_split(t1.rows[-1])
 
         # 核查结论 - 宋体五号
         conclusion = str(p.get('核查结论', '合格'))
-        _docx_set_tc_checkbox(t1.rows[-2].cells[0], "核查结论：☑合格；□不合格" if conclusion == '合格' else "核查结论：□合格；☑不合格")
-        _docx_set_v_align_center(t1.rows[-2].cells[0])
+        _docx_set_tc_checkbox(t1.rows[-3].cells[0], "核查结论：☑合格；□不合格" if conclusion == '合格' else "核查结论：□合格；☑不合格")
+        _docx_set_v_align_center(t1.rows[-3].cells[0])
 
         # 备注
-        t1.rows[-1].cells[0].text = '备注：' + str(p.get('备注', ''))
-
-        # 为表格后的所有段落设置 keepNext，包括空段落（换行符）
-        # 这样可以形成完整的链条，防止中间的空段落导致分页
-        body = doc._element.body
-        t1_elem = t1._element
-        found_t1 = False
-        paras_after_t1 = []  # 收集表格后的所有段落
-        signature_count = 0
-
-        for elem in body:
-            if elem == t1_elem:
-                found_t1 = True
-                continue
-            # 在表格1之后，查找段落元素
-            if found_t1 and elem.tag == _docx_qn('w:p'):
-                paras_after_t1.append(elem)
-                # 检查是否为签名栏段落
-                para_text = ''.join(t.text for t in elem.findall('.//' + _docx_qn('w:t')) if t.text)
-                if para_text and ('分析' in para_text or '校核' in para_text):
-                    signature_count += 1
-                # 找到2个签名栏段落后就停止（包含之前的空段落）
-                if signature_count >= 2:
-                    break
-
-        # 为表格后的所有段落（包括空段落和签名栏）设置 keepNext
-        for elem in paras_after_t1:
-            pPr = elem.find(_docx_qn('w:pPr'))
-            if pPr is None:
-                pPr = _docx_OxmlElement('w:pPr')
-                elem.insert(0, pPr)
-            # 设置 keepNext
-            keepNext = pPr.find(_docx_qn('w:keepNext'))
-            if keepNext is None:
-                keepNext = _docx_OxmlElement('w:keepNext')
-                pPr.append(keepNext)
-            # 设置 keepLines（段落内容不分页）
-            keepLines = pPr.find(_docx_qn('w:keepLines'))
-            if keepLines is None:
-                keepLines = _docx_OxmlElement('w:keepLines')
-                pPr.append(keepLines)
+        t1.rows[-2].cells[0].text = '备注：' + str(p.get('备注', ''))
 
         new_code = str(p.get('new_solution_code', '')).strip()
         epatemp_contents = p.get('epatemp_contents', [])
