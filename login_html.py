@@ -4151,13 +4151,12 @@ def lims_export_verification_docx():
             # 为每个数据行设置不跨页
             _docx_set_row_cant_split(row)
 
-        # 动态调整数据行高度策略：
-        # 根据数据行数决定是压缩到一页还是舒适地分成两页
-        # 临界值：8-12行之间，如果接近可以放入一页就压缩，否则放宽行高分两页
+        # 动态调整行高策略：根据数据行数决定是压缩到一页还是舒适地分成两页
+        # 统一应用于：R0-R3信息行 + 数据行 + 结论行 + 备注行（全部同一个行高）
         num_data_rows = len(table1_data)
         if num_data_rows <= 10:
             # 10行以内：尝试压缩行高，争取放入一页（含结论+备注）
-            row_height = 320  # 16磅 = 320 twips，比默认略小
+            row_height = 320  # 16磅 = 320 twips
         elif num_data_rows <= 14:
             # 11-14行：临界区，使用中等行高
             row_height = 360  # 18磅 = 360 twips
@@ -4165,19 +4164,21 @@ def lims_export_verification_docx():
             # 15行以上：明确分两页，使用舒适行高
             row_height = 400  # 20磅 = 400 twips
 
-        # 应用行高到所有数据行
-        for ri in range(len(table1_data)):
+        # 收集所有需要统一设置行高的行索引：
+        # R0-R3 信息行 + 数据行 + 倒数2行（结论行、备注行）
+        height_row_indices = set()
+        for row_idx in range(min(4, len(t1.rows))):   # R0-R3 信息行
+            height_row_indices.add(row_idx)
+        for ri in range(num_data_rows):                 # 数据行
             row_idx = ri + data_start
             if row_idx < len(t1.rows) - 2:
-                _docx_set_row_height(t1.rows[row_idx], row_height)
+                height_row_indices.add(row_idx)
+        if len(t1.rows) >= 2:
+            height_row_indices.add(len(t1.rows) - 2)    # 结论行
+            height_row_indices.add(len(t1.rows) - 1)    # 备注行
 
-        # 为核查结论和备注行也设置相同的行高
-        _docx_set_row_height(t1.rows[-2], row_height)  # 核查结论行
-        _docx_set_row_height(t1.rows[-1], row_height)  # 备注行
-
-        # 为信息行（被核查对象编号、核查对象编号、核查方法/核查时间、核查方法描述）
-        # 也设置与数据行相同的动态行高（R0-R3）
-        for row_idx in range(min(4, len(t1.rows))):  # R0-R3
+        # 统一应用同一个动态行高
+        for row_idx in sorted(height_row_indices):
             _docx_set_row_height(t1.rows[row_idx], row_height)
 
         # 为最后3个数据行设置 keepNext，强制与结论行保持在同一页
