@@ -4192,6 +4192,32 @@ def lims_export_verification_docx():
         # 备注
         t1.rows[-1].cells[0].text = '备注：' + str(p.get('备注', ''))
 
+        # 为表格后的段落（分析/日期、校核/日期）设置 keepNext，防止与表格分离
+        # 找到表格1在文档中的位置
+        t1_index = doc.tables.index(t1)
+        # 遍历文档中表格后的段落（通常是分析/日期、校核/日期）
+        for para in doc.paragraphs:
+            # 检查段落是否在表格1之后
+            para_parent = para._element.getparent()
+            t1_parent = t1._element.getparent()
+            if para_parent == t1_parent:
+                # 同一个父元素，检查顺序
+                try:
+                    para_idx = list(para_parent).index(para._element)
+                    t1_idx = list(t1_parent).index(t1._element)
+                    # 如果段落在表格1后面，且包含"分析"或"校核"，设置 keepNext
+                    if para_idx > t1_idx and para.text and ('分析' in para.text or '校核' in para.text):
+                        pPr = para._element.find(_docx_qn('w:pPr'))
+                        if pPr is None:
+                            pPr = _docx_OxmlElement('w:pPr')
+                            para._element.insert(0, pPr)
+                        keepNext = pPr.find(_docx_qn('w:keepNext'))
+                        if keepNext is None:
+                            keepNext = _docx_OxmlElement('w:keepNext')
+                            pPr.append(keepNext)
+                except (ValueError, AttributeError):
+                    pass
+
         new_code = str(p.get('new_solution_code', '')).strip()
         epatemp_contents = p.get('epatemp_contents', [])
 
