@@ -2783,6 +2783,21 @@ def _docx_set_row_cant_split(row):
         cantSplit = _docx_OxmlElement('w:cantSplit')
         trPr.append(cantSplit)
 
+def _docx_set_row_keep_next(row):
+    """设置表格行与下一行保持在同一页"""
+    tr_el = row._tr if hasattr(row, '_tr') else row
+    # 在表格行的每个单元格的段落中设置 keepNext
+    for tc_el in tr_el.findall(_docx_qn('w:tc')):
+        for p_el in tc_el.findall(_docx_qn('w:p')):
+            pPr = p_el.find(_docx_qn('w:pPr'))
+            if pPr is None:
+                pPr = _docx_OxmlElement('w:pPr')
+                p_el.insert(0, pPr)
+            keepNext = pPr.find(_docx_qn('w:keepNext'))
+            if keepNext is None:
+                keepNext = _docx_OxmlElement('w:keepNext')
+                pPr.append(keepNext)
+
 
 # ── 核查记录导出 PDF 合并辅助函数 ──
 
@@ -4121,8 +4136,17 @@ def lims_export_verification_docx():
             # 为每个数据行设置不跨页
             _docx_set_row_cant_split(row)
 
-        # 为核查结论行和备注行设置不跨页
+        # 为最后3个数据行设置 keepNext，强制与结论行保持在同一页
+        # 这样确保结论行不会单独成为新页第一行
+        last_data_rows = min(3, len(table1_data))  # 至少3行，如果数据少于3行则全部设置
+        for i in range(last_data_rows):
+            row_idx = data_start + len(table1_data) - last_data_rows + i
+            if row_idx < len(t1.rows) - 2:
+                _docx_set_row_keep_next(t1.rows[row_idx])
+
+        # 为核查结论行设置不跨页，并与备注行保持在一起
         _docx_set_row_cant_split(t1.rows[-2])  # 核查结论
+        _docx_set_row_keep_next(t1.rows[-2])   # 与备注行保持在一起
         _docx_set_row_cant_split(t1.rows[-1])  # 备注
 
         # 核查结论 - 宋体五号
