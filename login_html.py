@@ -4171,6 +4171,10 @@ def lims_export_verification_docx():
             if row_idx < len(t1.rows) - 2:
                 _docx_set_row_height(t1.rows[row_idx], row_height)
 
+        # 为核查结论和备注行也设置相同的行高
+        _docx_set_row_height(t1.rows[-2], row_height)  # 核查结论行
+        _docx_set_row_height(t1.rows[-1], row_height)  # 备注行
+
         # 为最后3个数据行设置 keepNext，强制与结论行保持在同一页
         # 这样确保结论行不会单独成为新页第一行
         last_data_rows = min(3, len(table1_data))  # 至少3行，如果数据少于3行则全部设置
