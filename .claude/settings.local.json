@@ -117,7 +117,21 @@
       "Bash(APIFOX_API_KEY=\"afxp_d213b4FGYKwP7aSUGNZmEeXHfEzXZF9yOHRR\" PROJECT_ID=\"8238274\" npx -y @wangmhaha/apifox-mcp-server --local)",
       "mcp__apifox__get-interface",
       "Bash(ls -1 *.html *.js)",
-      "Bash(ls -1 templates/ static/)"
+      "Bash(ls -1 templates/ static/)",
+      "Bash(git checkout *)",
+      "Bash(.venv/Scripts/python.exe -c \"import docx; print\\('python-docx', docx.__version__\\)\")",
+      "Bash(.venv/Scripts/python.exe -m py_compile login_html.py)",
+      "Bash(.venv/Scripts/python.exe _test_verify_export.py)",
+      "Bash(.venv/Scripts/python.exe -c \"import win32com.client; print\\('WIN32COM_OK'\\)\")",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(.venv/Scripts/python.exe _test_width.py)",
+      "Bash(.venv/Scripts/python.exe -c \"import pdfplumber; print\\('pdfplumber OK', pdfplumber.__version__\\)\")",
+      "Bash(.venv/Scripts/python.exe _test_pitch.py)",
+      "Bash(.venv/Scripts/python.exe _test_real.py)",
+      "Bash(git commit *)",
+      "Bash(git reset *)",
+      "Bash(git branch *)",
+      "Bash(PYTHONIOENCODING=utf-8 .venv/Scripts/python *)"
     ]
   },
   "enableAllProjectMcpServers": true,
