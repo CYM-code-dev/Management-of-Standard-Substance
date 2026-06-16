@@ -2413,6 +2413,106 @@
         return bbcdWeightedMean(vals, ws);
     }
 
+    // 源组的平均浓度（多组分取算术均值）。导出与链式计算 helper 共用，避免两处分叉。
+    function bbcdGrpMeanConc(grp) {
+        if (!grp.isMulti) return grp.rows[0]._src.concValue;
+        const sum = grp.rows.reduce((s, tr) => s + tr._src.concValue, 0);
+        return sum / grp.rows.length;
+    }
+
+    // 计算每个稀释点的结果浓度链。isGradual=true 逐级（源=前点结果），false 非逐级（源=原始源浓度）。
+    // 导出（bbcdBuildWorkingSolutionExportPayload）与详情模式推断（bbcdDetectGradualMode）共用，
+    // 保证两处链式口径一致。返回 { chainConcs, sourceGroups, isMultiSource, overallMeanSrcConc }。
+    function bbcdComputeWorkingSolutionChain(isGradual) {
+        const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')].filter(tr => tr._src);
+        const count = window.bbcdCurrentDilutionCount || 1;
+
+        // Group source rows (handle multi-component)
+        const sourceGroups = [];
+        rows.forEach(tr => {
+            const src = tr._src;
+            if (src.isComponent) {
+                if (src.componentIdx === 0) sourceGroups.push({ rows: [tr], isMulti: true });
+                else sourceGroups[sourceGroups.length - 1].rows.push(tr);
+            } else {
+                sourceGroups.push({ rows: [tr], isMulti: false });
+            }
+        });
+
+        const isMultiSource = sourceGroups.length > 1;
+        // For multi-source: weighted mean across ALL individual source rows (按种数加权)
+        const allConcVals = [];
+        const allWeights = [];
+        rows.forEach(tr => {
+            const v = tr._src.concValue;
+            if (isFinite(v)) {
+                allConcVals.push(v);
+                allWeights.push(bbcdRowWeight(tr));
+            }
+        });
+        const overallMeanSrcConc = bbcdWeightedMean(allConcVals, allWeights) || 0;
+
+        const chainConcs = [];
+        let prevConc = null;
+        for (let i = 0; i < count; i++) {
+            const volEl = document.querySelector(`.bbcd-dilution-vol[data-idx="${i}"]`);
+            const vol = parseFloat(volEl?.value) || 0;
+            let hasQty = false;
+            let qtyIsZero = false;
+            let firstQty = 0;
+            for (const grp of sourceGroups) {
+                const qtyEl = grp.rows[0].querySelector(`.bbcd-d-qty[data-dilution="${i}"]`);
+                const q = parseFloat(qtyEl?.value) || 0;
+                if (q > 0) { hasQty = true; firstQty = q; break; }
+                else if (q === 0) qtyIsZero = true;
+            }
+            if (qtyIsZero && vol > 0) {
+                chainConcs.push(0);
+                if (isGradual) prevConc = 0;
+                continue;
+            }
+            if (!hasQty || vol <= 0) {
+                chainConcs.push(null);
+                if (isGradual) prevConc = 0;
+                continue;
+            }
+            const srcConc = isMultiSource ? overallMeanSrcConc : bbcdGrpMeanConc(sourceGroups[0]);
+            if (isGradual && prevConc !== null && prevConc > 0) {
+                chainConcs.push(bbcdRoundConc(prevConc * firstQty / vol));
+                prevConc = chainConcs[i];
+            } else {
+                const c = srcConc * firstQty / vol;
+                chainConcs.push(bbcdRoundConc(c));
+                prevConc = chainConcs[i];
+            }
+        }
+
+        return { chainConcs, sourceGroups, isMultiSource, overallMeanSrcConc };
+    }
+
+    // 浓度近似相等（相对容差 1e-3 + 绝对下限 0.01，适配 2~3 位修约）
+    function bbcdApproxConc(a, b) {
+        if (!isFinite(a) || !isFinite(b)) return false;
+        return Math.abs(a - b) <= Math.max(0.01, Math.abs(b) * 1e-3);
+    }
+
+    // 从已保存的逐点结果浓度推断"逐级稀释"模式：逐点比较保存值更贴近逐级链还是非逐级链。
+    // 单点 / 模糊 / 用户手改浓度时返回 true（逐级，保持现状，零回归）。
+    function bbcdDetectGradualMode() {
+        const count = window.bbcdCurrentDilutionCount || 0;
+        if (count < 2) return true;
+        const serialChain = bbcdComputeWorkingSolutionChain(true).chainConcs;
+        const flatChain = bbcdComputeWorkingSolutionChain(false).chainConcs;
+        let sScore = 0, fScore = 0;
+        for (let i = 1; i < count; i++) {                 // 跳过第0点（两模式相同）
+            const saved = bbcdGetPointMeanConc(i);         // 单源即该值，多源取加权均值
+            if (saved == null || !isFinite(saved)) continue;
+            if (bbcdApproxConc(saved, serialChain[i])) sScore++;
+            if (bbcdApproxConc(saved, flatChain[i])) fScore++;
+        }
+        return fScore > sScore ? false : true;             // 非逐级严格更优才关，否则保持逐级
+    }
+
     // 自编号自动生成
     let bbcdCodeAuto = true;
     let bbcdNameAuto = true;
@@ -3297,7 +3397,7 @@
                 const audited = !!rec.auditUserName;
                 auditBtn.style.display = '';
                 auditBtn.className = audited ? 'btn btn-sm bg-success text-white border-0' : 'btn btn-sm bg-secondary text-white border-0';
-                auditBtn.innerHTML = audited ? '已审核' : '未审核';
+                auditBtn.innerHTML = audited ? '<i class="fas fa-check-circle me-1"></i>已审核' : '<i class="fas fa-clock me-1"></i>未审核';
                 auditBtn.disabled = false;
             } else {
                 auditBtn.style.display = 'none';
@@ -3713,6 +3813,10 @@
                 }
             }
         });
+
+        // 从已保存浓度还原"逐级稀释"开关，使详情显示与导出（源浓度列）与原配置一致
+        const gradualCb = document.getElementById('bbcdGradualDilution');
+        if (gradualCb) gradualCb.checked = bbcdDetectGradualMode();
 
         bbcdRecalcWorkingSolution();
         bbcdCheckValidity();
@@ -4772,25 +4876,6 @@
         const medium = mediumEl ? mediumEl.value.trim() : '';
         const baseCode = document.getElementById('bbcdSolutionCode').value.trim();
 
-        // Group source rows (handle multi-component)
-        const sourceGroups = [];
-        rows.forEach(tr => {
-            const src = tr._src;
-            if (src.isComponent) {
-                if (src.componentIdx === 0) sourceGroups.push({ rows: [tr], isMulti: true });
-                else sourceGroups[sourceGroups.length - 1].rows.push(tr);
-            } else {
-                sourceGroups.push({ rows: [tr], isMulti: false });
-            }
-        });
-
-        // Helper: get mean concentration of a sourceGroup (multi-component → average)
-        function grpMeanConc(grp) {
-            if (!grp.isMulti) return grp.rows[0]._src.concValue;
-            const sum = grp.rows.reduce((s, tr) => s + tr._src.concValue, 0);
-            return sum / grp.rows.length;
-        }
-
         // Helper: extract concentration from solutionCode (e.g. CK-CG-4TSCA-100.00-20260508 → "100.00")
         function extractConcFromCode(code) {
             let m = code.match(/\[([\d.]+)/);
@@ -4803,55 +4888,8 @@
             return '';
         }
 
-        // Calculate serial chain concentrations per dilution point
-        // chainConcs[i] = result concentration of dilution point i
-        const isMultiSource = sourceGroups.length > 1;
-        // For multi-source: weighted mean across ALL individual source rows (按种数加权)
-        const allConcVals = [];
-        const allWeights = [];
-        rows.forEach(tr => {
-            const v = tr._src.concValue;
-            if (isFinite(v)) {
-                allConcVals.push(v);
-                allWeights.push(bbcdRowWeight(tr));
-            }
-        });
-        const overallMeanSrcConc = bbcdWeightedMean(allConcVals, allWeights) || 0;
-
-        const chainConcs = [];
-        let prevConc = null;
-        for (let i = 0; i < count; i++) {
-            const volEl = document.querySelector(`.bbcd-dilution-vol[data-idx="${i}"]`);
-            const vol = parseFloat(volEl?.value) || 0;
-            let hasQty = false;
-            let qtyIsZero = false;
-            let firstQty = 0;
-            for (const grp of sourceGroups) {
-                const qtyEl = grp.rows[0].querySelector(`.bbcd-d-qty[data-dilution="${i}"]`);
-                const q = parseFloat(qtyEl?.value) || 0;
-                if (q > 0) { hasQty = true; firstQty = q; break; }
-                else if (q === 0) qtyIsZero = true;
-            }
-            if (qtyIsZero && vol > 0) {
-                chainConcs.push(0);
-                if (isGradual) prevConc = 0;
-                continue;
-            }
-            if (!hasQty || vol <= 0) {
-                chainConcs.push(null);
-                if (isGradual) prevConc = 0;
-                continue;
-            }
-            const srcConc = isMultiSource ? overallMeanSrcConc : grpMeanConc(sourceGroups[0]);
-            if (isGradual && prevConc !== null && prevConc > 0) {
-                chainConcs.push(bbcdRoundConc(prevConc * firstQty / vol));
-                prevConc = chainConcs[i];
-            } else {
-                const c = srcConc * firstQty / vol;
-                chainConcs.push(bbcdRoundConc(c));
-                prevConc = chainConcs[i];
-            }
-        }
+        // 计算逐级/非逐级链式浓度（与详情模式推断共用 bbcdComputeWorkingSolutionChain）
+        const { chainConcs, sourceGroups, isMultiSource, overallMeanSrcConc } = bbcdComputeWorkingSolutionChain(isGradual);
 
         // Build detail_list
         const detailList = [];
@@ -4879,7 +4917,7 @@
             if (isGradual && i > 0 && chainConcs[i - 1] !== null) {
                 srcConcForDisplay = chainConcs[i - 1];
             } else {
-                srcConcForDisplay = isMultiSource ? overallMeanSrcConc : grpMeanConc(sourceGroups[0]);
+                srcConcForDisplay = isMultiSource ? overallMeanSrcConc : bbcdGrpMeanConc(sourceGroups[0]);
             }
 
             // Per-row code: replace range [x-y] with specific concentration
@@ -4921,7 +4959,7 @@
 
                     if (grp.isMulti) {
                         const origConc = i === 0
-                            ? bbcdFmtConc(grpMeanConc(grp))
+                            ? bbcdFmtConc(bbcdGrpMeanConc(grp))
                             : bbcdFmtConc(srcConcForDisplay);
                         detailList.push({
                             dilutionIdx: i,

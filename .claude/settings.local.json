@@ -131,7 +131,10 @@
       "Bash(git commit *)",
       "Bash(git reset *)",
       "Bash(git branch *)",
-      "Bash(PYTHONIOENCODING=utf-8 .venv/Scripts/python *)"
+      "Bash(PYTHONIOENCODING=utf-8 .venv/Scripts/python *)",
+      "Bash(ls -la *.json session_*.json config*.json)",
+      "Bash(ls templates/)",
+      "Bash(.venv/Scripts/python -m py_compile login_html.py)"
     ]
   },
   "enableAllProjectMcpServers": true,
