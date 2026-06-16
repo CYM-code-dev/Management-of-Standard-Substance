@@ -4118,12 +4118,12 @@ def lims_export_verification_docx():
             _docx_set_tc_text(row.cells[1], str(item.get('理论值', '')), center=True, sz=18)
             _docx_set_tc_text(row.cells[2], str(item.get('实测值', '')), center=True, sz=18)
             _docx_set_tc_text(row.cells[3], str(item.get('相对偏差', '')), center=True, sz=18)
+            # 为每个数据行设置不跨页
+            _docx_set_row_cant_split(row)
 
-        # 为表格尾部行设置不跨页：最后3个数据行 + 核查结论行 + 备注行
-        # 这样确保至少3行数据+结论+备注保持在同一页
-        tail_start = max(data_start, len(t1.rows) - 5)  # 最后5行（至少3数据行+结论+备注）
-        for row_idx in range(tail_start, len(t1.rows)):
-            _docx_set_row_cant_split(t1.rows[row_idx])
+        # 为核查结论行和备注行设置不跨页
+        _docx_set_row_cant_split(t1.rows[-2])  # 核查结论
+        _docx_set_row_cant_split(t1.rows[-1])  # 备注
 
         # 核查结论 - 宋体五号
         conclusion = str(p.get('核查结论', '合格'))
