@@ -6908,6 +6908,7 @@
                 ? (payload.new_solution_code ? payload.new_solution_code + '期间核查.pdf' : '标准物质期间核查记录.pdf')
                 : (payload.new_solution_code ? payload.new_solution_code + '期间核查.docx' : '标准物质期间核查记录.docx');
             a.click(); URL.revokeObjectURL(url);
+            alert('核查记录导出成功（' + (hasEpatemp ? 'PDF' : 'Word') + '格式）');
         } catch (e) { alert('导出异常: '+e.message); }
     }
 
