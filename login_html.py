@@ -4190,7 +4190,7 @@ def lims_export_verification_docx():
         if len(t1.rows) >= 3:
             height_row_indices.add(len(t1.rows) - 3)    # 结论行
             height_row_indices.add(len(t1.rows) - 2)    # 备注行
-            height_row_indices.add(len(t1.rows) - 1)    # 签名行
+            # 签名行(-1) 不纳入动态行高，保留模板原有行高
 
         # 统一应用同一个动态行高
         for row_idx in sorted(height_row_indices):
