@@ -2674,6 +2674,19 @@ def _docx_set_v_align_center(tc):
         tcPr.append(vAlign)
     vAlign.set(_docx_qn('w:val'), 'center')
 
+def _docx_set_v_align_bottom(tc):
+    """Set vertical alignment of a cell to bottom."""
+    el = _docx_unwrap_tc(tc)
+    tcPr = el.find(_docx_qn('w:tcPr'))
+    if tcPr is None:
+        tcPr = _docx_OxmlElement('w:tcPr')
+        el.insert(0, tcPr)
+    vAlign = tcPr.find(_docx_qn('w:vAlign'))
+    if vAlign is None:
+        vAlign = _docx_OxmlElement('w:vAlign')
+        tcPr.append(vAlign)
+    vAlign.set(_docx_qn('w:val'), 'bottom')
+
 def _docx_set_tc_checkbox(tc, text, sz=21, center=False):
     """Fill cell with checkbox text in 宋体(SimSun). Supports \\n for line breaks."""
     el = _docx_unwrap_tc(tc)
@@ -4199,6 +4212,9 @@ def lims_export_verification_docx():
         _docx_set_row_keep_next(t1.rows[-2])
         # 签名行(-1)：不跨页（签名栏已在表格内，全在表格内可靠控制分页）
         _docx_set_row_cant_split(t1.rows[-1])
+        # 签名行单元格底端对齐
+        for cell in t1.rows[-1].cells:
+            _docx_set_v_align_bottom(cell)
 
         # 核查结论 - 宋体五号
         conclusion = str(p.get('核查结论', '合格'))
