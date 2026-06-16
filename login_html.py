@@ -4187,6 +4187,8 @@ def lims_export_verification_docx():
         _docx_set_row_cant_split(t1.rows[-2])  # 核查结论
         _docx_set_row_keep_next(t1.rows[-2])   # 与备注行保持在一起
         _docx_set_row_cant_split(t1.rows[-1])  # 备注
+        # 备注行也设置 keepNext，与表格后的签名栏段落保持在一起
+        _docx_set_row_keep_next(t1.rows[-1])
 
         # 核查结论 - 宋体五号
         conclusion = str(p.get('核查结论', '合格'))
@@ -4201,6 +4203,7 @@ def lims_export_verification_docx():
         body = doc._element.body
         t1_elem = t1._element
         found_t1 = False
+        signature_paras = []  # 收集签名栏段落
         for elem in body:
             if elem == t1_elem:
                 found_t1 = True
@@ -4209,16 +4212,29 @@ def lims_export_verification_docx():
             if found_t1 and elem.tag == _docx_qn('w:p'):
                 # 获取段落文本
                 para_text = ''.join(t.text for t in elem.findall('.//' + _docx_qn('w:t')) if t.text)
-                # 如果包含"分析"或"校核"，设置 keepNext
+                # 如果包含"分析"或"校核"，收集这些段落
                 if para_text and ('分析' in para_text or '校核' in para_text):
-                    pPr = elem.find(_docx_qn('w:pPr'))
-                    if pPr is None:
-                        pPr = _docx_OxmlElement('w:pPr')
-                        elem.insert(0, pPr)
-                    keepNext = pPr.find(_docx_qn('w:keepNext'))
-                    if keepNext is None:
-                        keepNext = _docx_OxmlElement('w:keepNext')
-                        pPr.append(keepNext)
+                    signature_paras.append(elem)
+                # 找到2个签名栏段落后就停止（避免处理后续无关内容）
+                if len(signature_paras) >= 2:
+                    break
+
+        # 为所有签名栏段落设置 keepNext（除最后一个）
+        for i, elem in enumerate(signature_paras):
+            pPr = elem.find(_docx_qn('w:pPr'))
+            if pPr is None:
+                pPr = _docx_OxmlElement('w:pPr')
+                elem.insert(0, pPr)
+            # 所有签名栏段落都设置 keepNext（包括最后一个，防止与后续内容分离）
+            keepNext = pPr.find(_docx_qn('w:keepNext'))
+            if keepNext is None:
+                keepNext = _docx_OxmlElement('w:keepNext')
+                pPr.append(keepNext)
+            # 同时设置 keepLines（段落内容不分页）
+            keepLines = pPr.find(_docx_qn('w:keepLines'))
+            if keepLines is None:
+                keepLines = _docx_OxmlElement('w:keepLines')
+                pPr.append(keepLines)
 
         new_code = str(p.get('new_solution_code', '')).strip()
         epatemp_contents = p.get('epatemp_contents', [])
