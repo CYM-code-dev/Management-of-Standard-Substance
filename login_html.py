@@ -2798,6 +2798,21 @@ def _docx_set_row_keep_next(row):
                 keepNext = _docx_OxmlElement('w:keepNext')
                 pPr.append(keepNext)
 
+def _docx_set_row_height(row, height_twips):
+    """设置表格行高度（单位：twips，1磅=20 twips）"""
+    tr_el = row._tr if hasattr(row, '_tr') else row
+    trPr = tr_el.find(_docx_qn('w:trPr'))
+    if trPr is None:
+        trPr = _docx_OxmlElement('w:trPr')
+        tr_el.insert(0, trPr)
+    # 设置行高
+    trHeight = trPr.find(_docx_qn('w:trHeight'))
+    if trHeight is None:
+        trHeight = _docx_OxmlElement('w:trHeight')
+        trPr.append(trHeight)
+    trHeight.set(_docx_qn('w:val'), str(height_twips))
+    trHeight.set(_docx_qn('w:hRule'), 'exact')  # 精确高度
+
 
 # ── 核查记录导出 PDF 合并辅助函数 ──
 
@@ -4135,6 +4150,26 @@ def lims_export_verification_docx():
             _docx_set_tc_text(row.cells[3], str(item.get('相对偏差', '')), center=True, sz=18)
             # 为每个数据行设置不跨页
             _docx_set_row_cant_split(row)
+
+        # 动态调整数据行高度策略：
+        # 根据数据行数决定是压缩到一页还是舒适地分成两页
+        # 临界值：8-12行之间，如果接近可以放入一页就压缩，否则放宽行高分两页
+        num_data_rows = len(table1_data)
+        if num_data_rows <= 10:
+            # 10行以内：尝试压缩行高，争取放入一页（含结论+备注）
+            row_height = 320  # 16磅 = 320 twips，比默认略小
+        elif num_data_rows <= 14:
+            # 11-14行：临界区，使用中等行高
+            row_height = 360  # 18磅 = 360 twips
+        else:
+            # 15行以上：明确分两页，使用舒适行高
+            row_height = 400  # 20磅 = 400 twips
+
+        # 应用行高到所有数据行
+        for ri in range(len(table1_data)):
+            row_idx = ri + data_start
+            if row_idx < len(t1.rows) - 2:
+                _docx_set_row_height(t1.rows[row_idx], row_height)
 
         # 为最后3个数据行设置 keepNext，强制与结论行保持在同一页
         # 这样确保结论行不会单独成为新页第一行
