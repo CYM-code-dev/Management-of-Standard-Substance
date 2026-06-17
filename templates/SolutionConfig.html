@@ -478,7 +478,7 @@
             <!-- 结果列表区 -->
             <div id="solResultArea" class="mb-3">
                 <div id="solSearchResults" style="display:none;">
-                  <div class="table-responsive" style="max-height:400px;overflow-y:auto;">
+                  <div class="table-responsive" style="max-height:calc(68vh - 1.5rem);overflow-y:auto;">
                     <table class="table table-sm table-bordered table-hover mb-0" id="solResultTable">
                       <thead class="table-light" style="position:sticky;top:0;z-index:1;">
                         <tr>
@@ -586,7 +586,7 @@
             </div>
             <!-- 1.2 结果列表区 -->
             <div id="bbcdResultArea" class="mb-3">
-              <div class="table-responsive" style="max-height:400px;overflow-y:auto;">
+              <div class="table-responsive" style="max-height:calc(68vh - 1.5rem);overflow-y:auto;">
                 <table class="table table-sm table-bordered table-hover mb-0" id="bbcdResultTable">
                   <thead class="table-light" style="position:sticky;top:0;z-index:1;">
                     <tr>
@@ -688,7 +688,7 @@
             </div>
             <!-- 1.2 结果列表区 -->
             <div id="dTabResultArea" class="mb-3">
-              <div class="table-responsive" style="max-height:400px;overflow-y:auto;">
+              <div class="table-responsive" style="max-height:calc(68vh - 1.5rem);overflow-y:auto;">
                 <table class="table table-sm table-bordered table-hover mb-0" id="dTabResultTable">
                   <thead class="table-light" style="position:sticky;top:0;z-index:1;">
                     <tr>
@@ -1010,8 +1010,8 @@
           <div class="col-auto">
             <label class="form-label mb-1 small fw-bold">核查模式</label>
             <select id="verifyMode" class="form-select form-select-sm">
-              <option value="new_verifies_old">新验旧（新标液作标准曲线测旧标液）</option>
-              <option value="old_verifies_new">旧验新（旧标液作标准曲线测新标液）</option>
+              <option value="new_verifies_old">新验旧</option>
+              <option value="old_verifies_new">旧验新</option>
             </select>
           </div>
           <div class="col-auto">
@@ -1101,6 +1101,19 @@
               <button type="button" class="btn btn-sm btn-outline-primary py-0" id="verifyExcelPasteBtn">解析填充</button>
             </div>
           </div>
+        </div>
+
+        <!-- 数据-点位 手动匹配确认（多文件+多点时显示） -->
+        <div id="verifyMatchConfirm" class="mb-3" style="display:none;">
+          <h6 class="fw-bold mb-2 small"><i class="fas fa-link me-1"></i>数据文件 — 核查点位 匹配确认</h6>
+          <div class="small text-muted mb-2">请核对每个 .D 文件夹对应的核查点位（已按智能匹配预填，可手动调整），确认无误后点下方按钮生成结果。</div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-2">
+              <thead class="table-light"><tr><th>.D 数据文件夹</th><th>核查点位</th></tr></thead>
+              <tbody id="verifyMatchTbody"></tbody>
+            </table>
+          </div>
+          <button type="button" id="verifyConfirmMatchBtn" class="btn btn-sm btn-success"><i class="fas fa-check me-1"></i>确认匹配并生成结果</button>
         </div>
 
         <!-- 6. 核查结果 -->
@@ -5854,12 +5867,14 @@
     let _verifyData = null;
     let _verifyMeasured = [];
     let _verifyRows = [];  // unified row data: [{reportName, exportName, theory, measured, unit}]
+    let _verifyMatchCtx = null;  // 多文件匹配确认上下文 { groups, folderKeys, files, checkedPoints }
 
     async function verifyCheckBtnHandler() {
         if (dTabSelectedIds.size !== 2) { alert('请选择恰好2条D型工作液记录进行核查'); return; }
         const [idx1, idx2] = [...dTabSelectedIds];
         const item1 = dTabLastResults[idx1], item2 = dTabLastResults[idx2];
-        _verifyData = null; _verifyMeasured = []; _verifyRows = []; _verifySelectedDFolders = []; _verifyEpatempContents = [];
+        _verifyData = null; _verifyMeasured = []; _verifyRows = []; _verifySelectedDFolders = []; _verifyEpatempContents = []; _verifyMatchCtx = null;
+        document.getElementById('verifyMatchConfirm').style.display = 'none';
         document.getElementById('verifyDFolderList').style.display = 'none';
         document.getElementById('verifyDFolderList').innerHTML = '';
         document.getElementById('verifyScanStatus').textContent = '';
@@ -6549,52 +6564,29 @@
     }
 
     /**
-     * 智能匹配 .D 文件夹 ↔ 浓度点：按化合物实测值与理论值的最小平均偏差配对，
-     * 避免依赖用户勾选顺序导致配反。
+     * 自动匹配 .D 文件夹 ↔ 浓度点（仅作下拉框预填建议，用户可在确认框手动调整）：
+     * 规则——.D 文件名中 "C+数字" 越小 ↔ 核查点位浓度越低；两者各自升序后一一配对。
      */
-    function _matchFoldersToPoints(groups, checkedPoints) {
-        const pairs = [];
-        const folderKeys = Object.keys(groups).map(Number);
-        for (const fidx of folderKeys) {
-            const compounds = groups[fidx];
-            for (let pi = 0; pi < checkedPoints.length; pi++) {
-                const pt = checkedPoints[pi];
-                const sc = pt.sub_concs || {};
-                let totalDev = 0, matchCount = 0;
-                for (const c of compounds) {
-                    const cName = (c.name || '').trim();
-                    const cPrefix = cName.replace(/[-–]\d{2,4}$/, '');
-                    let theo = null;
-                    if (sc[cName] !== undefined) theo = sc[cName];
-                    else if (cPrefix !== cName && sc[cPrefix] !== undefined) theo = sc[cPrefix];
-                    else {
-                        for (const k of Object.keys(sc)) {
-                            if (k && (cName.includes(k) || k.includes(cName) || (cPrefix && (cPrefix.includes(k) || k.includes(cPrefix))))) {
-                                theo = sc[k]; break;
-                            }
-                        }
-                    }
-                    if (theo !== null && theo > 0) {
-                        totalDev += Math.abs(c.measured_value - theo) / theo;
-                        matchCount++;
-                    }
-                }
-                const avgDev = matchCount > 0 ? totalDev / matchCount : Infinity;
-                pairs.push({ fidx, pidx: pi, matchCount, avgDev });
-            }
+    function _matchFoldersToPoints(files, folderKeys, checkedPoints) {
+        var cNumberOf = function(name) {
+            var m = String(name || '').match(/C(\d+)/i);
+            return m ? parseInt(m[1], 10) : Infinity;
+        };
+        var sortedFolders = folderKeys.slice().sort(function(a, b) {
+            return cNumberOf(files[a] && files[a].name) - cNumberOf(files[b] && files[b].name);
+        });
+        var sortedPointIdx = checkedPoints.map(function(_, i) { return i; }).sort(function(a, b) {
+            return (checkedPoints[a].concentration || 0) - (checkedPoints[b].concentration || 0);
+        });
+        var pairs = [];
+        for (var i = 0; i < sortedFolders.length && i < sortedPointIdx.length; i++) {
+            pairs.push({ folderIdx: sortedFolders[i], pointIdx: sortedPointIdx[i] });
         }
-        // 贪心分配：优先匹配数多、偏差小的配对
-        pairs.sort((a, b) => b.matchCount !== a.matchCount ? b.matchCount - a.matchCount : a.avgDev - b.avgDev);
-        const usedF = new Set(), usedP = new Set(), result = [];
-        for (const p of pairs) {
-            if (usedF.has(p.fidx) || usedP.has(p.pidx)) continue;
-            result.push({ folderIdx: p.fidx, pointIdx: p.pidx });
-            usedF.add(p.fidx); usedP.add(p.pidx);
-        }
-        return result;
+        return pairs;
     }
 
     function verifyBuildResultTable() {
+        document.getElementById('verifyMatchConfirm').style.display = 'none';
         if (!_verifyMeasured.length) return;
         const checkedPoints = _getCheckedConcPoints();
         const files = _verifySelectedDFolders || [];
@@ -6602,13 +6594,7 @@
         files.forEach((f, i) => { fileOrder[f.name] = i; });
 
         if (checkedPoints.length >= 2 && files.length >= 2) {
-            // 多标签页模式：每个文件+浓度点一个 tab
-            document.getElementById('verifySingleTable').style.display = 'none';
-            var tabsEl = document.getElementById('verifyResultTabs');
-            var panesEl = document.getElementById('verifyResultTabPanes');
-            tabsEl.style.display = '';
-            panesEl.style.display = '';
-
+            // 多文件+多点：弹出"数据-点位匹配确认"，确认后再生成（避免自动匹配配反）
             // 按文件分组
             var groups = {};
             _verifyMeasured.forEach(function(c, i) {
@@ -6618,60 +6604,118 @@
                 if (!groups[fidx]) groups[fidx] = [];
                 groups[fidx].push(c);
             });
+            var folderKeys = Object.keys(groups).map(Number);
+            // 智能匹配结果作为下拉框预填建议
+            var suggestByFidx = {};
+            _matchFoldersToPoints(files, folderKeys, checkedPoints).forEach(function(p) { suggestByFidx[p.folderIdx] = p.pointIdx; });
+            _verifyMatchCtx = { groups: groups, folderKeys: folderKeys, files: files, checkedPoints: checkedPoints };
 
-            var tabsHtml = '', panesHtml = '';
-            var tabIdx = 0;
-            var allRows = [];
-            // 智能匹配：按实测值/理论值偏差配对，而非下标顺序
-            var matchPairs = _matchFoldersToPoints(groups, checkedPoints);
-            for (var mi = 0; mi < matchPairs.length; mi++) {
-                var gi = matchPairs[mi].folderIdx;
-                var pi = matchPairs[mi].pointIdx;
-                if (!groups[gi] || !groups[gi].length) continue;
-                var tabLabel = files[gi].name + ' / ' + checkedPoints[pi].code;
-                var active = tabIdx === 0 ? ' active' : '';
-                tabsHtml += '<li class="nav-item"><a class="nav-link small' + active + '" data-bs-toggle="tab" href="#verifyTabPane' + tabIdx + '">' + bbcdEsc(tabLabel) + '</a></li>';
-
-                var matched = verifyMatchResults(groups[gi], [checkedPoints[pi]]);
-                allRows.push(...matched);
-
-                var rowsHtml = matched.map(function(row, ri) {
-                    return _renderVerifyRow(row, allRows.length - matched.length + ri, 'file');
-                }).join('');
-                panesHtml += '<div class="tab-pane' + active + '" id="verifyTabPane' + tabIdx + '"><div class="table-responsive mb-3"><table class="table table-sm table-bordered mb-0"><thead class="table-light"><tr><th style="width:36px;">序号</th><th>报告名称</th><th>LIMS物质名称</th><th>导出名称</th><th style="width:100px;">理论值</th><th style="width:100px;">实测值</th><th style="width:60px;">单位</th><th style="width:90px;">相对偏差(%)</th><th style="width:36px;">操作</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>';
-                tabIdx++;
-            }
-            _verifyRows = allRows;
-            tabsEl.innerHTML = tabsHtml;
-            panesEl.innerHTML = panesHtml;
-            // 绑定事件
-            for (var ti = 0; ti < tabIdx; ti++) {
-                var pane = document.getElementById('verifyTabPane' + ti);
-                if (!pane) continue;
-                pane.querySelectorAll('.verify-theory-input, .verify-measured-input').forEach(function(inp) { inp.addEventListener('input', verifyRecalcResults); });
-                pane.querySelectorAll('.verify-delete-row').forEach(function(btn) {
-                    btn.addEventListener('click', function(e) {
-                        var reportName = e.currentTarget.closest('tr').querySelector('td:nth-child(2)')?.textContent?.trim();
-                        document.querySelectorAll('#verifyResultTabPanes tbody tr').forEach(function(tr) {
-                            var rn = tr.querySelector('td:nth-child(2)')?.textContent?.trim();
-                            if (rn === reportName) tr.remove();
-                        });
-                        verifyRecalcResults();
-                    });
+            // 渲染匹配确认下拉框（每个文件夹一行；预填建议的点位用 option 的 selected 选中）
+            function buildMatchOptions(selectedPi) {
+                var html = '<option value="">—跳过（不匹配）—</option>';
+                checkedPoints.forEach(function(pt, pi) {
+                    var label = pt.code + ((pt.concentration !== undefined && pt.concentration !== null) ? '（' + _formatConcVal(pt.concentration) + (pt.unit || '') + '）' : '');
+                    html += '<option value="' + pi + '"' + (pi === selectedPi ? ' selected' : '') + '>' + bbcdEsc(label) + '</option>';
                 });
-                _bindMatchButtons(pane);
+                return html;
             }
-            verifyRecalcResults();
-        } else {
-            // 单表模式
-            document.getElementById('verifyResultTabs').style.display = 'none';
-            document.getElementById('verifyResultTabs').innerHTML = '';
-            document.getElementById('verifyResultTabPanes').style.display = 'none';
-            document.getElementById('verifyResultTabPanes').innerHTML = '';
-            document.getElementById('verifySingleTable').style.display = '';
-            _verifyRows = verifyMatchResults(_verifyMeasured, checkedPoints);
-            verifyRenderTable();
+            var rowsHtml = folderKeys.map(function(fidx) {
+                var suggested = suggestByFidx[fidx];
+                var fname = (files[fidx] && files[fidx].name) || ('文件夹' + fidx);
+                return '<tr><td>' + bbcdEsc(fname) + '</td>' +
+                    '<td><select class="form-select form-select-sm verify-match-point" data-fidx="' + fidx + '">' + buildMatchOptions(suggested) + '</select></td></tr>';
+            }).join('');
+            document.getElementById('verifyMatchTbody').innerHTML = rowsHtml;
+
+            // 清空并隐藏旧结果标签页（等用户确认后再生成）
+            var tabsEl = document.getElementById('verifyResultTabs');
+            var panesEl = document.getElementById('verifyResultTabPanes');
+            tabsEl.innerHTML = ''; tabsEl.style.display = 'none';
+            panesEl.innerHTML = ''; panesEl.style.display = 'none';
+            document.getElementById('verifySingleTable').style.display = 'none';
+            document.getElementById('verifyMatchConfirm').style.display = '';
+            return;
         }
+
+        // 单表模式（单文件夹/单点位，无歧义）
+        document.getElementById('verifyResultTabs').style.display = 'none';
+        document.getElementById('verifyResultTabs').innerHTML = '';
+        document.getElementById('verifyResultTabPanes').style.display = 'none';
+        document.getElementById('verifyResultTabPanes').innerHTML = '';
+        document.getElementById('verifySingleTable').style.display = '';
+        _verifyRows = verifyMatchResults(_verifyMeasured, checkedPoints);
+        verifyRenderTable();
+    }
+
+    /** 按显式配对 pairs=[{folderIdx, pointIdx}] 构建多文件结果标签页 */
+    function verifyRenderResultTabs(pairs, groups, files, checkedPoints) {
+        document.getElementById('verifySingleTable').style.display = 'none';
+        var tabsEl = document.getElementById('verifyResultTabs');
+        var panesEl = document.getElementById('verifyResultTabPanes');
+        tabsEl.style.display = '';
+        panesEl.style.display = '';
+
+        var tabsHtml = '', panesHtml = '';
+        var tabIdx = 0;
+        var allRows = [];
+        for (var mi = 0; mi < pairs.length; mi++) {
+            var gi = pairs[mi].folderIdx;
+            var pi = pairs[mi].pointIdx;
+            if (!groups[gi] || !groups[gi].length) continue;
+            var tabLabel = files[gi].name + ' / ' + checkedPoints[pi].code;
+            var active = tabIdx === 0 ? ' active' : '';
+            tabsHtml += '<li class="nav-item"><a class="nav-link small' + active + '" data-bs-toggle="tab" href="#verifyTabPane' + tabIdx + '">' + bbcdEsc(tabLabel) + '</a></li>';
+
+            var matched = verifyMatchResults(groups[gi], [checkedPoints[pi]]);
+            allRows.push(...matched);
+
+            var rowsHtml = matched.map(function(row, ri) {
+                return _renderVerifyRow(row, allRows.length - matched.length + ri, 'file');
+            }).join('');
+            panesHtml += '<div class="tab-pane' + active + '" id="verifyTabPane' + tabIdx + '"><div class="table-responsive mb-3"><table class="table table-sm table-bordered mb-0"><thead class="table-light"><tr><th style="width:36px;">序号</th><th>报告名称</th><th>LIMS物质名称</th><th>导出名称</th><th style="width:100px;">理论值</th><th style="width:100px;">实测值</th><th style="width:60px;">单位</th><th style="width:90px;">相对偏差(%)</th><th style="width:36px;">操作</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>';
+            tabIdx++;
+        }
+        _verifyRows = allRows;
+        tabsEl.innerHTML = tabsHtml;
+        panesEl.innerHTML = panesHtml;
+        // 绑定事件
+        for (var ti = 0; ti < tabIdx; ti++) {
+            var pane = document.getElementById('verifyTabPane' + ti);
+            if (!pane) continue;
+            pane.querySelectorAll('.verify-theory-input, .verify-measured-input').forEach(function(inp) { inp.addEventListener('input', verifyRecalcResults); });
+            pane.querySelectorAll('.verify-delete-row').forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
+                    var reportName = e.currentTarget.closest('tr').querySelector('td:nth-child(2)')?.textContent?.trim();
+                    document.querySelectorAll('#verifyResultTabPanes tbody tr').forEach(function(tr) {
+                        var rn = tr.querySelector('td:nth-child(2)')?.textContent?.trim();
+                        if (rn === reportName) tr.remove();
+                    });
+                    verifyRecalcResults();
+                });
+            });
+            _bindMatchButtons(pane);
+        }
+        verifyRecalcResults();
+    }
+
+    /** 读取匹配确认下拉框 → 校验点位不重复 → 生成结果标签页 */
+    function verifyConfirmMatch() {
+        if (!_verifyMatchCtx) return;
+        var ctx = _verifyMatchCtx;
+        var selects = document.querySelectorAll('#verifyMatchTbody .verify-match-point');
+        var pairs = [];
+        var usedPoints = {};
+        for (var i = 0; i < selects.length; i++) {
+            var val = selects[i].value;
+            if (val === '' || val === null) continue;
+            var pi = parseInt(val, 10);
+            if (usedPoints[pi]) { alert('核查点位不能重复，请检查'); return; }
+            usedPoints[pi] = true;
+            pairs.push({ folderIdx: parseInt(selects[i].dataset.fidx, 10), pointIdx: pi });
+        }
+        if (!pairs.length) { alert('请至少为一个数据文件选择核查点位'); return; }
+        document.getElementById('verifyMatchConfirm').style.display = 'none';
+        verifyRenderResultTabs(pairs, ctx.groups, ctx.files, ctx.checkedPoints);
     }
 
     let _verifySelectedDFolders = [];
@@ -7297,6 +7341,7 @@
         document.getElementById('verifyThreshold').addEventListener('change', () => { verifyUpdateCodes(); verifyRecalcResults(); });
         document.getElementById('verifySelectDFoldersBtn').addEventListener('click', verifySelectDFolders);
         document.getElementById('verifyParseEpatempBtn').addEventListener('click', verifyParseEpatemp);
+        document.getElementById('verifyConfirmMatchBtn').addEventListener('click', verifyConfirmMatch);
         document.getElementById('verifyExcelPasteBtn').addEventListener('click', verifyExcelPasteFill);
         document.getElementById('verifyExportBtn').addEventListener('click', verifyExportDocx);
         document.querySelector('#dTabResultTable tbody').addEventListener('change', e => {
@@ -7649,6 +7694,18 @@
             : `<tr><th>类型</th><th>编号</th><th>自编号</th><th>名称</th><th>审核状态</th><th style="width:90px;">操作</th></tr>`;
     }
 
+    // 按"配置人"升序排序（中文拼音），空名排到末尾
+    function qqSortByConfigurator(list) {
+        return [...list].sort((a, b) => {
+            const na = (a.configuratorName || a.creatorName || '').trim();
+            const nb = (b.configuratorName || b.creatorName || '').trim();
+            if (!na && !nb) return 0;
+            if (!na) return 1;
+            if (!nb) return -1;
+            return na.localeCompare(nb, 'zh-Hans-CN');
+        });
+    }
+
     function qqStatusBadge(item) {
         const v = item.validityDate ? String(item.validityDate).slice(0, 10) : '';
         if (!v) return '<span class="badge bg-secondary">—</span>';
@@ -7687,7 +7744,9 @@
             qqLastResults = data.data || [];
             if (qqAuditMode && !operator) qqRefreshOperatorOptions(qqLastResults);
             qqTotalRecords = data.total || 0;
-            qqFilteredResults = qqLastResults;
+            qqFilteredResults = qqAuditMode
+                ? qqSortByConfigurator(qqLastResults)
+                : qqLastResults;
             qqTotalPages = Math.max(1, Math.ceil(qqFilteredResults.length / qqPageSize));
             document.getElementById('qqTotalCount').textContent = qqTotalRecords;
             qqRenderCurrentPage();
@@ -7733,7 +7792,7 @@
                 : `<td>${qqEsc(item.configureOrder)}</td>`;
             const solCodeCell = `<td class="text-truncate" style="max-width:140px;" title="${qqEsc(item.solutionCode)}">${qqEsc(item.solutionCode)}</td>`;
             const extraCells = qqAuditMode
-                ? `<td class="text-truncate" style="max-width:100px;" title="${qqEsc(item.configuratorName || item.creatorName || '')}">${qqEsc(item.configuratorName || item.creatorName || '—')}</td><td>${qqStatusBadge(item)}</td>`
+                ? `<td class="text-truncate" style="max-width:100px;font-weight:700;color:#0f766e;" title="${qqEsc(item.configuratorName || item.creatorName || '')}">${qqEsc(item.configuratorName || item.creatorName || '—')}</td><td>${qqStatusBadge(item)}</td>`
                 : '';
             return `<tr>
                 <td>${qqTypeBadge(solType)}</td>
@@ -8268,7 +8327,7 @@
                 } catch (e) { alert('删除领用记录异常: ' + e.message); }
             }
             qqLastResults.splice(idx, 1);
-            qqFilteredResults = [...qqLastResults];
+            qqFilteredResults = qqAuditMode ? qqSortByConfigurator(qqLastResults) : [...qqLastResults];
             qqTotalRecords = qqFilteredResults.length;
             qqTotalPages = Math.max(1, Math.ceil(qqFilteredResults.length / qqPageSize));
             if (qqPageNo > qqTotalPages) qqPageNo = qqTotalPages;
