@@ -134,7 +134,9 @@
       "Bash(PYTHONIOENCODING=utf-8 .venv/Scripts/python *)",
       "Bash(ls -la *.json session_*.json config*.json)",
       "Bash(ls templates/)",
-      "Bash(.venv/Scripts/python -m py_compile login_html.py)"
+      "Bash(.venv/Scripts/python -m py_compile login_html.py)",
+      "Bash(.venv/Scripts/python convert_outline.py)",
+      "Bash(.venv/Scripts/python _dump_doc.py)"
     ]
   },
   "enableAllProjectMcpServers": true,
