@@ -483,7 +483,7 @@ def query():
         rd = result.get("resultData") or {}
         if result.get("success"):
             vo_list = rd.get("voList", [])
-            records = rd.get("records", 0)
+            records = rd.get("records") or rd.get("totalCount") or rd.get("totalRecords") or 0
             page = rd.get("page", 1)
             total = rd.get("total")
             if total is None or total <= 0:

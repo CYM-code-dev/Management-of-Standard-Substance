@@ -503,7 +503,7 @@
                       <span class="small text-muted">已选 <span id="solResultSelectedCount" class="fw-bold text-primary">0</span> 条</span>
                       <span class="small text-muted">/ 共 <span id="solResultTotalCount">0</span> 条</span>
                       <select id="solPageSizeSelect" class="form-select form-select-sm" style="width:auto;font-size:0.72rem;padding:0.15rem 0.4rem;">
-                        <option value="30" selected>30条/页</option>
+                        <option value="25" selected>25条/页</option>
                         <option value="50">50条/页</option>
                         <option value="100">100条/页</option>
                       </select>
@@ -613,7 +613,7 @@
                   <span class="small text-muted">已选 <span id="bbcdSelectedCount" class="fw-bold text-primary">0</span> 条</span>
                   <span class="small text-muted">/ 共 <span id="bbcdTotalCount">0</span> 条</span>
                   <select id="bbcdPageSizeSelect" class="form-select form-select-sm" style="width:auto;font-size:0.72rem;padding:0.15rem 0.4rem;">
-                    <option value="20">20条/页</option>
+                    <option value="25" selected>25条/页</option>
                     <option value="50">50条/页</option>
                     <option value="100">100条/页</option>
                   </select>
@@ -714,7 +714,7 @@
                   <span class="small text-muted">已选 <span id="dTabSelectedCount" class="fw-bold text-primary">0</span> 条</span>
                   <span class="small text-muted">/ 共 <span id="dTabTotalCount">0</span> 条</span>
                   <select id="dTabPageSizeSelect" class="form-select form-select-sm" style="width:auto;font-size:0.72rem;padding:0.15rem 0.4rem;">
-                    <option value="20">20条/页</option>
+                    <option value="25" selected>25条/页</option>
                     <option value="50">50条/页</option>
                     <option value="100">100条/页</option>
                   </select>
@@ -1214,7 +1214,7 @@
             <div class="d-flex align-items-center gap-2">
               <span class="small text-muted">/ 共 <span id="qqTotalCount">0</span> 条</span>
               <select id="qqPageSizeSelect" class="form-select form-select-sm" style="width:auto;font-size:0.72rem;padding:0.15rem 0.4rem;">
-                <option value="30" selected>30条/页</option>
+                <option value="25" selected>25条/页</option>
                 <option value="50">50条/页</option>
                 <option value="100">100条/页</option>
               </select>
@@ -1565,7 +1565,7 @@
     let solPageNo = 1;
     let solTotalPages = 1;
     let solTotalRecords = 0;
-    let solPageSize = 30;
+    let solPageSize = 25;
     let solSelectedMap = new Map(); // 跨页选中：id -> item 对象（服务端分页，按 id 存对象）
 
     function solSetBtnSaved(done) {
@@ -3075,7 +3075,7 @@
 
     // 分页与跨页选择状态
     let bbcdCurrentPage = 1;
-    let bbcdPageSize = 20;
+    let bbcdPageSize = 25;
     let bbcdFilteredResults = [];
     let bbcdSelectedIds = new Set();
     // 全局标志：防止 Modal 转换期间重复触发
@@ -5639,7 +5639,7 @@
     let dTabLastResults = [];
     let dTabFilteredResults = [];
     let dTabCurrentPage = 1;
-    let dTabPageSize = 20;
+    let dTabPageSize = 25;
     let dTabSelectedIds = new Set();
 
     async function dTabQuery() {
@@ -7010,18 +7010,7 @@
             document.getElementById(id).addEventListener('keypress', e => { if (e.key === 'Enter') bbcdQuery(); });
         });
         document.getElementById('bbcdCheckAll').addEventListener('change', e => {
-            // For cross-page: select/deselect all items in bbcdFilteredResults
-            if (e.target.checked) {
-                bbcdFilteredResults.forEach(item => {
-                    const idx = bbcdLastResults.indexOf(item);
-                    if (idx >= 0) bbcdSelectedIds.add(idx);
-                });
-            } else {
-                bbcdFilteredResults.forEach(item => {
-                    const idx = bbcdLastResults.indexOf(item);
-                    if (idx >= 0) bbcdSelectedIds.delete(idx);
-                });
-            }
+            // 表头全选仅作用于当前页
             document.querySelectorAll('.bbcd-row-check').forEach(c => c.checked = e.target.checked);
             bbcdUpdateSelection();
         });
@@ -7039,7 +7028,7 @@
             });
         });
         document.getElementById('bbcdPageSizeSelect').addEventListener('change', e => {
-            bbcdPageSize = parseInt(e.target.value, 10) || 20;
+            bbcdPageSize = parseInt(e.target.value, 10) || 25;
             bbcdCurrentPage = 1;
             bbcdRenderCurrentPage();
         });
@@ -7278,17 +7267,7 @@
             document.getElementById(id).addEventListener('keypress', e => { if (e.key === 'Enter') dTabQuery(); });
         });
         document.getElementById('dTabCheckAll').addEventListener('change', e => {
-            if (e.target.checked) {
-                dTabFilteredResults.forEach(item => {
-                    const idx = dTabLastResults.indexOf(item);
-                    if (idx >= 0) dTabSelectedIds.add(idx);
-                });
-            } else {
-                dTabFilteredResults.forEach(item => {
-                    const idx = dTabLastResults.indexOf(item);
-                    if (idx >= 0) dTabSelectedIds.delete(idx);
-                });
-            }
+            // 表头全选仅作用于当前页
             document.querySelectorAll('.dtab-row-check').forEach(c => c.checked = e.target.checked);
             dTabUpdateSelection();
         });
@@ -7306,7 +7285,7 @@
             });
         });
         document.getElementById('dTabPageSizeSelect').addEventListener('change', e => {
-            dTabPageSize = parseInt(e.target.value, 10) || 20;
+            dTabPageSize = parseInt(e.target.value, 10) || 25;
             dTabCurrentPage = 1;
             dTabRenderCurrentPage();
         });
@@ -7416,7 +7395,7 @@
             });
         });
         document.getElementById('solPageSizeSelect').addEventListener('change', e => {
-            solPageSize = parseInt(e.target.value, 10) || 30;
+            solPageSize = parseInt(e.target.value, 10) || 25;
             solSearchLims(1);
         });
         document.getElementById('solSaveBtn').addEventListener('click', solSave);
@@ -7579,7 +7558,7 @@
     let qqPageNo = 1;
     let qqTotalPages = 1;
     let qqTotalRecords = 0;
-    let qqPageSize = 30;
+    let qqPageSize = 25;
     let qqAuditMode = false; // true=待审核模式(仅未审核)
 
     // 法定节假日安排（每年年初公布，直接内置，不再请求外部接口）
@@ -8351,7 +8330,7 @@
             });
         });
         document.getElementById('qqPageSizeSelect').addEventListener('change', e => {
-            qqPageSize = parseInt(e.target.value, 10) || 30;
+            qqPageSize = parseInt(e.target.value, 10) || 25;
             qqDoQuery(1);
         });
     });

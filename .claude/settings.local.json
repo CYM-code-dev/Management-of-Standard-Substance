@@ -136,7 +136,8 @@
       "Bash(ls templates/)",
       "Bash(.venv/Scripts/python -m py_compile login_html.py)",
       "Bash(.venv/Scripts/python convert_outline.py)",
-      "Bash(.venv/Scripts/python _dump_doc.py)"
+      "Bash(.venv/Scripts/python _dump_doc.py)",
+      "Bash(.venv/Scripts/python -c \"import docx; print\\('ok'\\)\")"
     ]
   },
   "enableAllProjectMcpServers": true,
