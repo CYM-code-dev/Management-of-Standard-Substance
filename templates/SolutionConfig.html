@@ -726,7 +726,7 @@
                   <button class="btn btn-sm btn-outline-secondary dtab-page-btn" data-page="next" title="下一页"><i class="fas fa-angle-right"></i></button>
                   <button class="btn btn-sm btn-outline-secondary dtab-page-btn" data-page="last" title="末页"><i class="fas fa-angle-double-right"></i></button>
                 </div>
-                <button class="btn btn-sm btn-success" id="dTabCheckBtn"><i class="fas fa-clipboard-check me-1"></i>标液核查</button>
+                <button class="btn btn-sm btn-success" id="dTabCheckBtn" disabled><i class="fas fa-vial me-1"></i>标液期间核查</button>
               </div>
             </div>
           </div>
@@ -1001,7 +1001,7 @@
   <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header bg-success text-white py-2">
-        <h6 class="modal-title mb-0"><i class="fas fa-clipboard-check me-1"></i>标液核查</h6>
+        <h6 class="modal-title mb-0"><i class="fas fa-vial me-1"></i>标液期间核查</h6>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -5746,6 +5746,7 @@
         });
         const count = dTabSelectedIds.size;
         document.getElementById('dTabSelectedCount').textContent = count;
+        document.getElementById('dTabCheckBtn').disabled = count !== 2;
         const all = document.getElementById('dTabCheckAll');
         const pageAllChecked = checks.length > 0 && [...checks].every(c => c.checked);
         const pageSomeChecked = [...checks].some(c => c.checked);
