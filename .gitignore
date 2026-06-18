@@ -5,6 +5,7 @@
 session_*.json
 users_config.json
 config.json
+drafts/
 
 # Python
 __pycache__/

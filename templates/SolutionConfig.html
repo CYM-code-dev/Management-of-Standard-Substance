@@ -403,6 +403,7 @@
             <i class="fas fa-user-circle"></i> <span id="displayUserName"></span>
             <button class="ms-2" id="logoutBtn" title="退出登录"><i class="fas fa-sign-out-alt"></i></button>
         </div>
+        <button class="btn btn-outline-secondary" id="dTabDraftBtn"><i class="fas fa-folder-open me-1"></i>草稿箱</button>
         <button class="btn btn-outline-primary" id="quickQueryBtn"><i class="fas fa-bolt me-1"></i>快速查询</button>
         <button class="btn btn-outline-purple" id="pendingAuditBtn"><i class="fas fa-hourglass-half me-1"></i>待审核</button>
         <a href="/organic-std" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>有机标准品</a>
@@ -700,8 +701,8 @@
                       <th>配置人</th>
                       <th>配置日期</th>
                       <th>有效期</th>
-                      <th>审核</th>
-                      <th style="width:60px;">操作</th>
+                      <th style="width:78px;">审核</th>
+                      <th style="width:84px;">操作</th>
                     </tr>
                   </thead>
                   <tbody><tr><td colspan="10" class="text-center text-muted small py-3">请先查询</td></tr>
@@ -1154,7 +1155,31 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+        <button type="button" id="verifySaveDraftBtn" class="btn btn-sm btn-outline-primary"><i class="fas fa-save me-1"></i>保存草稿</button>
         <button type="button" id="verifyExportBtn" class="btn btn-sm btn-primary"><i class="fas fa-file-word me-1"></i>导出核查记录</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- 标液期间核查：草稿箱 -->
+<div class="modal fade" id="draftListModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title mb-0"><i class="fas fa-folder-open me-1"></i>我的核查草稿 <span class="small text-muted fw-normal">（仅本账号可见，到期自动删除）</span></h6>
+        <div>
+          <button class="btn btn-sm btn-outline-secondary me-2" id="draftRefreshBtn"><i class="fas fa-sync me-1"></i>刷新</button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light"><tr><th>标题</th><th>创建时间</th><th>到期时间</th><th class="text-center">.D数据</th><th class="text-end">操作</th></tr></thead>
+          <tbody id="draftListTbody"></tbody>
+        </table>
+        <div id="draftListEmpty" class="text-center text-muted small py-4 d-none">暂无草稿</div>
       </div>
     </div>
   </div>
@@ -5937,12 +5962,11 @@
     let _verifyMeasured = [];
     let _verifyRows = [];  // unified row data: [{reportName, exportName, theory, measured, unit}]
     let _verifyMatchCtx = null;  // 多文件匹配确认上下文 { groups, folderKeys, files, checkedPoints }
+    let _currentDraftId = null;     // 当前已加载/保存的草稿 id（再次「保存草稿」走更新）
+    let _currentDraftTitle = null;
 
-    async function verifyCheckBtnHandler() {
-        if (dTabSelectedIds.size !== 2) { alert('请选择恰好2条D型工作液记录进行核查'); return; }
-        const [idx1, idx2] = [...dTabSelectedIds];
-        const item1 = dTabLastResults[idx1], item2 = dTabLastResults[idx2];
-        _verifyData = null; _verifyMeasured = []; _verifyRows = []; _verifySelectedDFolders = []; _verifyEpatempContents = []; _verifyMatchCtx = null;
+    /** 清空核查模态框的结果区 DOM（不清全局变量；「新建核查」与「加载草稿」两条路径共用） */
+    function verifyResetModalDOM() {
         document.getElementById('verifyMatchConfirm').style.display = 'none';
         document.getElementById('verifyDFolderList').style.display = 'none';
         document.getElementById('verifyDFolderList').innerHTML = '';
@@ -5954,6 +5978,15 @@
         document.getElementById('verifyResultTabPanes').style.display = 'none';
         document.getElementById('verifyResultTabPanes').innerHTML = '';
         document.getElementById('verifySingleTable').style.display = '';
+    }
+
+    async function verifyCheckBtnHandler() {
+        if (dTabSelectedIds.size !== 2) { alert('请选择恰好2条D型工作液记录进行核查'); return; }
+        const [idx1, idx2] = [...dTabSelectedIds];
+        const item1 = dTabLastResults[idx1], item2 = dTabLastResults[idx2];
+        _verifyData = null; _verifyMeasured = []; _verifyRows = []; _verifySelectedDFolders = []; _verifyEpatempContents = []; _verifyMatchCtx = null;
+        _currentDraftId = null; _currentDraftTitle = null;
+        verifyResetModalDOM();
         bootstrap.Modal.getOrCreateInstance(document.getElementById('verifyModal')).show();
         loadVerifyPresets(false);  // 加载导出名称预设，默认「不套用预设」
         try {
@@ -7116,6 +7149,261 @@
         }
     }
 
+    // ==================== 标液期间核查：草稿（保存/加载/草稿箱） ====================
+
+    /** 收集当前核查状态为草稿快照（可直接 JSON 序列化、跨电脑加载；.D 数据以 base64 形式随草稿保存） */
+    function verifyCollectDraftPayload() {
+        if (!_verifyData) return null;
+        // table0：标准物质信息（仿 verifyExportDocx 抽取）
+        const table0 = [];
+        document.querySelectorAll('#verifyTable0 tbody tr').forEach((tr) => {
+            const cells = tr.querySelectorAll('td');
+            if (cells.length < 4) return;
+            table0.push({
+                name: (cells[1]?.querySelector('.verify-t0-name')?.value || cells[1]?.textContent?.trim() || ''),
+                code: (cells[2]?.textContent?.trim() || ''),
+                storage: (cells[3]?.textContent?.trim() || '')
+            });
+        });
+        // 编号区勾选的 data-code（数组形式，便于精确还原）
+        const checkedCodes = (areaId) => [...document.querySelectorAll('#' + areaId + ' .verify-code-check:checked')].map(c => c.dataset.code);
+        // 输入模式
+        const inputMode = document.getElementById('verifyModeManual').checked ? 'manual'
+            : (document.getElementById('verifyModeExcel').checked ? 'excel' : 'file');
+        // 结果行：先同步 DOM 输入，再清洗（去掉 theoryRaw/measuredRaw，确保还原用用户编辑后的值）
+        _syncRowsFromDOM();
+        const rows = _verifyRows.map(r => ({
+            reportName: r.reportName, substanceName: r.substanceName,
+            exportName: r.exportName, theory: r.theory, measured: r.measured, unit: r.unit,
+            multiIon: r.multiIon
+        }));
+        // 结果布局：单表 or 多标签页
+        const isMulti = document.getElementById('verifyResultTabs').style.display !== 'none';
+        const tabs = [];
+        if (isMulti) {
+            // .D 文件模式标签页 id=verifyTabPane{i}；手动模式 id=verifyManualPane{i}；二者顺序与 .nav-link 一致
+            const links = document.querySelectorAll('#verifyResultTabs .nav-link');
+            links.forEach((a, ti) => {
+                const paneId = (a.getAttribute('href') || '').replace('#', '');
+                const pane = paneId ? document.getElementById(paneId) : null;
+                tabs.push({ label: (a.textContent || '').trim(), count: pane ? pane.querySelectorAll('tbody tr').length : 0 });
+            });
+        }
+        return {
+            verifyData: _verifyData,
+            epatempContents: _verifyEpatempContents,
+            measured: _verifyMeasured,
+            matchCtx: _verifyMatchCtx,
+            rows: rows, isMulti: isMulti, tabs: tabs, table0: table0, inputMode: inputMode,
+            codes: { target: checkedCodes('verifyTargetCodeArea'), source: checkedCodes('verifySourceCodeArea') },
+            form: {
+                verifyMode: document.getElementById('verifyMode').value,
+                verifyDate: document.getElementById('verifyDate').value,
+                verifyThreshold: document.getElementById('verifyThreshold').value,
+                verifyMethodName: document.getElementById('verifyMethodName').value,
+                verifyMethodDesc: document.getElementById('verifyMethodDesc').value,
+                verifyConclusion: document.getElementById('verifyConclusion').value,
+                verifyNotes: document.getElementById('verifyNotes').value
+            },
+            schema_version: 1
+        };
+    }
+
+    /** 保存草稿（新建或更新当前 _currentDraftId）。标题：新标液编号 | 保存日期 | 创建人 */
+    async function verifySaveDraft() {
+        const payload = verifyCollectDraftPayload();
+        if (!payload) { alert('请先获取核查信息'); return; }
+        const btn = document.getElementById('verifySaveDraftBtn');
+        const orig = btn.innerHTML;
+        btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>保存中...';
+        try {
+            const solCode = (_verifyData?.new_solution?.solutionCode || '未命名');
+            const t = new Date();
+            const ymd = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+            const autoTitle = solCode + ' | ' + ymd + ' | ' + ((typeof _currentDisplayName !== 'undefined' && _currentDisplayName) || '');
+            const body = { payload: payload, title: (_currentDraftTitle || autoTitle) };
+            if (_currentDraftId) body.draft_id = _currentDraftId;
+            const resp = await fetch('/api/verification/draft/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await resp.json();
+            if (!data.success) { alert('保存失败: ' + (data.message || '')); return; }
+            _currentDraftId = data.draft_id;
+            _currentDraftTitle = data.title;
+            alert('草稿已保存\n标题：' + (data.title || '') + '\n到期时间：' + (data.expires_at || ''));
+        } catch (e) { alert('保存异常: ' + e.message); }
+        finally { btn.disabled = false; btn.innerHTML = orig; }
+    }
+
+    /** 按快照重建结果表（单表或标签页），直接用 _verifyRows 渲染，保留用户编辑值 */
+    function verifyRestoreResults(p) {
+        _verifyRows = (p.rows || []).map(r => ({
+            reportName: r.reportName, substanceName: r.substanceName,
+            exportName: r.exportName, theory: r.theory, measured: r.measured, unit: r.unit,
+            multiIon: r.multiIon
+        }));
+        const renderMode = (p.inputMode === 'manual' || p.inputMode === 'excel') ? 'manual' : 'file';
+        if (p.isMulti && p.tabs && p.tabs.length) {
+            // 多标签页：按 tabs 描述切片重建（结构仿 verifyRenderResultTabs，但数据来自快照、不重算匹配）
+            document.getElementById('verifySingleTable').style.display = 'none';
+            const tabsEl = document.getElementById('verifyResultTabs');
+            const panesEl = document.getElementById('verifyResultTabPanes');
+            tabsEl.style.display = ''; panesEl.style.display = '';
+            const theadFile = '<thead class="table-light"><tr><th style="width:36px;">序号</th><th>报告名称</th><th>LIMS物质名称</th><th>导出名称</th><th style="width:100px;">理论值</th><th style="width:100px;">实测值</th><th style="width:60px;">单位</th><th style="width:90px;">相对偏差(%)</th><th style="width:36px;">操作</th></tr></thead>';
+            const theadManual = '<thead class="table-light"><tr><th style="width:36px;">序号</th><th>物质名称</th><th>导出名称</th><th style="width:100px;">理论值</th><th style="width:100px;">实测值</th><th style="width:60px;">单位</th><th style="width:90px;">相对偏差(%)</th><th style="width:36px;">操作</th></tr></thead>';
+            const thead = renderMode === 'manual' ? theadManual : theadFile;
+            let tabsHtml = '', panesHtml = '', idx = 0;
+            for (let ti = 0; ti < p.tabs.length; ti++) {
+                const tab = p.tabs[ti];
+                const active = ti === 0 ? ' active' : '';
+                const count = tab.count || 0;
+                tabsHtml += '<li class="nav-item"><a class="nav-link small' + active + '" data-bs-toggle="tab" href="#verifyTabPane' + ti + '">' + bbcdEsc(tab.label || ('数据' + (ti + 1))) + '</a></li>';
+                const slice = _verifyRows.slice(idx, idx + count);
+                const rowsHtml = slice.map((row, ri) => _renderVerifyRow(row, idx + ri, renderMode)).join('');
+                panesHtml += '<div class="tab-pane' + active + '" id="verifyTabPane' + ti + '"><div class="table-responsive mb-3"><table class="table table-sm table-bordered mb-0">' + thead + '<tbody>' + rowsHtml + '</tbody></table></div></div>';
+                idx += count;
+            }
+            tabsEl.innerHTML = tabsHtml; panesEl.innerHTML = panesHtml;
+            // 绑定事件（与 verifyRenderResultTabs 一致）
+            for (let tj = 0; tj < p.tabs.length; tj++) {
+                const pane = document.getElementById('verifyTabPane' + tj);
+                if (!pane) continue;
+                pane.querySelectorAll('.verify-theory-input, .verify-measured-input').forEach(inp => inp.addEventListener('input', verifyRecalcResults));
+                pane.querySelectorAll('.verify-delete-row').forEach(btn => {
+                    btn.addEventListener('click', function (e) {
+                        const reportName = e.currentTarget.closest('tr').querySelector('td:nth-child(2)')?.textContent?.trim();
+                        document.querySelectorAll('#verifyResultTabPanes tbody tr').forEach(tr => {
+                            const rn = tr.querySelector('td:nth-child(2)')?.textContent?.trim();
+                            if (rn === reportName) tr.remove();
+                        });
+                        verifyRecalcResults();
+                    });
+                });
+                _bindMatchButtons(pane);
+            }
+            document.getElementById('verifyMatchConfirm').style.display = 'none';
+        } else {
+            // 单表模式：直接用 verifyRenderTable 按 _verifyRows 渲染（renderMode 由 verifyModeFile 自动判定）
+            document.getElementById('verifyResultTabs').style.display = 'none';
+            document.getElementById('verifyResultTabs').innerHTML = '';
+            document.getElementById('verifyResultTabPanes').style.display = 'none';
+            document.getElementById('verifyResultTabPanes').innerHTML = '';
+            document.getElementById('verifySingleTable').style.display = '';
+            verifyRenderTable();
+        }
+        verifyRecalcResults();
+    }
+
+    /** 从草稿快照恢复核查模态框（不走 verifyCheckBtnHandler，不重新拉 LIMS） */
+    function verifyLoadDraft(draft) {
+        const p = draft.payload || {};
+        // 1. 写回全局（文件夹句柄不可恢复，但导出仅需 epatempContents）
+        _verifyData = p.verifyData || null;
+        _verifyMeasured = p.measured || [];
+        _verifyRows = p.rows || [];
+        _verifyMatchCtx = p.matchCtx || null;
+        _verifyEpatempContents = p.epatempContents || [];
+        _verifySelectedDFolders = [];
+        _currentDraftId = draft.draft_id;
+        _currentDraftTitle = draft.title;
+        if (!_verifyData) { alert('草稿数据不完整'); return; }
+        // 2. 清空结果 DOM（不清全局）
+        verifyResetModalDOM();
+        // 3. 直接打开模态框
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('verifyModal')).show();
+        // 4. 用快照重建基础（编号区/table0/下拉）
+        verifyPopulateModal(_verifyData);
+        // 5. 覆盖表单字段（verifyPopulateModal 会把日期设为今天、结论设合格，必须在其后覆盖）
+        const f = p.form || {};
+        const setVal = (id, v) => { if (v !== undefined && v !== null) { const el = document.getElementById(id); if (el) el.value = v; } };
+        setVal('verifyMode', f.verifyMode); setVal('verifyDate', f.verifyDate); setVal('verifyThreshold', f.verifyThreshold);
+        setVal('verifyMethodName', f.verifyMethodName); setVal('verifyMethodDesc', f.verifyMethodDesc);
+        setVal('verifyConclusion', f.verifyConclusion); setVal('verifyNotes', f.verifyNotes);
+        // populate 用 data.mode 构建的编号区可能与用户最终选择的 f.verifyMode 不一致，按真实 mode/threshold 重建编号区
+        verifyUpdateCodes();
+        // 6. 按 data-code 重新勾选编号（上一步已按正确模式重建 DOM）
+        const restoreChecks = (areaId, codes) => {
+            const set = new Set(codes || []);
+            document.querySelectorAll('#' + areaId + ' .verify-code-check').forEach(c => { c.checked = set.has(c.dataset.code); });
+        };
+        restoreChecks('verifyTargetCodeArea', (p.codes || {}).target);
+        restoreChecks('verifySourceCodeArea', (p.codes || {}).source);
+        // 7. 恢复 table0 可编辑名称
+        const t0 = p.table0 || [];
+        document.querySelectorAll('#verifyTable0 tbody tr').forEach((tr, i) => {
+            const inp = tr.querySelector('.verify-t0-name');
+            if (inp && t0[i] && t0[i].name !== undefined) inp.value = t0[i].name;
+        });
+        // 8. 恢复输入模式 radio + 直接切换可见区（不触发 change，避免 verifyBuildManualTabs/excel 清空等副作用）
+        const im = p.inputMode || 'file';
+        const modeMap = { file: 'verifyModeFile', manual: 'verifyModeManual', excel: 'verifyModeExcel' };
+        const modeRadio = document.getElementById(modeMap[im] || 'verifyModeFile');
+        if (modeRadio) modeRadio.checked = true;
+        document.getElementById('verifyInputFile').style.display = (im === 'file') ? '' : 'none';
+        document.getElementById('verifyInputManual').style.display = (im === 'manual') ? '' : 'none';
+        document.getElementById('verifyInputExcel').style.display = (im === 'excel') ? '' : 'none';
+        const _pbar = document.getElementById('verifyPresetBar');
+        if (_pbar) _pbar.style.display = (im === 'file') ? 'flex' : 'none';
+        // 9. 加载导出名称预设下拉（selectLast=false 不覆盖行值）
+        loadVerifyPresets(false);
+        // 10. 重建结果表
+        verifyRestoreResults(p);
+        // 11. 标注 .D 状态
+        const status = document.getElementById('verifyParseStatus');
+        if (_verifyEpatempContents && _verifyEpatempContents.length) {
+            status.textContent = '已从草稿载入 ' + _verifyEpatempContents.length + ' 个.D数据（可直接导出，无需重选）';
+            status.className = 'small text-success';
+        } else {
+            status.textContent = '草稿无.D数据（如需 PDF 附件请选择.D文件夹并解析）';
+            status.className = 'small text-muted';
+        }
+    }
+
+    /** 打开草稿箱：列出当前账号的未过期草稿 */
+    async function draftOpenList() {
+        const tbody = document.getElementById('draftListTbody');
+        const empty = document.getElementById('draftListEmpty');
+        if (empty) empty.classList.add('d-none');
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted small py-3">加载中...</td></tr>';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('draftListModal')).show();
+        try {
+            const resp = await fetch('/api/verification/draft/list');
+            const data = await resp.json();
+            if (!data.success) { tbody.innerHTML = '<tr><td colspan="5" class="text-danger small">' + bbcdEsc(data.message || '加载失败') + '</td></tr>'; return; }
+            const list = data.drafts || [];
+            if (!list.length) { tbody.innerHTML = ''; if (empty) empty.classList.remove('d-none'); return; }
+            tbody.innerHTML = list.map(d => {
+                const dData = d.has_d_data ? '<span class="badge bg-success">是</span>' : '<span class="badge bg-secondary">否</span>';
+                return '<tr>'
+                    + '<td class="small">' + bbcdEsc(d.title || (d.draft_id || '').slice(0, 8)) + '</td>'
+                    + '<td class="small text-muted">' + bbcdEsc(d.created_at || '') + '</td>'
+                    + '<td class="small text-muted">' + bbcdEsc(d.expires_at || '') + '</td>'
+                    + '<td class="text-center">' + dData + '</td>'
+                    + '<td class="text-end text-nowrap">'
+                    + '<button class="btn btn-sm btn-outline-primary me-1" data-action="open" data-draft-id="' + bbcdEsc(d.draft_id) + '"><i class="fas fa-folder-open"></i> 打开</button>'
+                    + '<button class="btn btn-sm btn-outline-danger" data-action="delete" data-draft-id="' + bbcdEsc(d.draft_id) + '"><i class="fas fa-trash"></i></button>'
+                    + '</td></tr>';
+            }).join('');
+        } catch (e) { tbody.innerHTML = '<tr><td colspan="5" class="text-danger small">加载异常: ' + bbcdEsc(e.message) + '</td></tr>'; }
+    }
+
+    async function draftOpenOne(draftId) {
+        try {
+            const resp = await fetch('/api/verification/draft/' + encodeURIComponent(draftId));
+            const data = await resp.json();
+            if (!data.success || !data.draft) { alert('打开失败: ' + (data.message || '草稿不存在或已过期')); return; }
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('draftListModal')).hide();
+            verifyLoadDraft(data.draft);
+        } catch (e) { alert('打开异常: ' + e.message); }
+    }
+
+    async function draftDeleteOne(draftId) {
+        try {
+            const resp = await fetch('/api/verification/draft/' + encodeURIComponent(draftId) + '/delete', { method: 'POST' });
+            const data = await resp.json();
+            if (!data.success) { alert('删除失败: ' + (data.message || '')); return; }
+            draftOpenList();
+        } catch (e) { alert('删除异常: ' + e.message); }
+    }
+
     // ==================== 标液期间核查：导出名称预设 ====================
     var _exportPresets = { lastProject: "", projects: {} };
     var _presetEditingProject = "";
@@ -7758,6 +8046,17 @@
         document.getElementById('verifyConfirmMatchBtn').addEventListener('click', verifyConfirmMatch);
         document.getElementById('verifyExcelPasteBtn').addEventListener('click', verifyExcelPasteFill);
         document.getElementById('verifyExportBtn').addEventListener('click', verifyExportDocx);
+        // 草稿
+        document.getElementById('verifySaveDraftBtn').addEventListener('click', verifySaveDraft);
+        document.getElementById('dTabDraftBtn').addEventListener('click', draftOpenList);
+        document.getElementById('draftRefreshBtn').addEventListener('click', draftOpenList);
+        document.getElementById('draftListTbody').addEventListener('click', e => {
+            const btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+            const id = btn.dataset.draftId;
+            if (btn.dataset.action === 'open') draftOpenOne(id);
+            else if (btn.dataset.action === 'delete') { if (confirm('删除该草稿？')) draftDeleteOne(id); }
+        });
         // 导出名称预设
         document.getElementById('verifyApplyPresetBtn').addEventListener('click', applyExportPreset);
         document.getElementById('verifyManagePresetBtn').addEventListener('click', openPresetModal);

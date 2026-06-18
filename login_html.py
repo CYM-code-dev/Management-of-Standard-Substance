@@ -9,6 +9,7 @@ import datetime
 import base64
 import hashlib
 import re
+import uuid
 from io import BytesIO
 from urllib.parse import urlencode
 
@@ -4569,6 +4570,150 @@ def start_niimbot_server():
         print("  警告：打印服务启动超时，请手动运行 npm start")
     except Exception as e:
         print(f"  警告：打印服务启动失败: {e}，请手动运行 npm start")
+
+
+# ==================== 标液核查草稿（仅创建者可见，3 自然日过期） ====================
+DRAFT_DIR = 'drafts'
+DRAFT_EXPIRE_DAYS = 3
+
+
+def _draft_user_dir(username):
+    """草稿按账号隔离：返回 drafts/<username>/ 目录（已创建）。用户名做安全过滤。"""
+    safe = re.sub(r'[^A-Za-z0-9_一-鿿.-]', '_', username or 'anon')
+    d = os.path.join(DRAFT_DIR, safe)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _draft_purge_expired(username):
+    """删除已过期草稿；逐文件 try/except，损坏文件原样保留（绝不静默销毁数据）。"""
+    d = _draft_user_dir(username)
+    now = datetime.datetime.now()
+    for fn in os.listdir(d):
+        if not fn.endswith('.json'):
+            continue
+        path = os.path.join(d, fn)
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                doc = json.load(f)
+            exp = doc.get('expires_at', '')
+            if exp and datetime.datetime.strptime(exp, '%Y-%m-%d %H:%M:%S') < now:
+                os.remove(path)
+        except Exception:
+            continue
+
+
+def _draft_write_atomic(path, obj):
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+
+
+@app.route('/api/verification/draft/save', methods=['POST'])
+def verification_draft_save():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    username = session.get('username') or 'anon'
+    p = request.get_json() or {}
+    payload = p.get('payload')
+    if not isinstance(payload, dict):
+        return jsonify({"success": False, "message": "草稿内容无效"}), 400
+    if len(json.dumps(payload, ensure_ascii=False)) > 10_000_000:
+        return jsonify({"success": False, "message": "草稿过大，请减少 .D 数据"}), 400
+
+    d = _draft_user_dir(username)
+    draft_id = p.get('draft_id') or ''
+    path = None
+    if re.match(r'^[A-Za-z0-9]{32}$', draft_id):
+        cand = os.path.join(d, draft_id + '.json')
+        if os.path.exists(cand):
+            path = cand  # 复用现有 id（更新）
+    if not path:
+        draft_id = uuid.uuid4().hex
+        path = os.path.join(d, draft_id + '.json')
+
+    now = datetime.datetime.now()
+    expires = now + datetime.timedelta(days=DRAFT_EXPIRE_DAYS)
+    doc = {
+        "draft_id": draft_id,
+        "created_by_username": username,
+        "created_by_name": session.get('display_name') or username,
+        "created_at": now.strftime('%Y-%m-%d %H:%M:%S'),
+        "expires_at": expires.strftime('%Y-%m-%d %H:%M:%S'),
+        "title": (p.get('title') or draft_id[:8]),
+        "payload": payload,
+    }
+    _draft_write_atomic(path, doc)
+    _draft_purge_expired(username)
+    return jsonify({"success": True, "draft_id": draft_id, "title": doc["title"], "expires_at": doc["expires_at"]})
+
+
+@app.route('/api/verification/draft/list', methods=['GET'])
+def verification_draft_list():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    username = session.get('username') or 'anon'
+    _draft_purge_expired(username)
+    d = _draft_user_dir(username)
+    out = []
+    for fn in os.listdir(d):
+        if not fn.endswith('.json'):
+            continue
+        try:
+            with open(os.path.join(d, fn), 'r', encoding='utf-8') as f:
+                doc = json.load(f)
+        except Exception:
+            continue
+        payload = doc.get('payload') or {}
+        out.append({
+            "draft_id": doc.get('draft_id', fn[:-5]),
+            "title": doc.get('title', ''),
+            "created_at": doc.get('created_at', ''),
+            "expires_at": doc.get('expires_at', ''),
+            "has_d_data": bool(payload.get('epatempContents')),
+        })
+    out.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    return jsonify({"success": True, "drafts": out})
+
+
+@app.route('/api/verification/draft/<draft_id>', methods=['GET'])
+def verification_draft_load(draft_id):
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    if not re.match(r'^[A-Za-z0-9]{32}$', draft_id):
+        return jsonify({"success": False, "message": "草稿不存在或已过期"}), 404
+    username = session.get('username') or 'anon'
+    path = os.path.join(_draft_user_dir(username), draft_id + '.json')
+    if not os.path.exists(path):
+        return jsonify({"success": False, "message": "草稿不存在或已过期"}), 404
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            doc = json.load(f)
+    except Exception:
+        return jsonify({"success": False, "message": "草稿损坏"}), 500
+    try:
+        if datetime.datetime.strptime(doc.get('expires_at', ''), '%Y-%m-%d %H:%M:%S') < datetime.datetime.now():
+            os.remove(path)
+            return jsonify({"success": False, "message": "草稿已过期"}), 404
+    except Exception:
+        pass
+    return jsonify({"success": True, "draft": doc})
+
+
+@app.route('/api/verification/draft/<draft_id>/delete', methods=['POST', 'DELETE'])
+def verification_draft_delete(draft_id):
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    if re.match(r'^[A-Za-z0-9]{32}$', draft_id):
+        username = session.get('username') or 'anon'
+        path = os.path.join(_draft_user_dir(username), draft_id + '.json')
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except Exception:
+            pass
+    return jsonify({"success": True})
 
 
 if __name__ == '__main__':
