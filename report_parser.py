@@ -1425,42 +1425,42 @@ def parse_pdf_report(file_path: str) -> dict:
 
 
 def parse_epatemp_txt(file_path: str) -> dict:
-    """解析 epatemp.txt 定量报告，返回 {compound_name: (measured_value, unit)}。"""
+    """解析 epatemp.txt 定量报告，返回 {compound_name: (measured_value, measured_raw, unit)}。"""
     import os
     if not os.path.isfile(file_path):
         return {}
     # 匹配目标化合物行: 编号) 名称 保留时间 定量离子 响应值  浓度 单位 [偏差]
-    # 响应值可能是纯数字或带m后缀(手动积分)，浓度单位可能是ng/mg/L等
+    # 定量离子可能是数字(如108)或文本(如VOC报告的"TIC")；响应值可能是纯数字或带m后缀(手动积分)，浓度单位可能是ng/mg/L等
     row_pattern = re.compile(
         r'^\s*\d+\)\s+(.+?)\s{2,}'
-        r'[\d.]+\s+\d+\s+\d+[m]?\s+([\d.]+)\s*(ng|mg/L|μg/mL|ug/mL)'
+        r'[\d.]+\s+\S+\s+\d+[m]?\s+([\d.]+)\s*(ng|mg/L|μg/mL|ug/mL)'
     )
-    for encoding in ('gbk', 'gb18030', 'gb2312', 'utf-8', 'latin-1'):
+    # 仪器导出的报告里偶有非法字节（会让严格 GBK 解码直接抛错、整份解析失败），
+    # 故用 errors='replace' 容忍；并以"是否找到'目标化合物'表头"作为编码是否正确的判据，
+    # 而非"是否含替换符"。gb18030 最全（GBK 超集），优先尝试。
+    for encoding in ('gb18030', 'gbk', 'utf-8'):
         try:
-            with open(file_path, 'r', encoding=encoding) as f:
+            with open(file_path, 'r', encoding=encoding, errors='replace') as f:
                 content = f.read()
-            if '�' in content:
-                continue
-            result = {}
-            extracting = False
-            for line in content.splitlines():
-                if '目标化合物' in line:
-                    extracting = True
-                    continue
-                if not extracting:
-                    continue
-                m = row_pattern.match(line)
-                if m:
-                    name = m.group(1).strip()
-                    if name:
-                        result[name] = (float(m.group(2)), m.group(2), m.group(3))
-            if result:
-                if encoding != 'latin-1':
-                    return result
-                if encoding == 'latin-1':
-                    return result
         except (UnicodeDecodeError, UnicodeError):
             continue
+        if '目标化合物' not in content:
+            continue
+        result = {}
+        extracting = False
+        for line in content.splitlines():
+            if '目标化合物' in line:
+                extracting = True
+                continue
+            if not extracting:
+                continue
+            m = row_pattern.match(line)
+            if m:
+                name = m.group(1).strip()
+                if name:
+                    result[name] = (float(m.group(2)), m.group(2), m.group(3))
+        if result:
+            return result
     return {}
 
 

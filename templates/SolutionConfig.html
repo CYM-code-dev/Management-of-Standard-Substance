@@ -1118,6 +1118,14 @@
 
         <!-- 6. 核查结果 -->
         <h6 class="fw-bold mb-2 small"><i class="fas fa-chart-bar me-1"></i>核查结果</h6>
+        <div id="verifyPresetBar" class="align-items-center gap-2 mb-2 flex-wrap" style="display:flex;">
+          <span class="small text-muted fw-bold">导出名称预设：</span>
+          <select id="verifyPresetApplySelect" class="form-select form-select-sm" style="max-width:180px;">
+            <option value="">—不套用预设—</option>
+          </select>
+          <button type="button" class="btn btn-sm btn-outline-info" id="verifyApplyPresetBtn"><i class="fas fa-magic me-1"></i>套用预设</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="verifyManagePresetBtn"><i class="fas fa-cog me-1"></i>管理预设</button>
+        </div>
         <ul class="nav nav-tabs mb-2" id="verifyResultTabs" style="display:none;"></ul>
         <div class="tab-content" id="verifyResultTabPanes" style="display:none;"></div>
         <div id="verifySingleTable" class="table-responsive mb-3">
@@ -1147,6 +1155,50 @@
       <div class="modal-footer">
         <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
         <button type="button" id="verifyExportBtn" class="btn btn-sm btn-primary"><i class="fas fa-file-word me-1"></i>导出核查记录</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- 标液期间核查：导出名称预设管理 -->
+<div class="modal fade" id="verifyPresetModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white py-2">
+        <h6 class="modal-title mb-0"><i class="fas fa-tags me-1"></i>导出名称预设管理</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3 p-2 border rounded bg-light">
+          <label class="form-label mb-1 small fw-bold"><i class="fas fa-filter me-1"></i>当前项目自动剔除的物质名称（随项目保存，多个用逗号分隔，如：联苯胺-D8, A, B）</label>
+          <input type="text" id="presetIgnoreInput" class="form-control form-control-sm" placeholder="如：联苯胺-D8, A, B">
+          <div class="small text-muted mt-1">仅对当前选中项目生效；切换上方项目会显示对应的剔除名单。核查生成时报告名/LIMS名命中即自动删行。</div>
+        </div>
+        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+          <label class="form-label mb-0 small fw-bold">项目：</label>
+          <select id="presetProjectSelect" class="form-select form-select-sm" style="max-width:200px;"></select>
+          <button type="button" class="btn btn-sm btn-outline-primary" id="presetNewProjectBtn"><i class="fas fa-plus"></i> 新建</button>
+          <button type="button" class="btn btn-sm btn-outline-warning" id="presetRenameProjectBtn"><i class="fas fa-pen"></i> 重命名</button>
+          <button type="button" class="btn btn-sm btn-outline-danger" id="presetDelProjectBtn"><i class="fas fa-trash"></i> 删除</button>
+          <button type="button" class="btn btn-sm btn-success ms-auto" id="presetImportBtn"><i class="fas fa-file-import me-1"></i>从当前核查结果导入</button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0" id="presetTable">
+            <thead class="table-light">
+              <tr><th style="width:45%;">物质名称（匹配键，建议填LIMS名）</th><th>导出名称</th><th style="width:60px;">操作</th></tr>
+            </thead>
+            <tbody id="presetTbody"></tbody>
+          </table>
+        </div>
+        <div class="mt-2 d-flex align-items-center gap-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="presetAddRowBtn"><i class="fas fa-plus"></i> 添加一行</button>
+          <span class="small text-muted">套用时优先按LIMS物质名称匹配，匹配不上再按报告名称兜底（支持模糊包含）。</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-sm btn-primary" id="presetSaveBtn"><i class="fas fa-save me-1"></i>保存</button>
       </div>
     </div>
   </div>
@@ -4679,6 +4731,9 @@
             dilutionVols.push(parseFloat(el?.value) || 0);
         }
 
+        // 逐级稀释开关：决定 diluteStatus 与领用量口径（逐级=第一点，非逐级=各点之和）
+        const isGradual = document.getElementById('bbcdGradualDilution')?.checked || false;
+
         // 过滤掉第一行（定容体积行），只处理数据行
         const dataRows = rows.slice(1).filter(tr => tr._src);
 
@@ -4766,7 +4821,15 @@
             const firstTr = group.rows[0];
             const firstSrc = firstTr._src;
             const qtyInputs = firstTr.querySelectorAll('.bbcd-d-qty');
-            const firstQty = qtyInputs[0]?.value || '1';
+            // 领用量（原液实际消耗量）：逐级=第一点移取体积；非逐级=各点移取体积之和
+            let receiveQtyStr;
+            if (isGradual) {
+                receiveQtyStr = qtyInputs[0]?.value || '1';
+            } else {
+                let qtySum = 0;
+                for (let i = 0; i < count; i++) qtySum += parseFloat(qtyInputs[i]?.value) || 0;
+                receiveQtyStr = bbcdFmtQty(qtySum);
+            }
 
             group.rows.forEach(tr => {
                 const src = tr._src;
@@ -4787,7 +4850,7 @@
                     dilutionSix: null, dilutionSeven: null, dilutionEight: null,
                     dilutionNine: null, dilutionTen: null, dilutionEleven: null, dilutionTwelve: null,
                     remark: null, dataSeq: concRec ? concRec.dataSeq : dataSeq++,
-                    receivedQuantity: firstQty,
+                    receivedQuantity: receiveQtyStr,
                     receivedUint: 'mL',
                     medium: document.getElementById('bbcdMediumD')?.value.trim() || null,
                     consumableReceive: concRec ? concRec.consumableReceive : null, configurationProcess: null,
@@ -4817,7 +4880,7 @@
                 }
             });
 
-            receivedQuantityParts.push(`${firstSrc.solutionName}:${firstQty}`);
+            receivedQuantityParts.push(`${firstSrc.solutionName}:${receiveQtyStr}`);
         });
 
         // 获取唯一的 originalCode 和 controlledNo
@@ -4862,7 +4925,7 @@
             constantVolume: _viewRec2 ? _viewRec2.constantVolume : 0,
             totalConstantVolume: _viewRec2 ? _viewRec2.totalConstantVolume : 0,
             usedConstantVolume: _viewRec2 ? _viewRec2.usedConstantVolume : 0,
-            remark: null, diluteStatus: true,
+            remark: null, diluteStatus: isGradual,
             consumableReceive: _viewRec2 ? _viewRec2.consumableReceive : null,
             customType: document.getElementById('bbcdCustomType').value.trim() || null,
             auditUserName: _viewRec2 ? _viewRec2.auditUserName : null,
@@ -4882,7 +4945,7 @@
             modifierName: null,
             modifyDatetime: nowStr,
             receivedUint: _viewRec2 ? (_viewRec2.receivedUint || '') : 'mL',
-            receivedQuantity: _viewRec2 ? (_viewRec2.receivedQuantity || 0) : 0,
+            receivedQuantity: _viewRec2 ? (_viewRec2.receivedQuantity || 0) : receivedQuantityParts.join(';'),
         };
     }
 
@@ -5892,6 +5955,7 @@
         document.getElementById('verifyResultTabPanes').innerHTML = '';
         document.getElementById('verifySingleTable').style.display = '';
         bootstrap.Modal.getOrCreateInstance(document.getElementById('verifyModal')).show();
+        loadVerifyPresets(false);  // 加载导出名称预设，默认「不套用预设」
         try {
             const resp = await fetch('/api/lims/get_verification_info', { method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ solution_ids: [item1.id, item2.id], configure_orders: [item1.configureOrder, item2.configureOrder] }) });
@@ -6041,8 +6105,12 @@
     function verifyMatchResults(parsed, limsPoints) {
         const rows = [];
         const matchedParsed = new Set();
+        // 名称归一化：全角逗号「，」→ 半角「,」、去空白、转小写。报告名(来自.D/epatemp)与 LIMS 物质名
+        // (sub_concs 键) 标点/大小写/空格风格可能不一致(如「N,N-」与「N，N-」、「DIBP」与「dibp」)，
+        // 统一后再比较，避免匹配失败落到错误浓度点。仅用于比较，回填仍用原始名。
+        const normName = s => String(s || '').replace(/，/g, ',').replace(/\s+/g, '').toLowerCase();
 
-        // 规则1: 名称匹配（优先 sub_concs key 查找）
+        // 规则1: 名称匹配（优先 sub_concs key 查找，名称经归一化比较）
         for (let pi = 0; pi < parsed.length; pi++) {
             const cName = (parsed[pi].name || '').trim();
             const cVal = parsed[pi].measured_value;
@@ -6051,25 +6119,35 @@
             if (!cName) continue;
             // 去掉离子后缀: DIBP-149 → DIBP
             const cPrefix = cName.replace(/[-–]\d{2,4}$/, '');
+            const cNameN = normName(cName);
+            const cPrefixN = cPrefix !== cName ? normName(cPrefix) : cNameN;
             let matched = false;
             for (const pt of limsPoints) {
                 const ptName = pt.name || '';
                 const sc = pt.sub_concs || {};
                 const scStr = pt.sub_concs_str || {};
+                // 归一化 sub_concs 键 → 原始键（按归一化键查找，回填原始名/浓度）
+                const scByNorm = {};
+                for (const k of Object.keys(sc)) scByNorm[normName(k)] = k;
                 // 1a: sub_concs 精确匹配（DIBP → sc["DIBP"]）
-                if (sc[cName] !== undefined) {
-                    rows.push({ reportName: cName, substanceName: cName, exportName: cName, theory: sc[cName], theoryRaw: scStr[cName] || _formatConcVal(sc[cName]), measured: cVal, measuredRaw: cValRaw, unit: cUnit, matched: true });
+                var hitK = scByNorm[cNameN];
+                if (hitK !== undefined) {
+                    rows.push({ reportName: cName, substanceName: hitK, exportName: hitK, theory: sc[hitK], theoryRaw: scStr[hitK] || _formatConcVal(sc[hitK]), measured: cVal, measuredRaw: cValRaw, unit: cUnit, matched: true });
                     matched = true; break;
                 }
                 // 1b: sub_concs 去后缀匹配（DIBP-149 → sc["DIBP"]）
-                if (cPrefix !== cName && sc[cPrefix] !== undefined) {
-                    rows.push({ reportName: cName, substanceName: cPrefix, exportName: cPrefix, theory: sc[cPrefix], theoryRaw: scStr[cPrefix] || _formatConcVal(sc[cPrefix]), measured: cVal, measuredRaw: cValRaw, unit: cUnit, matched: true });
-                    matched = true; break;
+                if (cPrefix !== cName) {
+                    hitK = scByNorm[cPrefixN];
+                    if (hitK !== undefined) {
+                        rows.push({ reportName: cName, substanceName: hitK, exportName: hitK, theory: sc[hitK], theoryRaw: scStr[hitK] || _formatConcVal(sc[hitK]), measured: cVal, measuredRaw: cValRaw, unit: cUnit, matched: true });
+                        matched = true; break;
+                    }
                 }
                 // 1c: sub_concs key 模糊匹配（报告名包含某个 sub_concs key）
                 if (!matched) {
                     for (const scKey of Object.keys(sc)) {
-                        if (scKey && (cName.includes(scKey) || scKey.includes(cName) || (cPrefix && (cPrefix.includes(scKey) || scKey.includes(cPrefix))))) {
+                        const scKeyN = normName(scKey);
+                        if (scKeyN && (cNameN.includes(scKeyN) || scKeyN.includes(cNameN) || (cPrefixN && (cPrefixN.includes(scKeyN) || scKeyN.includes(cPrefixN))))) {
                             rows.push({ reportName: cName, substanceName: scKey, exportName: scKey, theory: sc[scKey], theoryRaw: scStr[scKey] || _formatConcVal(sc[scKey]), measured: cVal, measuredRaw: cValRaw, unit: cUnit, matched: true });
                             matched = true; break;
                         }
@@ -6077,7 +6155,7 @@
                     if (matched) break;
                 }
                 // 1d: pt.name 精确匹配
-                if (ptName === cName) {
+                if (normName(ptName) === cNameN) {
                     rows.push({ reportName: cName, substanceName: ptName, exportName: ptName, theory: pt.concentration, theoryRaw: _formatConcVal(pt.concentration), measured: cVal, measuredRaw: cValRaw, unit: cUnit, matched: true });
                     matched = true; break;
                 }
@@ -6259,39 +6337,60 @@
 
     /** 为容器内的下拉选择绑定事件 */
     function _bindMatchButtons(container) {
+        // 在指定浓度点 pt 中查找物质 name 的理论浓度（优先 sub_concs，其次 pt.name 列表）
+        function theoryInPoint(pt, name) {
+            if (!pt || !name) return { theory: '', raw: '' };
+            if (pt.sub_concs && pt.sub_concs[name] !== undefined) {
+                return { theory: pt.sub_concs[name], raw: (pt.sub_concs_str && pt.sub_concs_str[name]) || _formatConcVal(pt.sub_concs[name]) };
+            }
+            if (pt.name && pt.name.split(',').map(function(s){return s.trim();}).includes(name)) {
+                return { theory: pt.concentration, raw: _formatConcVal(pt.concentration) };
+            }
+            return { theory: '', raw: '' };
+        }
+        // 由行所在标签页 data-point-code 定位其浓度点（多标签页模式）；单表/找不到返回 null
+        function pointOfRow(rowTr) {
+            var pane = rowTr ? rowTr.closest('.tab-pane') : null;
+            var code = pane ? (pane.dataset.pointCode || '') : '';
+            if (!code) return null;
+            var hit = null;
+            _getCheckedConcPoints().forEach(function(p) { if (p.code === code) hit = p; });
+            return hit;
+        }
         container.querySelectorAll('.verify-lims-select').forEach(function(sel) {
             sel.addEventListener('change', function(ev) {
                 var selectedName = ev.target.value;
                 var tr = ev.target.closest('tr');
                 if (!selectedName || !tr) return;
-                var checkedPoints = _getCheckedConcPoints();
+                // 当前行所属浓度点（多标签页时锁定到本标签页的点位，避免误取其他点位的浓度）
+                var myPoint = pointOfRow(tr);
+                var pts = myPoint ? [myPoint] : _getCheckedConcPoints();
                 // 更新导出名称
                 var exportInput = tr.querySelector('.verify-export-name');
                 if (exportInput && !exportInput.value) exportInput.value = selectedName;
-                // 查找理论值
-                var foundTheory = '';
-                var foundTheoryRaw = '';
-                checkedPoints.forEach(function(pt) {
-                    if (pt.sub_concs && pt.sub_concs[selectedName] !== undefined) { foundTheory = pt.sub_concs[selectedName]; foundTheoryRaw = (pt.sub_concs_str && pt.sub_concs_str[selectedName]) ? pt.sub_concs_str[selectedName] : _formatConcVal(foundTheory); }
-                    else if (pt.name && pt.name.split(',').map(function(s){return s.trim();}).includes(selectedName)) { foundTheory = pt.concentration; foundTheoryRaw = _formatConcVal(pt.concentration); }
-                });
+                // 查找理论值（取首个命中）
+                var foundTheory = '', foundTheoryRaw = '';
+                for (var i = 0; i < pts.length; i++) {
+                    var t = theoryInPoint(pts[i], selectedName);
+                    if (t.theory !== '' || t.raw !== '') { foundTheory = t.theory; foundTheoryRaw = t.raw; break; }
+                }
                 var theoryInput = tr.querySelector('.verify-theory-input');
                 if (theoryInput && foundTheoryRaw) theoryInput.value = foundTheoryRaw;
                 else if (theoryInput && foundTheory) theoryInput.value = foundTheory;
-                // 替换下拉为文字
-                var cell = ev.target.closest('.verify-lims-name-cell');
-                if (cell) cell.innerHTML = '<span class="text-muted">'+bbcdEsc(selectedName)+'</span>';
-                // 同步所有标签页中同一报告名的行
+                // 不再替换为静态文字：保留下拉，用户可随时改选物质、重新匹配浓度（避免"选择后即锁定无法修改"）
+                // 同步所有标签页中同一报告名的行（保留下拉、按各自点位的浓度取理论值）
                 var srcReportName = tr.querySelector('td:nth-child(2)')?.textContent?.trim();
                 document.querySelectorAll('#verifyResultTabPanes tbody tr').forEach(function(otherTr) {
                     var otherReportName = otherTr.querySelector('td:nth-child(2)')?.textContent?.trim();
                     if (otherReportName === srcReportName && otherTr !== tr) {
                         var otherCell = otherTr.querySelector('.verify-lims-name-cell');
-                        if (otherCell && otherCell.querySelector('.verify-lims-select')) {
-                            otherCell.innerHTML = '<span class="text-muted">'+bbcdEsc(selectedName)+'</span>';
-                            if (foundTheoryRaw || foundTheory) {
-                                var ot = otherTr.querySelector('.verify-theory-input');
-                                if (ot) ot.value = foundTheoryRaw || foundTheory;
+                        var otherSel = otherCell ? otherCell.querySelector('.verify-lims-select') : null;
+                        if (otherSel) {
+                            otherSel.value = selectedName;   // 同步选择，保留下拉可再改
+                            var ot = theoryInPoint(pointOfRow(otherTr) || myPoint, selectedName);
+                            if (ot.raw || ot.theory) {
+                                var oti = otherTr.querySelector('.verify-theory-input');
+                                if (oti) oti.value = ot.raw || ot.theory;
                             }
                             var oe = otherTr.querySelector('.verify-export-name');
                             if (oe && !oe.value) oe.value = selectedName;
@@ -6310,6 +6409,13 @@
         var pasteData = _parsePastedData(textarea.value);
         if (pasteData.length === 0) { alert('未能解析出有效数据'); return; }
 
+        // 构建行数据 → 剔除忽略行（如A/B）→ 套用预设导出名称（与其它模式一致，并支持「套用预设」按钮重套）
+        _verifyRows = pasteData.map(function(d) {
+            return { reportName: d.name || '', substanceName: '', exportName: d.name || '',
+                theory: d.theory, theoryRaw: d.theoryRaw, measured: d.measured, measuredRaw: d.measuredRaw, unit: d.unit || '' };
+        });
+        _verifyRows = _applyPresetToRows(_filterIgnoredRows(_verifyRows));
+
         // 隐藏标签页，显示单表
         document.getElementById('verifyResultTabs').style.display = 'none';
         document.getElementById('verifyResultTabPanes').style.display = 'none';
@@ -6324,13 +6430,13 @@
         if (limsTh.length >= 2 && limsTh[1].textContent.trim() === 'LIMS物质名称') {
             limsTh[1].style.display = 'none';
         }
-        tbody.innerHTML = pasteData.map(function(d, i) {
+        tbody.innerHTML = _verifyRows.map(function(r, i) {
             return '<tr data-row-idx="'+i+'">' +
                 '<td class="text-center">'+(i+1)+'</td>' +
-                '<td><input type="text" class="form-control form-control-sm py-0 verify-export-name" data-idx="'+i+'" value="'+bbcdEsc(d.name)+'" style="font-size:0.75rem;"></td>' +
-                '<td><input type="text" class="form-control form-control-sm py-0 verify-theory-input" data-idx="'+i+'" value="'+(d.theoryRaw||d.theory||'')+'" style="font-size:0.75rem;"></td>' +
-                '<td><input type="text" class="form-control form-control-sm py-0 verify-measured-input" data-idx="'+i+'" value="'+(d.measuredRaw||d.measured||'')+'" style="font-size:0.75rem;"></td>' +
-                '<td><input type="text" class="form-control form-control-sm py-0 verify-unit-input" data-idx="'+i+'" value="'+bbcdEsc(d.unit||'')+'" style="font-size:0.75rem;width:55px;"></td>' +
+                '<td><input type="text" class="form-control form-control-sm py-0 verify-export-name" data-idx="'+i+'" value="'+bbcdEsc(r.exportName)+'" style="font-size:0.75rem;"></td>' +
+                '<td><input type="text" class="form-control form-control-sm py-0 verify-theory-input" data-idx="'+i+'" value="'+(r.theoryRaw||r.theory||'')+'" style="font-size:0.75rem;"></td>' +
+                '<td><input type="text" class="form-control form-control-sm py-0 verify-measured-input" data-idx="'+i+'" value="'+(r.measuredRaw||r.measured||'')+'" style="font-size:0.75rem;"></td>' +
+                '<td><input type="text" class="form-control form-control-sm py-0 verify-unit-input" data-idx="'+i+'" value="'+bbcdEsc(r.unit||'')+'" style="font-size:0.75rem;width:55px;"></td>' +
                 '<td class="verify-deviation text-center">--</td>' +
                 '<td class="text-center"><button class="btn btn-sm btn-outline-danger py-0 px-1 verify-delete-row" data-idx="'+i+'" title="删除"><i class="fas fa-times"></i></button></td>';
         }).join('');
@@ -6367,7 +6473,7 @@
             document.getElementById('verifyResultTabPanes').style.display = 'none';
             document.getElementById('verifyResultTabPanes').innerHTML = '';
             const pt = checkedPoints[0];
-            _verifyRows = _buildManualRowsForPoint(pt);
+            _verifyRows = _applyPresetToRows(_filterIgnoredRows(_buildManualRowsForPoint(pt)));
             verifyRenderTable();
         } else {
             document.getElementById('verifySingleTable').style.display = 'none';
@@ -6378,8 +6484,10 @@
 
             var tabsHtml = '', panesHtml = '';
             var globalIdx = 0;
+            var allManualRows = [];
             checkedPoints.forEach(function(pt, gi) {
-                var rows = _buildManualRowsForPoint(pt);
+                var rows = _applyPresetToRows(_filterIgnoredRows(_buildManualRowsForPoint(pt)));
+                allManualRows = allManualRows.concat(rows);
                 var tabLabel = pt.code;
                 var active = gi === 0 ? ' active' : '';
                 tabsHtml += '<li class="nav-item"><a class="nav-link small' + active + '" data-bs-toggle="tab" href="#verifyManualPane' + gi + '">' + bbcdEsc(tabLabel) + '</a></li>';
@@ -6396,6 +6504,7 @@
                     '</div>' +
                   '</div>';
             });
+            _verifyRows = allManualRows;
             tabsEl.innerHTML = tabsHtml;
             panesEl.innerHTML = panesHtml;
             // 绑定事件
@@ -6649,7 +6758,7 @@
         document.getElementById('verifyResultTabPanes').style.display = 'none';
         document.getElementById('verifyResultTabPanes').innerHTML = '';
         document.getElementById('verifySingleTable').style.display = '';
-        _verifyRows = verifyMatchResults(_verifyMeasured, checkedPoints);
+        _verifyRows = _applyPresetToRows(_filterIgnoredRows(verifyMatchResults(_verifyMeasured, checkedPoints)));
         verifyRenderTable();
     }
 
@@ -6672,13 +6781,13 @@
             var active = tabIdx === 0 ? ' active' : '';
             tabsHtml += '<li class="nav-item"><a class="nav-link small' + active + '" data-bs-toggle="tab" href="#verifyTabPane' + tabIdx + '">' + bbcdEsc(tabLabel) + '</a></li>';
 
-            var matched = verifyMatchResults(groups[gi], [checkedPoints[pi]]);
+            var matched = _applyPresetToRows(_filterIgnoredRows(verifyMatchResults(groups[gi], [checkedPoints[pi]])));
             allRows.push(...matched);
 
             var rowsHtml = matched.map(function(row, ri) {
                 return _renderVerifyRow(row, allRows.length - matched.length + ri, 'file');
             }).join('');
-            panesHtml += '<div class="tab-pane' + active + '" id="verifyTabPane' + tabIdx + '"><div class="table-responsive mb-3"><table class="table table-sm table-bordered mb-0"><thead class="table-light"><tr><th style="width:36px;">序号</th><th>报告名称</th><th>LIMS物质名称</th><th>导出名称</th><th style="width:100px;">理论值</th><th style="width:100px;">实测值</th><th style="width:60px;">单位</th><th style="width:90px;">相对偏差(%)</th><th style="width:36px;">操作</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>';
+            panesHtml += '<div class="tab-pane' + active + '" id="verifyTabPane' + tabIdx + '" data-point-code="' + bbcdEsc(checkedPoints[pi].code) + '"><div class="table-responsive mb-3"><table class="table table-sm table-bordered mb-0"><thead class="table-light"><tr><th style="width:36px;">序号</th><th>报告名称</th><th>LIMS物质名称</th><th>导出名称</th><th style="width:100px;">理论值</th><th style="width:100px;">实测值</th><th style="width:60px;">单位</th><th style="width:90px;">相对偏差(%)</th><th style="width:36px;">操作</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div>';
             tabIdx++;
         }
         _verifyRows = allRows;
@@ -7007,6 +7116,324 @@
         }
     }
 
+    // ==================== 标液期间核查：导出名称预设 ====================
+    var _exportPresets = { lastProject: "", projects: {} };
+    var _presetEditingProject = "";
+
+    function _norm(s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, ''); }
+
+    /** 把项目数据归一为 {items, ignore}（兼容旧的纯数组形式） */
+    function _projData(name) {
+        var p = (name && _exportPresets.projects) ? _exportPresets.projects[name] : null;
+        if (Array.isArray(p)) return { items: p, ignore: [] };
+        if (p && typeof p === 'object') return { items: Array.isArray(p.items) ? p.items : [], ignore: Array.isArray(p.ignore) ? p.ignore : [] };
+        return { items: [], ignore: [] };
+    }
+
+    /** 当前"套用预设"下拉选中的项目名（'' 表示不套用）。
+     *  仅 .D 文件模式下套用预设/剔除（手动录入、Excel粘贴由用户自行控制名称），其余模式返回 '' */
+    function _selectedProjectName() {
+        var fileRadio = document.getElementById('verifyModeFile');
+        if (fileRadio && !fileRadio.checked) return '';
+        var sel = document.getElementById('verifyPresetApplySelect');
+        return sel ? (sel.value || '') : '';
+    }
+
+    /** 当前选中项目的"自动剔除"名单（命中即丢弃该行）。忽略名单跟着项目走。 */
+    function _ignoredNameSet() {
+        var set = {};
+        _projData(_selectedProjectName()).ignore.forEach(function (n) { if (n && String(n).trim()) set[_norm(n)] = true; });
+        return set;
+    }
+
+    /** 过滤掉命中忽略名单的行（按 substanceName/reportName 匹配），返回新数组 */
+    function _filterIgnoredRows(rows) {
+        var set = _ignoredNameSet();
+        if (!Object.keys(set).length) return rows || [];
+        return (rows || []).filter(function (r) {
+            if (!r) return false;
+            var cands = [r.substanceName, r.reportName].filter(function (x) { return !!x; });
+            for (var i = 0; i < cands.length; i++) { if (set[_norm(cands[i])]) return false; }
+            return true;
+        });
+    }
+
+    /** 就地把预设导出名称套用到「行数组」上（在各行生成入口处调用，apply-at-source）。
+     *  优先按 substanceName(LIMS名) 精确匹配，其次 reportName，再退化为模糊包含。
+     *  返回原数组（已就地修改）。 */
+    function _applyPresetToRows(rows) {
+        if (!rows || !rows.length) return rows;
+        var list = _projData(_selectedProjectName()).items;
+        if (!list.length) return rows;
+        var map = {};
+        list.forEach(function (r) { if (r && r.key) map[_norm(r.key)] = r.exportName; });
+        var keys = Object.keys(map);
+        if (!keys.length) return rows;
+        rows.forEach(function (r) {
+            if (!r) return;
+            var cands = [r.substanceName, r.reportName].filter(function (x) { return !!x; });
+            var hit = null;
+            for (var ci = 0; ci < cands.length; ci++) {
+                if (map[_norm(cands[ci])] !== undefined) { hit = map[_norm(cands[ci])]; break; }
+            }
+            if (hit === null) {
+                for (var ci2 = 0; ci2 < cands.length && hit === null; ci2++) {
+                    var nc = _norm(cands[ci2]);
+                    for (var ki = 0; ki < keys.length; ki++) {
+                        if (nc.indexOf(keys[ki]) >= 0 || keys[ki].indexOf(nc) >= 0) { hit = map[keys[ki]]; break; }
+                    }
+                }
+            }
+            if (hit !== null) r.exportName = hit;
+        });
+        return rows;
+    }
+
+    /** 把"剔除忽略行 + 套用导出名称"重新作用到当前已显示的结果表（DOM 级，单表/多标签页通用）。
+     *  返回 {removed, applied, proj}。供「套用预设」按钮和保存预设后即时刷新共用。 */
+    function _reapplyPresetToDom() {
+        var proj = _selectedProjectName();
+        var list = _projData(proj).items;
+        var ignoreSet = _ignoredNameSet();
+        var map = {};
+        list.forEach(function (r) { if (r && r.key) map[_norm(r.key)] = r.exportName; });
+        var keys = Object.keys(map);
+        function lookup(row) {
+            var cands = [row.substanceName, row.reportName].filter(function (x) { return !!x; });
+            for (var ci = 0; ci < cands.length; ci++) { if (map[_norm(cands[ci])] !== undefined) return map[_norm(cands[ci])]; }
+            for (var ci2 = 0; ci2 < cands.length; ci2++) { var nc = _norm(cands[ci2]); for (var ki = 0; ki < keys.length; ki++) { if (nc.indexOf(keys[ki]) >= 0 || keys[ki].indexOf(nc) >= 0) return map[keys[ki]]; } }
+            return null;
+        }
+        if (typeof _syncRowsFromDOM === 'function') _syncRowsFromDOM();
+        var removed = 0, applied = 0;
+        document.querySelectorAll('.verify-export-name').forEach(function (inp) {
+            var i = parseInt(inp.dataset.idx, 10);
+            var row = isNaN(i) ? null : _verifyRows[i];
+            if (!row) return;
+            // 命中忽略名单 → 删除整行
+            if (ignoreSet[_norm(row.substanceName)] || ignoreSet[_norm(row.reportName)]) {
+                var tr = inp.closest('tr'); if (tr) tr.remove(); removed++; return;
+            }
+            var hit = lookup(row);
+            if (hit !== null) { inp.value = hit; applied++; }
+        });
+        if (typeof verifyRecalcResults === 'function') verifyRecalcResults();
+        return { removed: removed, applied: applied, proj: proj };
+    }
+
+    /** 显式「套用预设」按钮 */
+    function applyExportPreset() {
+        var r = _reapplyPresetToDom();
+        if (_exportPresets.lastProject !== r.proj) _persistExportPresetsLastProject(r.proj);
+        // 仅在「无任何变化」时提示，便于排查（如未选项目/匹配不上）；正常套用不再弹窗，结果直接体现在表格
+        if (!r.removed && !r.applied) alert('当前结果无变化（检查预设项目/匹配键，或确认结果表已生成）');
+    }
+
+    /** 拉取当前用户预设并填充「核查结果」区的套用下拉；selectLast=true 时按 lastProject 选中 */
+    async function loadVerifyPresets(selectLast) {
+        try {
+            const resp = await fetch('/api/lims/export_presets');
+            const j = await resp.json();
+            if (!j.success) { console.warn('加载预设失败:', j.message); return; }
+            _exportPresets = j.presets || { lastProject: "", projects: {} };
+            _normalizeAllProjects();
+        } catch (e) { console.warn('加载预设异常:', e.message); return; }
+        var sel = document.getElementById('verifyPresetApplySelect');
+        if (!sel) return;
+        var names = Object.keys(_exportPresets.projects || {});
+        var last = _exportPresets.lastProject || '';
+        sel.innerHTML = '<option value="">—不套用预设—</option>' +
+            names.map(function (n) { return '<option value="' + bbcdEsc(n) + '"' + (selectLast && n === last ? ' selected' : '') + '>' + bbcdEsc(n) + '</option>'; }).join('');
+        if (selectLast && last && names.indexOf(last) >= 0) sel.value = last;
+    }
+
+    function _persistExportPresetsLastProject(proj) {
+        _exportPresets.lastProject = proj || '';
+        fetch('/api/lims/export_presets', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ presets: _exportPresets })
+        }).catch(function () {});
+    }
+
+    /** 把所有项目归一为 {items, ignore}（就地），兼容旧的纯数组形式 */
+    function _normalizeAllProjects() {
+        if (!_exportPresets.projects) return;
+        Object.keys(_exportPresets.projects).forEach(function (n) { _exportPresets.projects[n] = _projData(n); });
+    }
+
+    // ---- 预设管理模态框 ----
+    /** 刷新"自动剔除"输入框为当前编辑项目的忽略名单 */
+    function _renderPresetIgnoreInput() {
+        var ig = document.getElementById('presetIgnoreInput');
+        if (ig) ig.value = _projData(_presetEditingProject).ignore.join(', ');
+    }
+    async function openPresetModal() {
+        await loadVerifyPresets(false);
+        var names = Object.keys(_exportPresets.projects || {});
+        _presetEditingProject = names.length ? ((_exportPresets.lastProject && names.indexOf(_exportPresets.lastProject) >= 0) ? _exportPresets.lastProject : names[0]) : '';
+        renderPresetProjectSelect();
+        renderPresetRows();
+        _renderPresetIgnoreInput();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('verifyPresetModal')).show();
+    }
+
+    function renderPresetProjectSelect() {
+        var sel = document.getElementById('presetProjectSelect');
+        var names = Object.keys(_exportPresets.projects || {});
+        if (!names.length) { sel.innerHTML = '<option value="">（暂无项目）</option>'; return; }
+        sel.innerHTML = names.map(function (n) {
+            return '<option value="' + bbcdEsc(n) + '"' + (n === _presetEditingProject ? ' selected' : '') + '>' + bbcdEsc(n) + '</option>';
+        }).join('');
+    }
+
+    function renderPresetRows() {
+        var tbody = document.getElementById('presetTbody');
+        if (!_presetEditingProject) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted small">请先「新建」一个项目</td></tr>';
+            return;
+        }
+        var list = _projData(_presetEditingProject).items;
+        if (!list.length) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted small">暂无条目，点「添加一行」或「从当前核查结果导入」</td></tr>';
+            return;
+        }
+        tbody.innerHTML = list.map(function (r, i) {
+            return '<tr>' +
+                '<td><input type="text" class="form-control form-control-sm py-0 preset-key" data-i="' + i + '" value="' + bbcdEsc(r.key) + '" style="font-size:0.75rem;"></td>' +
+                '<td><input type="text" class="form-control form-control-sm py-0 preset-export" data-i="' + i + '" value="' + bbcdEsc(r.exportName) + '" style="font-size:0.75rem;"></td>' +
+                '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 preset-del" data-i="' + i + '" title="删除"><i class="fas fa-times"></i></button></td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    /** 把当前编辑表格（DOM）的"物质→导出名称"收集回当前项目的 items（保留 ignore 不变） */
+    function presetCollectFromDOM() {
+        if (!_presetEditingProject) return;
+        var arr = [];
+        document.querySelectorAll('#presetTbody tr').forEach(function (tr) {
+            var kInp = tr.querySelector('.preset-key');
+            if (!kInp) return;
+            var k = (kInp.value || '').trim();
+            var eInp = tr.querySelector('.preset-export');
+            var e = eInp ? (eInp.value || '').trim() : '';
+            if (k) arr.push({ key: k, exportName: e });
+        });
+        var d = _projData(_presetEditingProject);
+        _exportPresets.projects[_presetEditingProject] = { items: arr, ignore: d.ignore };
+    }
+
+    function presetProjectChanged() {
+        presetCollectFromDOM();                       // 切换前保存当前项目
+        var sel = document.getElementById('presetProjectSelect');
+        _presetEditingProject = sel ? (sel.value || '') : '';
+        renderPresetRows();
+        _renderPresetIgnoreInput();                   // 切项目后，忽略名单跟着变
+    }
+
+    function presetNewProject() {
+        var name = prompt('请输入新项目名称：');
+        if (!name) return;
+        name = name.trim();
+        if (!name) return;
+        _exportPresets.projects = _exportPresets.projects || {};
+        if (_exportPresets.projects[name]) { alert('该项目已存在'); return; }
+        _exportPresets.projects[name] = { items: [], ignore: [] };
+        _presetEditingProject = name;
+        renderPresetProjectSelect();
+        renderPresetRows();
+        _renderPresetIgnoreInput();
+    }
+
+    function presetRenameProject() {
+        if (!_presetEditingProject) { alert('请先选择项目'); return; }
+        var name = prompt('重命名为：', _presetEditingProject);
+        if (!name) return;
+        name = name.trim();
+        if (!name || name === _presetEditingProject) return;
+        if (_exportPresets.projects[name]) { alert('该项目已存在'); return; }
+        _exportPresets.projects[name] = _exportPresets.projects[_presetEditingProject];
+        delete _exportPresets.projects[_presetEditingProject];
+        if (_exportPresets.lastProject === _presetEditingProject) _exportPresets.lastProject = name;
+        _presetEditingProject = name;
+        renderPresetProjectSelect();
+        renderPresetRows();
+    }
+
+    function presetDelProject() {
+        if (!_presetEditingProject) { alert('请先选择项目'); return; }
+        if (!confirm('确定删除项目「' + _presetEditingProject + '」及其全部预设？')) return;
+        delete _exportPresets.projects[_presetEditingProject];
+        if (_exportPresets.lastProject === _presetEditingProject) _exportPresets.lastProject = '';
+        var names = Object.keys(_exportPresets.projects);
+        _presetEditingProject = names.length ? names[0] : '';
+        renderPresetProjectSelect();
+        renderPresetRows();
+    }
+
+    function presetAddRow() {
+        if (!_presetEditingProject) { alert('请先「新建」或选择一个项目'); return; }
+        presetCollectFromDOM();
+        _exportPresets.projects[_presetEditingProject].items.push({ key: '', exportName: '' });
+        renderPresetRows();
+    }
+
+    function presetDelRow(i) {
+        presetCollectFromDOM();
+        var arr = _exportPresets.projects[_presetEditingProject].items;
+        if (arr && arr[i] != null) arr.splice(i, 1);
+        renderPresetRows();
+    }
+
+    /** 把当前核查结果(_verifyRows) 的 物质→导出名称 合并导入到当前项目 */
+    function presetImportFromVerify() {
+        if (!_verifyRows || !_verifyRows.length) { alert('当前核查结果为空，请先生成核查结果（.D解析或手动录入）'); return; }
+        if (!_presetEditingProject) {
+            var name = prompt('当前无项目，请输入要导入到的项目名称：', '新项目');
+            if (!name) return;
+            name = name.trim();
+            if (!name) return;
+            _exportPresets.projects = _exportPresets.projects || {};
+            _exportPresets.projects[name] = { items: [], ignore: [] };
+            _presetEditingProject = name;
+        }
+        presetCollectFromDOM();
+        var byKey = {};
+        _projData(_presetEditingProject).items.forEach(function (r) { if (r && r.key) byKey[r.key] = r.exportName; });
+        var n = 0;
+        _verifyRows.forEach(function (r) {
+            if (!r) return;
+            var key = (r.substanceName || r.reportName || '').trim();
+            if (key && r.exportName) { byKey[key] = r.exportName; n++; }
+        });
+        _exportPresets.projects[_presetEditingProject].items = Object.keys(byKey).map(function (k) { return { key: k, exportName: byKey[k] }; });
+        renderPresetProjectSelect();
+        renderPresetRows();
+        alert('已从当前核查结果导入/合并 ' + n + ' 条到项目「' + _presetEditingProject + '」，记得点「保存」');
+    }
+
+    async function presetSave() {
+        presetCollectFromDOM();
+        if (_presetEditingProject) {
+            _exportPresets.lastProject = _presetEditingProject;
+            // 把"自动剔除"输入框写入当前项目的 ignore
+            var ig = document.getElementById('presetIgnoreInput');
+            if (ig) _exportPresets.projects[_presetEditingProject].ignore = (ig.value || '').split(/[,，]/).map(function (s) { return s.trim(); }).filter(function (s) { return !!s; });
+        }
+        try {
+            const resp = await fetch('/api/lims/export_presets', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ presets: _exportPresets })
+            });
+            const j = await resp.json();
+            if (!j.success) { alert('保存失败：' + (j.message || '')); return; }
+            var inst = bootstrap.Modal.getInstance(document.getElementById('verifyPresetModal'));
+            if (inst) inst.hide();
+            loadVerifyPresets(true);   // 刷新核查区套用下拉
+            _reapplyPresetToDom();     // 即时把"剔除忽略行+套用导出名称"作用到当前结果表（如刚加的 联苯胺-D8 立即消失）
+        } catch (e) { alert('保存异常：' + e.message); }
+    }
+    // ==================== /导出名称预设 ====================
+
 
         document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('bbcdQueryBtn').addEventListener('click', bbcdQuery);
@@ -7304,6 +7731,8 @@
                 document.getElementById('verifyInputFile').style.display = (this.value === 'file') ? '' : 'none';
                 document.getElementById('verifyInputManual').style.display = (this.value === 'manual') ? '' : 'none';
                 document.getElementById('verifyInputExcel').style.display = (this.value === 'excel') ? '' : 'none';
+                var _pbar = document.getElementById('verifyPresetBar');
+                if (_pbar) _pbar.style.display = (this.value === 'file') ? 'flex' : 'none';   // 套用预设仅 .D 文件模式可见（勿用 d-flex 类：其 !important 会盖过内联 display:none）
                 if (this.value === 'manual') verifyBuildManualTabs();
                 if (this.value === 'excel') {
                     // 清空核查结果，等粘贴后填充
@@ -7329,6 +7758,20 @@
         document.getElementById('verifyConfirmMatchBtn').addEventListener('click', verifyConfirmMatch);
         document.getElementById('verifyExcelPasteBtn').addEventListener('click', verifyExcelPasteFill);
         document.getElementById('verifyExportBtn').addEventListener('click', verifyExportDocx);
+        // 导出名称预设
+        document.getElementById('verifyApplyPresetBtn').addEventListener('click', applyExportPreset);
+        document.getElementById('verifyManagePresetBtn').addEventListener('click', openPresetModal);
+        document.getElementById('presetNewProjectBtn').addEventListener('click', presetNewProject);
+        document.getElementById('presetRenameProjectBtn').addEventListener('click', presetRenameProject);
+        document.getElementById('presetDelProjectBtn').addEventListener('click', presetDelProject);
+        document.getElementById('presetProjectSelect').addEventListener('change', presetProjectChanged);
+        document.getElementById('presetImportBtn').addEventListener('click', presetImportFromVerify);
+        document.getElementById('presetAddRowBtn').addEventListener('click', presetAddRow);
+        document.getElementById('presetSaveBtn').addEventListener('click', presetSave);
+        document.getElementById('presetTbody').addEventListener('click', function(e) {
+            var btn = e.target.closest('.preset-del');
+            if (btn) presetDelRow(parseInt(btn.dataset.i, 10));
+        });
         document.querySelector('#dTabResultTable tbody').addEventListener('change', e => {
             if (e.target.classList.contains('dtab-row-check')) dTabUpdateSelection();
         });

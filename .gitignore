@@ -13,6 +13,9 @@ __pycache__/
 .venv/
 新建文件夹
 
+# 示例/测试数据（不参与 GitHub 上传）
+示例数据/
+
 # OS
 Thumbs.db
 Desktop.ini

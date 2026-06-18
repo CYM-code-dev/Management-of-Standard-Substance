@@ -134,6 +134,23 @@ def set_user_paths(username, excel_path, cert_path):
         json.dump(config, f, indent=2, ensure_ascii=False)
 
 
+def get_user_presets(display_name):
+    """返回用户的「标液期间核查导出名称预设」{lastProject, projects}。
+    存放在独立的顶层键 verifyExportPresets（按 display_name 索引），
+    避免被 set_user_paths 保存路径时整体替换 users 条目而误删。"""
+    config = load_config()
+    p = config.get('verifyExportPresets', {}).get(display_name) or {}
+    return {"lastProject": p.get("lastProject", ""), "projects": p.get("projects", {})}
+
+
+def set_user_presets(display_name, presets):
+    """保存用户的导出名称预设（直接读写顶层 verifyExportPresets，不碰 set_user_paths）"""
+    config = load_config()
+    config.setdefault('verifyExportPresets', {})[display_name] = presets
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+
+
 # ==================== 远程系统连接类 ====================
 def md5_1024_times(text: str) -> str:
     current = text.encode('utf-8')
@@ -556,6 +573,32 @@ def admin_delete_paths(username):
     config.get('users', {}).pop(username, None)
     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
+    return jsonify({"success": True})
+
+
+# ==================== 标液期间核查：导出名称预设 ====================
+@app.route('/api/lims/export_presets', methods=['GET'])
+def lims_get_export_presets():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    dn = (session.get('display_name') or '').strip()
+    if not dn:
+        return jsonify({"success": False, "message": "无显示名"}), 400
+    return jsonify({"success": True, "presets": get_user_presets(dn)})
+
+
+@app.route('/api/lims/export_presets', methods=['POST'])
+def lims_set_export_presets():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    dn = (session.get('display_name') or '').strip()
+    if not dn:
+        return jsonify({"success": False, "message": "无显示名"}), 400
+    data = request.get_json() or {}
+    presets = data.get('presets')
+    if not isinstance(presets, dict) or 'projects' not in presets:
+        return jsonify({"success": False, "message": "presets 格式错误"}), 400
+    set_user_presets(dn, presets)
     return jsonify({"success": True})
 
 
