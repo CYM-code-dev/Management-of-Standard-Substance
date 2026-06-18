@@ -3325,6 +3325,37 @@
 
     // ========== 查看详情功能 ==========
 
+    // 预取 D 类型（工作液）的源溶液信息到 window._dViewSourceInfo，供 bbcdPopulateConfigModal
+    // 填充源数据（solutionCode/concUnit 等）。bbcdViewDetail / qqViewDetail / qqExportRecord 共用，
+    // 任一处漏调都会导致导出源数据缺失或残留旧值（曾出现"待审核/快速查询→详情→导出"源数据错误的 bug）。
+    async function bbcdPrefetchDSourceInfo(rec) {
+        window._dViewSourceInfo = {}; // 先重置，避免上一条记录的源信息残留
+        if (!rec || !Array.isArray(rec.detailList) || rec.detailList.length === 0) return;
+        const sources = new Map(); // order/id → {order, id}
+        rec.detailList.forEach(dl => {
+            const order = String(dl.originalCode || '').trim();
+            const id = String(dl.originalId || '').trim();
+            if (order && !sources.has(order)) sources.set(order, { order, id: id || '' });
+            else if (!order && id && !sources.has(id)) sources.set(id, { order: '', id });
+        });
+        if (sources.size === 0) return;
+        const results = {};
+        await Promise.all([...sources.values()].map(async (src) => {
+            try {
+                const params = new URLSearchParams();
+                if (src.order) params.set('order', src.order);
+                if (src.id) params.set('id', src.id);
+                const r = await fetch('/api/lims/get_source_info?' + params.toString());
+                const d = await r.json();
+                if (d.success && d.data) {
+                    if (src.order) results[src.order] = d.data;
+                    if (src.id) results[src.id] = d.data;
+                }
+            } catch (e) {}
+        }));
+        window._dViewSourceInfo = results;
+    }
+
     async function bbcdViewDetail(idx) {
         const item = bbcdLastResults[idx];
         if (!item) return;
@@ -3348,33 +3379,7 @@
                 else solType = 'SOLUTION_TYPE_B';
             }
             // For D-type: pre-fetch source info so fallback path has correct solutionCode
-            if (solType === 'SOLUTION_TYPE_D' && rec.detailList) {
-                const sources = new Map(); // order/id → {order, id}
-                rec.detailList.forEach(dl => {
-                    const order = String(dl.originalCode || '').trim();
-                    const id = String(dl.originalId || '').trim();
-                    if (order && !sources.has(order)) sources.set(order, {order, id: id || ''});
-                    else if (!order && id && !sources.has(id)) sources.set(id, {order: '', id});
-                });
-                if (sources.size > 0) {
-                    const results = {};
-                    await Promise.all([...sources.values()].map(async (src) => {
-                        try {
-                            const params = new URLSearchParams();
-                            if (src.order) params.set('order', src.order);
-                            if (src.id) params.set('id', src.id);
-                            const r = await fetch('/api/lims/get_source_info?' + params.toString());
-                            const d = await r.json();
-                            if (d.success && d.data) {
-                                const info = d.data;
-                                if (src.order) results[src.order] = info;
-                                if (src.id) results[src.id] = info;
-                            }
-                        } catch (e) {}
-                    }));
-                    window._dViewSourceInfo = results;
-                }
-            }
+            if (solType === 'SOLUTION_TYPE_D') await bbcdPrefetchDSourceInfo(rec);
             bbcdPopulateConfigModal(rec, solType);
             bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdConfigModal')).show();
         } catch (e) {
@@ -7815,6 +7820,8 @@
             const data = await resp.json();
             if (!data.success) { alert('获取详情失败: ' + (data.message || '')); return; }
             if (typeof bbcdPopulateConfigModal === 'function') {
+                // D 类型需先预取源溶液信息，否则导出时源数据缺失（与 bbcdViewDetail 一致）
+                if (solType === 'SOLUTION_TYPE_D') await bbcdPrefetchDSourceInfo(data.data);
                 bbcdPopulateConfigModal(data.data, solType);
                 const detailModal = document.getElementById('bbcdConfigModal');
                 detailModal.style.zIndex = '1060';
@@ -7877,33 +7884,10 @@
             if (!data.success) { alert('获取详情失败: ' + (data.message || '')); return; }
             const rec = data.data;
             // Pre-fetch source info for D-type (same as bbcdViewDetail)
-            if (solType === 'SOLUTION_TYPE_D' && rec.detailList) {
+            if (solType === 'SOLUTION_TYPE_D') {
                 const saved = bbcdLastResults;
                 bbcdLastResults = qqLastResults;
-                const sources = new Map();
-                rec.detailList.forEach(dl => {
-                    const order = String(dl.originalCode || '').trim();
-                    const id = String(dl.originalId || '').trim();
-                    if (order && !sources.has(order)) sources.set(order, {order, id: id || ''});
-                    else if (!order && id && !sources.has(id)) sources.set(id, {order: '', id});
-                });
-                if (sources.size > 0) {
-                    const results = {};
-                    await Promise.all([...sources.values()].map(async (src) => {
-                        try {
-                            const params = new URLSearchParams();
-                            if (src.order) params.set('order', src.order);
-                            if (src.id) params.set('id', src.id);
-                            const r = await fetch('/api/lims/get_source_info?' + params.toString());
-                            const d = await r.json();
-                            if (d.success && d.data) {
-                                if (src.order) results[src.order] = d.data;
-                                if (src.id) results[src.id] = d.data;
-                            }
-                        } catch (e) {}
-                    }));
-                    window._dViewSourceInfo = results;
-                }
+                await bbcdPrefetchDSourceInfo(rec);
                 bbcdLastResults = saved;
             }
             if (typeof bbcdPopulateConfigModal !== 'function') { alert('导出功能不可用'); return; }
@@ -8119,7 +8103,19 @@
                   </div>
                 </div>
             `);
-            bootstrap.Modal.getOrCreateInstance(document.getElementById(modalId)).show();
+            const previewModalEl = document.getElementById(modalId);
+            bootstrap.Modal.getOrCreateInstance(previewModalEl).show();
+            // 标签预览需浮在已打开的查询/详情模态框之上（快速查询/待审核 → 详情 → 打印标签 的嵌套场景）
+            const baseZ = Math.max(1055, ...Array.from(document.querySelectorAll('.modal.show'))
+                .filter(m => m !== previewModalEl)
+                .map(m => parseInt(getComputedStyle(m).zIndex) || 1055));
+            const topZ = baseZ + 10;
+            previewModalEl.style.zIndex = String(topZ);
+            setTimeout(() => {
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                const lastBackdrop = backdrops[backdrops.length - 1];
+                if (lastBackdrop) lastBackdrop.style.zIndex = String(topZ - 1);
+            }, 50);
         } catch (e) {
             alert('生成标签失败: ' + e.message);
         } finally {
