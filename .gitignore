@@ -20,3 +20,6 @@ __pycache__/
 Thumbs.db
 Desktop.ini
 .claude/worktrees/
+
+# 运行时草稿数据（跨电脑接力草稿）
+drafts/

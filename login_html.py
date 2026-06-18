@@ -370,6 +370,61 @@ def get_system():
         user_systems[sess_id] = RemoteSystem(sess_id)
     return user_systems[sess_id]
 
+
+# ==================== 会话过期统一处理 ====================
+# 远程 LIMS 会话存活缓存（秒）：避免高频 /api/status 轮询打爆 LIMS
+_SESSION_CHECK_TTL = 20
+_session_check_cache = {}            # {username: (timestamp, alive)}
+_session_check_lock = threading.Lock()
+
+
+def remote_session_alive(system, username):
+    """带短缓存的远程会话存活探测。False 时立即失效缓存，便于重登后重探。"""
+    now = time.time()
+    with _session_check_lock:
+        hit = _session_check_cache.get(username)
+    if hit and (now - hit[0]) < _SESSION_CHECK_TTL:
+        return hit[1]
+    # 远程系统可能尚未载入（如服务重启后内存丢失）：按账号从磁盘恢复，再校验，避免误判过期
+    if username and (not system.current_user or system.current_user != username):
+        system.current_user = username
+        system.load_session()
+    alive = bool(system.current_user) and system.verify_session()
+    with _session_check_lock:
+        _session_check_cache[username] = (now, alive)
+    if not alive:
+        with _session_check_lock:
+            _session_check_cache.pop(username, None)
+    return alive
+
+
+def _expired_response(msg="远程会话已失效，请重新登录"):
+    """统一过期信号：HTTP 401 + 哨兵 code + 中文提示。"""
+    return jsonify({"success": False, "code": "SESSION_EXPIRED", "message": msg}), 401
+
+
+def _resp_looks_expired(resp):
+    """识别 LIMS 过期标记：HTML 登录页 / errorCtx.errorCode==401 / 未登录文案。"""
+    try:
+        ct = resp.headers.get('Content-Type', '')
+        if 'html' in ct.lower():
+            return True
+        body = resp.text.lstrip()
+        if body.startswith('<!') or body.startswith('<html'):
+            return True
+        data = resp.json()
+        if isinstance(data, dict):
+            err = data.get('errorCtx') or {}
+            if isinstance(err, dict) and err.get('errorCode') in ('401', 401):
+                return True
+            msg = (data.get('errorDesc') or '') + (data.get('message') or '')
+            if '未登录' in msg or 'login' in msg.lower():
+                return True
+    except Exception:
+        pass
+    return False
+
+
 # ==================== 路由 ====================
 @app.route('/')
 def index():
@@ -442,7 +497,13 @@ def login():
 @app.route('/api/status')
 def status():
     if session.get('logged_in'):
-        return jsonify({"logged_in": True, "username": session.get('username'), "display_name": session.get('display_name'), "pid": session.get('pid')})
+        system = get_system()
+        username = session.get('username', '')
+        if not remote_session_alive(system, username):
+            session.pop('logged_in', None)
+            system.logout()
+            return jsonify({"logged_in": False, "code": "SESSION_EXPIRED"})
+        return jsonify({"logged_in": True, "username": username, "display_name": session.get('display_name'), "pid": session.get('pid')})
     system = get_system()
     if system.current_user and system.verify_session():
         session['logged_in'] = True
@@ -466,7 +527,7 @@ def query():
     if not pid:
         system = get_system()
         if system.current_pid: pid = session['pid'] = system.current_pid
-        else: return jsonify({"success": False, "message": "无法获取用户PID"})
+        else: return _expired_response("无法获取用户PID，请重新登录")
     system = get_system()
     if system.current_user != username:
         system.current_user = username
@@ -494,7 +555,7 @@ def query():
     try:
         resp = system.session.get(f"{system.base_url}/detectionManager/manager/consumableBill/pageObj", params=params)
         if resp.status_code != 200:
-            if resp.status_code in (401,403): session.pop('logged_in', None); system.logout(); return jsonify({"success": False, "message": "远程会话已失效"})
+            if resp.status_code in (401,403): session.pop('logged_in', None); system.logout(); return _expired_response()
             return jsonify({"success": False, "message": f"请求失败，状态码: {resp.status_code}"})
         result = resp.json()
         rd = result.get("resultData") or {}
@@ -513,7 +574,7 @@ def query():
                     total = 1
             return jsonify({"success": True, "data": vo_list, "records": records, "page": page, "total": total})
         error_msg = (result.get("errorCtx") or {}).get("errorMsg", "查询失败")
-        if "未登录" in error_msg or "login" in error_msg.lower(): session.pop('logged_in', None); system.logout(); return jsonify({"success": False, "message": "远程会话已失效"})
+        if "未登录" in error_msg or "login" in error_msg.lower(): session.pop('logged_in', None); system.logout(); return _expired_response()
         return jsonify({"success": False, "message": error_msg})
     except Exception as e:
         return jsonify({"success": False, "message": f"查询异常: {str(e)}"})
@@ -853,7 +914,7 @@ def update_lims_unit():
 
         system = get_system()
         if not system.current_user:
-            return jsonify({"success": False, "message": "远程会话已失效，请重新登录"})
+            return _expired_response()
 
         form_data = {}
         form_data['concentrationUnitName'] = new_unit
@@ -1053,9 +1114,11 @@ def lims_save_solution():
             "Content-Type": "application/json;charset=UTF-8"
         }
         resp = system.session.post(url, json=payload, headers=headers)
+        if resp.status_code in (401, 403) or _resp_looks_expired(resp):
+            return _expired_response()
         if not resp.ok:
             print(f"[saveSolutionConfigure] status={resp.status_code} body={resp.text[:500]}")
-        resp.raise_for_status()
+            return jsonify({"success": False, "message": f"LIMS 请求失败，状态码: {resp.status_code}"}), 502
         result = resp.json()
         if not result.get("success"):
             return jsonify({"success": False, "message": result.get('errorDesc') or str(result.get('errorCtx', '配置失败'))})
@@ -1981,9 +2044,11 @@ def lims_save_solution_b():
             "Content-Type": "application/json;charset=UTF-8",
         }
         resp = system.session.post(url, json=payload, headers=headers)
+        if resp.status_code in (401, 403) or _resp_looks_expired(resp):
+            return _expired_response()
         if not resp.ok:
             print(f"[save_solution_b] status={resp.status_code} body={resp.text[:500]}")
-        resp.raise_for_status()
+            return jsonify({"success": False, "message": f"LIMS 请求失败，状态码: {resp.status_code}"}), 502
         result = resp.json()
         if not result.get('success'):
             return jsonify({
@@ -2041,9 +2106,11 @@ def save_working_solution():
 
     try:
         resp = system.session.post(url, json=payload, headers=headers)
+        if resp.status_code in (401, 403) or _resp_looks_expired(resp):
+            return _expired_response()
         if not resp.ok:
             print(f"[save_working_solution] status={resp.status_code} body={resp.text[:500]}")
-        resp.raise_for_status()
+            return jsonify({"success": False, "message": f"LIMS 请求失败，状态码: {resp.status_code}"}), 502
         result = resp.json()
         if not result.get('success'):
             return jsonify({
@@ -2100,8 +2167,11 @@ def lims_update_solution():
             "Content-Type": "application/json;charset=UTF-8",
         }
         resp = system.session.post(url, json=payload, headers=headers)
+        if resp.status_code in (401, 403) or _resp_looks_expired(resp):
+            return _expired_response()
         if not resp.ok:
             print(f"[updateObj1] status={resp.status_code} body={resp.text[:500]}")
+            return jsonify({"success": False, "message": f"LIMS 请求失败，状态码: {resp.status_code}"}), 502
         result = resp.json()
         if not result.get("success"):
             err_ctx = result.get('errorCtx') or {}
@@ -2135,9 +2205,11 @@ def lims_audit_solution():
         resp = system.session.get(url, params={
             "id": solution_id, "pid": pid, "pname": pname, "loginId": pid,
         }, headers=headers)
+        if resp.status_code in (401, 403) or _resp_looks_expired(resp):
+            return _expired_response()
         if not resp.ok:
             print(f"[auditData] status={resp.status_code} body={resp.text[:500]}")
-        resp.raise_for_status()
+            return jsonify({"success": False, "message": f"LIMS 请求失败，状态码: {resp.status_code}"}), 502
         result = resp.json()
         if not result.get("success"):
             return jsonify({"success": False, "message": result.get('errorDesc') or str(result.get('errorCtx', '审核失败'))})
@@ -2169,9 +2241,11 @@ def lims_unaudit_solution():
         resp = system.session.get(url, params={
             "id": solution_id, "pid": pid, "pname": pname, "loginId": pid,
         }, headers=headers)
+        if resp.status_code in (401, 403) or _resp_looks_expired(resp):
+            return _expired_response()
         if not resp.ok:
             print(f"[cancelAuditData] status={resp.status_code} body={resp.text[:500]}")
-        resp.raise_for_status()
+            return jsonify({"success": False, "message": f"LIMS 请求失败，状态码: {resp.status_code}"}), 502
         result = resp.json()
         if not result.get("success"):
             return jsonify({"success": False, "message": result.get('errorDesc') or str(result.get('errorCtx', '取消审核失败'))})
@@ -2232,7 +2306,7 @@ def lims_delete_solution():
         ct = resp.headers.get('Content-Type', '')
         if 'html' in ct or resp.text.lstrip().startswith('<!') or resp.text.lstrip().startswith('<html'):
             print(f"[delById] session过期，返回了HTML: {resp.text[:200]}")
-            return jsonify({"success": False, "message": "LIMS 会话已过期，请重新登录后再试"}), 401
+            return _expired_response("LIMS 会话已过期，请重新登录后再试")
         result = resp.json()
         if not result.get("success"):
             err_ctx = result.get('errorCtx') or {}
@@ -2303,7 +2377,7 @@ def lims_delete_receive():
         ct = resp.headers.get('Content-Type', '')
         if 'html' in ct or resp.text.lstrip().startswith('<!') or resp.text.lstrip().startswith('<html'):
             print(f"[deleteReceive] session过期，返回了HTML: {resp.text[:200]}")
-            return jsonify({"success": False, "message": "LIMS 会话已过期，请重新登录后再试"}), 401
+            return _expired_response("LIMS 会话已过期，请重新登录后再试")
         result = resp.json()
         if not result.get("success"):
             err_ctx = result.get('errorCtx') or {}

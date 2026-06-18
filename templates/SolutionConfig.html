@@ -1317,18 +1317,58 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // 全局 fetch 拦截：session 过期(401)自动跳转登录页
+    // 全局 fetch 拦截：session 过期(401 或 body 哨兵)统一锁定页面并跳转登录
     const _origFetch = window.fetch;
+    const _EXEMPT_URLS = ['/api/status', '/api/captcha', '/api/login'];
     window.fetch = async function(...args) {
         const resp = await _origFetch.apply(this, args);
-        if (resp.status === 401) {
-            const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-            if (!url.includes('/api/status') && !url.includes('/api/captcha') && !url.includes('/api/login')) {
-                window.location.href = '/login';
+        const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+        if (_EXEMPT_URLS.some(p => url.includes(p))) return resp;
+        if (resp.status === 401) { _onSessionExpired('401'); return resp; }
+        // 兼容返回 200 但 body 带过期哨兵的端点：clone 一份嗅探，不影响调用方 await resp.json()
+        try {
+            const ct = resp.headers.get('Content-Type') || '';
+            if (ct.includes('application/json')) {
+                resp.clone().json().then(d => {
+                    if (d && (d.code === 'SESSION_EXPIRED' ||
+                        (typeof d.message === 'string' &&
+                         (d.message.includes('远程会话已失效') || d.message.includes('未登录'))))) {
+                        _onSessionExpired('sentinel');
+                    }
+                }).catch(() => {});
             }
-        }
+        } catch (e) {}
         return resp;
     };
+
+    // ---------- 会话过期硬阻断 ----------
+    let _sessionExpiredFired = false;
+    function _onSessionExpired(source) {
+        if (_sessionExpiredFired) return;          // 并发触发只处理一次
+        _sessionExpiredFired = true;
+        _currentPid = '';
+        _currentDisplayName = '';                  // 清除残留身份
+        try { localStorage.removeItem('auth_logged_in'); } catch (e) {}
+        // 关闭所有打开的 Bootstrap 弹窗与遮罩，避免用户继续操作
+        try {
+            document.querySelectorAll('.modal.show').forEach(el => bootstrap.Modal.getOrCreateInstance(el).hide());
+            document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+            document.body.classList.remove('modal-open');
+        } catch (e) {}
+        // 不可关闭的全屏遮罩：锁定页面
+        if (!document.getElementById('__expiryOverlay')) {
+            const ov = document.createElement('div');
+            ov.id = '__expiryOverlay';
+            ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(15,23,42,0.78);' +
+                'display:flex;align-items:center;justify-content:center;color:#fff;font-family:system-ui;' +
+                'font-size:1.1rem;text-align:center;';
+            ov.innerHTML = '<div><div style="margin-bottom:12px;">登录会话已失效</div>' +
+                '<div style="opacity:.8;font-size:.9rem;">正在跳转到登录页…</div></div>';
+            document.body.appendChild(ov);
+        }
+        const u = encodeURIComponent(localStorage.getItem('last_username') || '');
+        setTimeout(() => { window.location.href = '/login?error=' + encodeURIComponent('登录会话已失效，请重新登录') + '&username=' + u; }, 600);
+    }
 
     // ---------- 权限控制常量与工具函数 ----------
     const ADMIN_DISPLAY_NAME = '崔艳梅';
@@ -1404,8 +1444,13 @@
             const resp = await fetch('/api/status', { credentials: 'include' });
             const data = await resp.json();
             if (data.logged_in) {
+                if (data.username) { try { localStorage.setItem('last_username', data.username); } catch (e) {} }
                 showLoggedInUI(data.display_name || data.username, data.pid || '', data.username || '');
-            } else showLoggedOutUI();
+            } else if (data.code === 'SESSION_EXPIRED' || localStorage.getItem('auth_logged_in') === 'true') {
+                _onSessionExpired('status');   // 从已登录变为过期 → 硬阻断
+            } else {
+                showLoggedOutUI();
+            }
         } catch (e) { console.warn('获取登录状态失败', e); showLoggedOutUI(); }
     }
 
@@ -1418,6 +1463,8 @@
     }
 
     function showLoggedOutUI() {
+        _currentPid = '';
+        _currentDisplayName = '';
         showLoginBtn.style.display = 'inline-block';
         userInfoBox.style.display = 'none';
         localStorage.removeItem('auth_logged_in');
@@ -1503,6 +1550,8 @@
         window.addEventListener('storage', (e) => {
             if (e.key === 'auth_logged_in') checkLoginStatus();
         });
+        // 心跳：每 60s 探测远程会话存活，过期即硬阻断（/api/status 已带远程探针）
+        setInterval(checkLoginStatus, 60_000);
     });
 
     // ---------- 配置变量 ----------
