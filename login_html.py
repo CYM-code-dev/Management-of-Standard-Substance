@@ -307,17 +307,20 @@ class RemoteSystem:
 
     def verify_session(self):
         if not self.current_user: return False
-        try:
-            resp = self.session.get(f"{self.base_url}/detectionManager/core/security/getLoginUser")
-            if resp.status_code != 200: return False
-            data = resp.json()
-            if not data.get('success'): return False
-            # 检测LIMS包在200中的认证错误
-            err_ctx = data.get('errorCtx') or {}
-            if err_ctx.get('errorCode') == '401': return False
-            return True
-        except:
-            return False
+        # /getLoginUser 在部分 LIMS 上不可用（HTTP 500「资源不存在」），改以 /users/info 为主探针；
+        # 两端点任一返回 success 即视为存活，与 _fetch_user_info 的探测保持一致
+        for ep in ("/detectionManager/core/users/info", "/detectionManager/core/security/getLoginUser"):
+            try:
+                resp = self.session.get(f"{self.base_url}{ep}")
+                if resp.status_code != 200: continue
+                data = resp.json()
+                if data.get('success'):
+                    err_ctx = data.get('errorCtx') or {}
+                    if str(err_ctx.get('errorCode')) == '401': continue
+                    return True
+            except:
+                continue
+        return False
 
     def logout(self):
         self.stop_keep_alive()
@@ -343,15 +346,8 @@ class RemoteSystem:
     def _keep_alive_worker(self):
         while self.keep_alive_flag and self.should_keep_alive() and self.current_user:
             try:
-                resp = self.session.get(f"{self.base_url}/detectionManager/core/security/getLoginUser")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if not data.get('success'):
-                        print(f"[KeepAlive] LIMS会话已失效，停止保活")
-                        self.keep_alive_flag = False
-                        break
-                else:
-                    print(f"[KeepAlive] LIMS会话检查失败: status={resp.status_code}，停止保活")
+                if not self.verify_session():
+                    print(f"[KeepAlive] LIMS会话已失效，停止保活")
                     self.keep_alive_flag = False
                     break
             except Exception as e:
