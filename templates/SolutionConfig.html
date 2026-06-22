@@ -1856,7 +1856,9 @@
         const kwCas   = document.getElementById('solSearchCas').value.trim();
         const kwLabNo = document.getElementById('solSearchLabNo').value.trim();
         const kwOrg   = document.getElementById('solSearchOrg').value.trim();
-        const kw = kwName || kwLabNo;
+        // LIMS 的 casNo 参数不生效，但 keyword 会同时匹配 CAS，故把 CAS 纳入 keyword 候选；
+        // 其余已填字段仍由下方客户端过滤精确收窄
+        const kw = kwName || kwLabNo || kwCas;
         if (pageNo === undefined) pageNo = 1;
         solPageNo = pageNo;
         const searchKw = kw ? (kw.match(/^CK-[A-Z]+-(\d+)$/i) ? kw.match(/^CK-[A-Z]+-(\d+)$/i)[1] : kw) : '';
@@ -7590,6 +7592,11 @@
             _exportPresets.currentUser = _exportPresets.currentUser || '';
             _normalizeAllProjects();
         } catch (e) { console.warn('加载预设异常:', e.message); return; }
+        _renderPresetApplySelect(selectLast);
+    }
+
+    /** 刷新「核查结果」区套用预设下拉（基于当前本地 _exportPresets，不重载服务器） */
+    function _renderPresetApplySelect(selectLast) {
         var sel = document.getElementById('verifyPresetApplySelect');
         if (!sel) return;
         var names = Object.keys(_exportPresets.projects || {});
@@ -7741,16 +7748,30 @@
         renderPresetRows();
     }
 
-    function presetDelProject() {
+    async function presetDelProject() {
         if (!_presetEditingProject) { alert('请先选择项目'); return; }
         if (!isMyProject(_presetEditingProject)) { alert('他人项目只读，不能删除'); return; }
         if (!confirm('确定删除项目「' + _presetEditingProject + '」及其全部预设？')) return;
-        delete _exportPresets.projects[_presetEditingProject];
-        if (_exportPresets.lastProject === _presetEditingProject) _exportPresets.lastProject = '';
+        var deleted = _presetEditingProject;
+        // 调专用删除接口：服务端只删这一项（owner==dn 才删），不碰其他项目
+        try {
+            const resp = await fetch('/api/lims/export_presets/delete', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ project: deleted })
+            });
+            const j = await resp.json();
+            if (!j.success) { alert('删除失败：' + (j.message || '')); return; }
+        } catch (e) { alert('删除异常：' + e.message); return; }
+        // 只从本地移除该项（不碰窗口内其他未保存编辑）
+        delete _exportPresets.projects[deleted];
+        if (_exportPresets.lastProject === deleted) _exportPresets.lastProject = '';
         var names = Object.keys(_exportPresets.projects);
         _presetEditingProject = names.length ? names[0] : '';
         renderPresetProjectSelect();
         renderPresetRows();
+        _renderPresetIgnoreInput();
+        refreshPresetEditableState();
+        _renderPresetApplySelect(false);   // 同步核查区套用下拉（去掉已删项）
     }
 
     function presetAddRow() {

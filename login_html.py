@@ -748,6 +748,40 @@ def lims_set_export_presets():
     return jsonify({"success": True})
 
 
+@app.route('/api/lims/export_presets/delete', methods=['POST'])
+def lims_delete_export_preset_project():
+    """只删除当前用户拥有的指定预设项目（他人项目只读拒绝），不碰其他项目。
+    供前端「删除项目」即时生效用——避免全量保存顺带提交窗口内其他未保存编辑。"""
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    dn = (session.get('display_name') or '').strip()
+    if not dn:
+        return jsonify({"success": False, "message": "无显示名"}), 400
+    data = request.get_json() or {}
+    name = (data.get('project') or '').strip()
+    if not name:
+        return jsonify({"success": False, "message": "未指定项目名"}), 400
+    with _presets_migration_lock:
+        config = load_config()
+        if config.get('verifyExportPresets'):
+            config = _migrate_presets_to_global(config)
+        glob = config.get('verifyExportPresetsGlobal', {}) or {}
+        proj = glob.get(name)
+        if isinstance(proj, dict) and proj.get('owner') == dn:
+            del glob[name]
+        elif proj is None:
+            pass  # 项目不存在，视为已删（幂等）
+        else:
+            return jsonify({"success": False, "message": "无权删除该项目（他人项目只读）"}), 403
+        lp = config.get('verifyExportPresetsLastProject', {})
+        if isinstance(lp, dict) and lp.get(dn) == name:
+            lp[dn] = ''
+        config['verifyExportPresetsGlobal'] = glob
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+    return jsonify({"success": True})
+
+
 # ==================== 手动导入 Excel ====================
 @app.route('/api/upload_excel', methods=['POST'])
 def upload_excel():
