@@ -7468,7 +7468,7 @@
     }
 
     // ==================== 标液期间核查：导出名称预设 ====================
-    var _exportPresets = { lastProject: "", projects: {} };
+    var _exportPresets = { lastProject: "", projects: {}, currentUser: "" };
     var _presetEditingProject = "";
 
     function _norm(s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, ''); }
@@ -7476,9 +7476,9 @@
     /** 把项目数据归一为 {items, ignore}（兼容旧的纯数组形式） */
     function _projData(name) {
         var p = (name && _exportPresets.projects) ? _exportPresets.projects[name] : null;
-        if (Array.isArray(p)) return { items: p, ignore: [] };
-        if (p && typeof p === 'object') return { items: Array.isArray(p.items) ? p.items : [], ignore: Array.isArray(p.ignore) ? p.ignore : [] };
-        return { items: [], ignore: [] };
+        if (Array.isArray(p)) return { owner: '', items: p, ignore: [] };
+        if (p && typeof p === 'object') return { owner: p.owner || '', items: Array.isArray(p.items) ? p.items : [], ignore: Array.isArray(p.ignore) ? p.ignore : [] };
+        return { owner: '', items: [], ignore: [] };
     }
 
     /** 当前"套用预设"下拉选中的项目名（'' 表示不套用）。
@@ -7586,7 +7586,8 @@
             const resp = await fetch('/api/lims/export_presets');
             const j = await resp.json();
             if (!j.success) { console.warn('加载预设失败:', j.message); return; }
-            _exportPresets = j.presets || { lastProject: "", projects: {} };
+            _exportPresets = j.presets || { lastProject: "", projects: {}, currentUser: "" };
+            _exportPresets.currentUser = _exportPresets.currentUser || '';
             _normalizeAllProjects();
         } catch (e) { console.warn('加载预设异常:', e.message); return; }
         var sel = document.getElementById('verifyPresetApplySelect');
@@ -7594,7 +7595,11 @@
         var names = Object.keys(_exportPresets.projects || {});
         var last = _exportPresets.lastProject || '';
         sel.innerHTML = '<option value="">—不套用预设—</option>' +
-            names.map(function (n) { return '<option value="' + bbcdEsc(n) + '"' + (selectLast && n === last ? ' selected' : '') + '>' + bbcdEsc(n) + '</option>'; }).join('');
+            names.map(function (n) {
+                var own = _projData(n).owner;
+                var tag = (own && own !== _exportPresets.currentUser) ? ('（' + bbcdEsc(own) + '）') : '';
+                return '<option value="' + bbcdEsc(n) + '"' + (selectLast && n === last ? ' selected' : '') + '>' + bbcdEsc(n) + tag + '</option>';
+            }).join('');
         if (selectLast && last && names.indexOf(last) >= 0) sel.value = last;
     }
 
@@ -7609,7 +7614,24 @@
     /** 把所有项目归一为 {items, ignore}（就地），兼容旧的纯数组形式 */
     function _normalizeAllProjects() {
         if (!_exportPresets.projects) return;
-        Object.keys(_exportPresets.projects).forEach(function (n) { _exportPresets.projects[n] = _projData(n); });
+        Object.keys(_exportPresets.projects).forEach(function (n) {
+            var d = _projData(n);
+            _exportPresets.projects[n] = { owner: d.owner, items: d.items, ignore: d.ignore };
+        });
+    }
+
+    /** 当前项目是否归当前用户所有（用于只读控制：他人项目不可增删改） */
+    function isMyProject(name) {
+        return !!name && _projData(name).owner === _exportPresets.currentUser;
+    }
+
+    /** 按当前编辑项目的归属，切换管理模态框各操作按钮/input 的只读态 */
+    function refreshPresetEditableState() {
+        var mine = isMyProject(_presetEditingProject);
+        ['presetRenameProjectBtn', 'presetDelProjectBtn', 'presetImportBtn', 'presetAddRowBtn'].forEach(function (id) {
+            var b = document.getElementById(id); if (b) b.disabled = !mine;
+        });
+        var ig = document.getElementById('presetIgnoreInput'); if (ig) ig.readOnly = !mine;
     }
 
     // ---- 预设管理模态框 ----
@@ -7625,6 +7647,7 @@
         renderPresetProjectSelect();
         renderPresetRows();
         _renderPresetIgnoreInput();
+        refreshPresetEditableState();
         bootstrap.Modal.getOrCreateInstance(document.getElementById('verifyPresetModal')).show();
     }
 
@@ -7633,7 +7656,8 @@
         var names = Object.keys(_exportPresets.projects || {});
         if (!names.length) { sel.innerHTML = '<option value="">（暂无项目）</option>'; return; }
         sel.innerHTML = names.map(function (n) {
-            return '<option value="' + bbcdEsc(n) + '"' + (n === _presetEditingProject ? ' selected' : '') + '>' + bbcdEsc(n) + '</option>';
+            var tag = isMyProject(n) ? '' : ('（' + bbcdEsc(_projData(n).owner || '他人') + '·只读）');
+            return '<option value="' + bbcdEsc(n) + '"' + (n === _presetEditingProject ? ' selected' : '') + '>' + bbcdEsc(n) + tag + '</option>';
         }).join('');
     }
 
@@ -7643,16 +7667,19 @@
             tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted small">请先「新建」一个项目</td></tr>';
             return;
         }
+        var mine = isMyProject(_presetEditingProject);
         var list = _projData(_presetEditingProject).items;
         if (!list.length) {
-            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted small">暂无条目，点「添加一行」或「从当前核查结果导入」</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted small">' + (mine ? '暂无条目，点「添加一行」或「从当前核查结果导入」' : '他人项目，只读') + '</td></tr>';
             return;
         }
+        var ro = mine ? '' : ' readonly';
+        var dis = mine ? '' : ' disabled';
         tbody.innerHTML = list.map(function (r, i) {
             return '<tr>' +
-                '<td><input type="text" class="form-control form-control-sm py-0 preset-key" data-i="' + i + '" value="' + bbcdEsc(r.key) + '" style="font-size:0.75rem;"></td>' +
-                '<td><input type="text" class="form-control form-control-sm py-0 preset-export" data-i="' + i + '" value="' + bbcdEsc(r.exportName) + '" style="font-size:0.75rem;"></td>' +
-                '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 preset-del" data-i="' + i + '" title="删除"><i class="fas fa-times"></i></button></td>' +
+                '<td><input type="text" class="form-control form-control-sm py-0 preset-key" data-i="' + i + '" value="' + bbcdEsc(r.key) + '" style="font-size:0.75rem;"' + ro + '></td>' +
+                '<td><input type="text" class="form-control form-control-sm py-0 preset-export" data-i="' + i + '" value="' + bbcdEsc(r.exportName) + '" style="font-size:0.75rem;"' + ro + '></td>' +
+                '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 preset-del" data-i="' + i + '" title="删除"' + dis + '><i class="fas fa-times"></i></button></td>' +
                 '</tr>';
         }).join('');
     }
@@ -7670,7 +7697,7 @@
             if (k) arr.push({ key: k, exportName: e });
         });
         var d = _projData(_presetEditingProject);
-        _exportPresets.projects[_presetEditingProject] = { items: arr, ignore: d.ignore };
+        _exportPresets.projects[_presetEditingProject] = { owner: d.owner, items: arr, ignore: d.ignore };
     }
 
     function presetProjectChanged() {
@@ -7679,24 +7706,28 @@
         _presetEditingProject = sel ? (sel.value || '') : '';
         renderPresetRows();
         _renderPresetIgnoreInput();                   // 切项目后，忽略名单跟着变
+        refreshPresetEditableState();                 // 切项目后，按归属切换只读态
     }
 
     function presetNewProject() {
+        if (!_exportPresets.currentUser) { alert('用户信息缺失，请重新登录后再试'); return; }
         var name = prompt('请输入新项目名称：');
         if (!name) return;
         name = name.trim();
         if (!name) return;
         _exportPresets.projects = _exportPresets.projects || {};
         if (_exportPresets.projects[name]) { alert('该项目已存在'); return; }
-        _exportPresets.projects[name] = { items: [], ignore: [] };
+        _exportPresets.projects[name] = { owner: _exportPresets.currentUser, items: [], ignore: [] };
         _presetEditingProject = name;
         renderPresetProjectSelect();
         renderPresetRows();
         _renderPresetIgnoreInput();
+        refreshPresetEditableState();
     }
 
     function presetRenameProject() {
         if (!_presetEditingProject) { alert('请先选择项目'); return; }
+        if (!isMyProject(_presetEditingProject)) { alert('他人项目只读，不能重命名'); return; }
         var name = prompt('重命名为：', _presetEditingProject);
         if (!name) return;
         name = name.trim();
@@ -7712,6 +7743,7 @@
 
     function presetDelProject() {
         if (!_presetEditingProject) { alert('请先选择项目'); return; }
+        if (!isMyProject(_presetEditingProject)) { alert('他人项目只读，不能删除'); return; }
         if (!confirm('确定删除项目「' + _presetEditingProject + '」及其全部预设？')) return;
         delete _exportPresets.projects[_presetEditingProject];
         if (_exportPresets.lastProject === _presetEditingProject) _exportPresets.lastProject = '';
@@ -7723,12 +7755,14 @@
 
     function presetAddRow() {
         if (!_presetEditingProject) { alert('请先「新建」或选择一个项目'); return; }
+        if (!isMyProject(_presetEditingProject)) { alert('他人项目只读'); return; }
         presetCollectFromDOM();
         _exportPresets.projects[_presetEditingProject].items.push({ key: '', exportName: '' });
         renderPresetRows();
     }
 
     function presetDelRow(i) {
+        if (!isMyProject(_presetEditingProject)) return;
         presetCollectFromDOM();
         var arr = _exportPresets.projects[_presetEditingProject].items;
         if (arr && arr[i] != null) arr.splice(i, 1);
@@ -7738,13 +7772,14 @@
     /** 把当前核查结果(_verifyRows) 的 物质→导出名称 合并导入到当前项目 */
     function presetImportFromVerify() {
         if (!_verifyRows || !_verifyRows.length) { alert('当前核查结果为空，请先生成核查结果（.D解析或手动录入）'); return; }
+        if (_presetEditingProject && !isMyProject(_presetEditingProject)) { alert('他人项目只读，不能导入'); return; }
         if (!_presetEditingProject) {
             var name = prompt('当前无项目，请输入要导入到的项目名称：', '新项目');
             if (!name) return;
             name = name.trim();
             if (!name) return;
             _exportPresets.projects = _exportPresets.projects || {};
-            _exportPresets.projects[name] = { items: [], ignore: [] };
+            _exportPresets.projects[name] = { owner: _exportPresets.currentUser, items: [], ignore: [] };
             _presetEditingProject = name;
         }
         presetCollectFromDOM();

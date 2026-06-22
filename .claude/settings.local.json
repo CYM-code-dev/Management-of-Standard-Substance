@@ -141,7 +141,8 @@
       "Bash(grep -iE 'test|tmp|temp|debug|backup|bak|copy|\\\\.\\(log|out|orig\\)$')",
       "Bash(grep -iE 'test|/tmp|temp|debug|dump|backup|\\\\.bak$|\\\\.orig$|\\\\.out$|\\\\.log$|scratch')",
       "Bash(git ls-tree *)",
-      "Bash(grep -iE 'test|dump|tmp|temp|debug|backup|\\\\.bak$|\\\\.orig$|\\\\.log$|cache|session|__pycache__|\\\\.pyc$|新建文件夹|outline')"
+      "Bash(grep -iE 'test|dump|tmp|temp|debug|backup|\\\\.bak$|\\\\.orig$|\\\\.log$|cache|session|__pycache__|\\\\.pyc$|新建文件夹|outline')",
+      "Bash(git diff *)"
     ]
   },
   "enableAllProjectMcpServers": true,

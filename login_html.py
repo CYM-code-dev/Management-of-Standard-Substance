@@ -35,6 +35,9 @@ CORS(app, supports_credentials=True)
 CONFIG_FILE = 'config.json'
 MANUAL_UPLOAD_DIR = 'manual_uploads'
 
+# 导出名称预设迁移锁：防止并发首次访问时多用户同时触发旧格式迁移互相覆盖
+_presets_migration_lock = threading.Lock()
+
 
 # ==================== 数值修约规则 ====================
 def _sig_figs(val, n):
@@ -135,21 +138,106 @@ def set_user_paths(username, excel_path, cert_path):
         json.dump(config, f, indent=2, ensure_ascii=False)
 
 
+def _norm_items(arr):
+    """规整预设项目 items：每项 {key, exportName}，丢弃无 key 的项"""
+    out = []
+    if isinstance(arr, list):
+        for it in arr:
+            if isinstance(it, dict):
+                k = it.get('key')
+                k = k.strip() if isinstance(k, str) else k
+                if k:
+                    out.append({'key': k, 'exportName': it.get('exportName', '')})
+    return out
+
+
+def _migrate_presets_to_global(config):
+    """把旧的按 display_name 分散的预设（顶层 verifyExportPresets）合并到全局共享池
+    verifyExportPresetsGlobal（每个项目带 owner=原 display_name，项目名冲突后者覆盖），
+    同时把各用户的 lastProject 记入 verifyExportPresetsLastProject。旧键改名为
+    _verifyExportPresetsLegacyBackup（代码级软备份 + 幂等守卫，不直接删除）。返回 config。
+    幂等：旧键不存在时直接返回。"""
+    legacy = config.get('verifyExportPresets')
+    if not isinstance(legacy, dict) or not legacy:
+        return config
+    glob = config.setdefault('verifyExportPresetsGlobal', {})
+    last = config.setdefault('verifyExportPresetsLastProject', {})
+    for dn, payload in legacy.items():
+        if not isinstance(payload, dict):
+            continue
+        if payload.get('lastProject'):
+            last.setdefault(dn, payload['lastProject'])
+        projects = payload.get('projects') or {}
+        for name, proj in projects.items():
+            if isinstance(proj, list):          # 兼容旧纯数组形式
+                items, ignore = proj, []
+            elif isinstance(proj, dict):
+                items, ignore = proj.get('items', []), proj.get('ignore', [])
+            else:
+                items, ignore = [], []
+            glob[name] = {'owner': dn, 'items': _norm_items(items), 'ignore': ignore or []}
+    config['_verifyExportPresetsLegacyBackup'] = legacy
+    config.pop('verifyExportPresets', None)
+    return config
+
+
 def get_user_presets(display_name):
-    """返回用户的「标液期间核查导出名称预设」{lastProject, projects}。
-    存放在独立的顶层键 verifyExportPresets（按 display_name 索引），
-    避免被 set_user_paths 保存路径时整体替换 users 条目而误删。"""
-    config = load_config()
-    p = config.get('verifyExportPresets', {}).get(display_name) or {}
-    return {"lastProject": p.get("lastProject", ""), "projects": p.get("projects", {})}
+    """返回全局共享的导出名称预设：{lastProject(个人), projects(全局,带owner), currentUser}。
+    全员可见；编辑权限由前端按 owner 只读控制、后端按 owner 合并兜底。"""
+    with _presets_migration_lock:
+        config = load_config()
+        if config.get('verifyExportPresets'):                # 旧键仍在 → 一次性迁移
+            config = _migrate_presets_to_global(config)
+            with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+        glob = config.get('verifyExportPresetsGlobal', {}) or {}
+        last = config.get('verifyExportPresetsLastProject', {}) or {}
+        projects = {n: {'owner': p.get('owner', ''), 'items': p.get('items', []), 'ignore': p.get('ignore', [])}
+                    for n, p in glob.items() if isinstance(p, dict)}
+        return {"lastProject": last.get(display_name, ''), "projects": projects, "currentUser": display_name}
 
 
 def set_user_presets(display_name, presets):
-    """保存用户的导出名称预设（直接读写顶层 verifyExportPresets，不碰 set_user_paths）"""
-    config = load_config()
-    config.setdefault('verifyExportPresets', {})[display_name] = presets
-    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
+    """合并保存当前用户的预设变更。以服务端全局池为权威：
+    他人项目(owner≠dn)钉死保留；我的项目(owner==dn)以提交为准(增/改/删)；
+    新建(服务端无此名)仅 owner==dn 或 owner 缺失才接受；伪造他人 owner 的提交忽略。
+    lastProject 单独按 dn 存。这样前端两个 POST 入口(保存/切换套用)都安全。"""
+    with _presets_migration_lock:
+        config = load_config()
+        if config.get('verifyExportPresets'):
+            config = _migrate_presets_to_global(config)
+        glob = config.get('verifyExportPresetsGlobal', {}) or {}
+        last = config.setdefault('verifyExportPresetsLastProject', {})
+
+        submitted = presets.get('projects') if isinstance(presets, dict) else None
+        if not isinstance(submitted, dict):
+            submitted = {}
+        if isinstance(presets, dict) and 'lastProject' in presets:
+            last[display_name] = presets.get('lastProject') or ''
+
+        new_global = {}
+        # 1) 他人项目：原样保留服务端版本（提交中对它们的任何变更一律忽略）
+        for name, sd in glob.items():
+            if isinstance(sd, dict) and sd.get('owner') != display_name:
+                new_global[name] = {'owner': sd.get('owner', ''), 'items': sd.get('items', []), 'ignore': sd.get('ignore', [])}
+        # 2) 当前用户提交的项目：仅自己的(owner==dn 或服务端无此名的新建)才采纳
+        for name, sub in submitted.items():
+            if not isinstance(sub, dict):
+                continue
+            sd = glob.get(name)
+            if sd is None:
+                # 新建：仅 owner==dn 或 owner 缺失才接受；伪造他人 owner 忽略
+                if sub.get('owner', '') == display_name or sub.get('owner', '') == '':
+                    new_global[name] = {'owner': display_name, 'items': _norm_items(sub.get('items', [])), 'ignore': sub.get('ignore', []) or []}
+            elif isinstance(sd, dict) and sd.get('owner') == display_name:
+                # 我的项目：以提交为准
+                new_global[name] = {'owner': display_name, 'items': _norm_items(sub.get('items', [])), 'ignore': sub.get('ignore', []) or []}
+            # else: 服务端已有且 owner≠dn → 他人项目，已在步骤1保留，忽略提交
+        # 3) 删除：我的项目(owner==dn)在提交中不再出现 → 不写入 new_global（天然删除）
+
+        config['verifyExportPresetsGlobal'] = new_global
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
 
 
 # ==================== 远程系统连接类 ====================
