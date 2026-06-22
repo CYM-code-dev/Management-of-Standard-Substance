@@ -1380,6 +1380,14 @@ def _fetch_solution_detail(system, solution_id):
     return data.get('resultData') or {}
 
 
+def _first_number(s):
+    """提取字符串前导数字部分，保留原始小数位（避免 str(float) 丢尾零）。
+    '10.00(mg/L)' → '10.00'；'' 或无前导数字 → ''
+    """
+    m = re.match(r'^\s*([\d.]+)', str(s))
+    return m.group(1) if m else ''
+
+
 def _trace_export_chain(system, trace_targets, target_date, target_person):
     """Trace source chain upward (D→C→B→A), find records with same configurator + date.
     trace_targets: list of (lims_id, configure_order) tuples. Use lims_id if available.
@@ -1478,7 +1486,6 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
         # Use totalConstantVolume for actual dilution volume (constantVolume = remaining qty)
         total_vol = record.get('totalConstantVolume')
         constant_volume = float(total_vol if total_vol is not None else record.get('constantVolume') or 0)
-
         rec_conc = str(record.get('concentration') or '').strip()
         rec_parsed = _parse_conc_field(rec_conc)
         rec_conc_val = rec_parsed[0][1] if rec_parsed else 0
@@ -1487,11 +1494,18 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
         # Get detailList for this record
         detail_list = record.get('detailList') or []
         is_d_type = prefix == 'D'
+        # 体积优先取 detailList 原始串（保留 10.00 精度）；record 级 totalConstantVolume 是 float，str() 会丢尾零
+        constant_volume_raw = ''
+        if detail_list:
+            constant_volume_raw = str(detail_list[0].get('volume') or '').strip()
+        if not constant_volume_raw:
+            constant_volume_raw = str(total_vol if total_vol is not None else record.get('constantVolume') or '')
 
         # Extract parent info from detailList (if available) or from parent record
         parent_name = ''
         parent_conc_val = 0
         parent_conc_unit = ''
+        parent_conc_raw = ''
         received_qty = ''
         received_unit = str(record.get('receivedUint') or 'mL').strip()
 
@@ -1500,6 +1514,7 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
             dl0 = detail_list[0]
             parent_name = str(dl0.get('originalName', '')).strip()
             p_conc = str(dl0.get('originalConcentration', '') or '').strip()
+            parent_conc_raw = p_conc
             pc = _parse_conc_field(p_conc)
             if pc:
                 parent_conc_val = pc[0][1]
@@ -1519,6 +1534,7 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
                     if parent_rec:
                         parent_name = str(parent_rec.get('solutionName') or '').strip()
                         p_conc = str(parent_rec.get('concentration') or '').strip()
+                        parent_conc_raw = p_conc
                         pc = _parse_conc_field(p_conc)
                         if pc:
                             parent_conc_val = pc[0][1]
@@ -1542,7 +1558,7 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
             'solution_name': str(record.get('solutionName') or '').strip(),
             'solution_code': str(record.get('solutionCode') or '').strip(),
             'concentration': rec_conc,
-            'constant_volume': str(constant_volume),
+            'constant_volume': _first_number(constant_volume_raw) or str(constant_volume),
             'medium': str(record.get('medium') or '').strip(),
             'configure_date': rec_date,
             'validity_date': str(record.get('validityDate') or '').strip(),
@@ -1551,7 +1567,7 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
             'received_quantity': received_qty,
             'received_unit': received_unit,
             'parent_name': parent_name,
-            'parent_concentration': str(parent_conc_val),
+            'parent_concentration': _first_number(parent_conc_raw) or str(parent_conc_val),
             'parent_conc_unit': parent_conc_unit,
             'original_code': original_code,
             'concentration_count': str(record.get('concentrationCount') or '').strip(),
