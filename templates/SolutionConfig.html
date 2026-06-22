@@ -5465,6 +5465,20 @@
             singleBtn.addEventListener('click', onSingle);
             document.getElementById('bbcdMergeExportModal').addEventListener('hidden.bs.modal', onDismiss, { once: true });
 
+            // 置顶：从查询/详情弹窗内触发导出时，避免合并确认窗被下层模态框盖住
+            // （复用标签预览弹窗的层级策略，见 ~8900 行）
+            const mergeModalEl = document.getElementById('bbcdMergeExportModal');
+            const baseZ = Math.max(1055, ...Array.from(document.querySelectorAll('.modal.show'))
+                .filter(m => m !== mergeModalEl)
+                .map(m => parseInt(getComputedStyle(m).zIndex) || 1055));
+            const topZ = baseZ + 10;
+            mergeModalEl.style.zIndex = String(topZ);
+            setTimeout(() => {
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                const lastBackdrop = backdrops[backdrops.length - 1];
+                if (lastBackdrop) lastBackdrop.style.zIndex = String(topZ - 1);
+            }, 50);
+
             modal.show();
         });
     }
