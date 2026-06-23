@@ -462,6 +462,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="钉钉标液提醒：手动触发/测试")
     ap.add_argument("--run-now", action="store_true", help="立即执行一次采集+发送")
     ap.add_argument("--test-send", action="store_true", help="发送一条测试消息验证加签通道")
+    ap.add_argument("--test-ocr", action="store_true", help="强制走 OCR 登录并验证查询（不发钉钉、不写状态）")
     ap.add_argument("--check-workday", action="store_true", help="打印今天/下一工作日")
     args = ap.parse_args()
 
@@ -472,6 +473,35 @@ if __name__ == "__main__":
     elif args.test_send:
         ok, data = send_markdown("测试-标液提醒通道", "✅ 钉钉标液提醒通道测试成功。")
         print(f"test-send -> ok={ok} data={data}")
+    elif args.test_ocr:
+        # 强制走 OCR 登录（跳过内存/磁盘会话），验证 ocr_account 能否登录并查询。
+        # 不发钉钉、不写状态，纯诊断。
+        cfg = _load_cfg()
+        acc = cfg.get("ocr_account") or {}
+        if not (acc.get("username") and acc.get("password")):
+            print(f"{_DINGTALK_LOG} ocr_account 未配置 username/password，无法测试")
+            sys.exit(1)
+        lh = _get_lh()
+        system = lh.RemoteSystem("dt_ocr")
+        t0 = time.time()
+        try:
+            ok = _ocr_login(system, acc["username"], acc["password"])
+        except Exception as e:
+            print(f"{_DINGTALK_LOG} OCR 登录异常（检查 ddddocr 是否装好 / LIMS 是否可达）: {e}")
+            sys.exit(1)
+        print(f"{_DINGTALK_LOG} OCR 登录: {'成功' if ok else '失败'}（耗时 {time.time()-t0:.1f}s）")
+        if not ok:
+            print(f"{_DINGTALK_LOG} OCR 登录失败：检查 ddddocr 识别 / ocr_account 账号密码是否正确")
+            sys.exit(1)
+        try:
+            items = _fetch_all(system, "SOLUTION_TYPE_D")
+            print(f"{_DINGTALK_LOG} 查询验证: SOLUTION_TYPE_D 返回 {len(items)} 条")
+            matches = _collect_expiring(system, cfg)
+            print(f"{_DINGTALK_LOG} 即将过期且需通知: {len(matches)} 条")
+            print(f"{_DINGTALK_LOG} OK OCR 登录 + 查询 全链路正常")
+        except Exception as e:
+            print(f"{_DINGTALK_LOG} 登录成功但查询失败: {e}")
+            sys.exit(1)
     elif args.run_now:
         run_once()
     else:
