@@ -3144,7 +3144,7 @@
                 <td>${bbcdEsc(item.configuratorName || item.creatorName || '—')}</td>
                 <td>${bbcdEsc(item.configureDate || '—')}</td>
                 <td>${bbcdEsc(item.validityDate || '—')}</td>
-                <td>${item.auditUserName ? '<span class="badge bg-success">已审核</span>' : '<span class="badge bg-secondary">未审核</span>'}</td>
+                <td>${item.auditUserName ? bbcdEsc(item.auditUserName) : ''}</td>
                 <td><i class="fas fa-eye solution-config-icon me-1" data-idx="${realIdx}" title="查看详情" style="cursor:pointer;color:#14b8a6;"></i>${renderDeleteIcon(item, realIdx, 'bbcd-delete-btn')}</td>
             </tr>`;
         }).join('');
@@ -5373,8 +5373,14 @@
         try {
             const statusResp = await fetch('/api/status', { credentials: 'include' });
             const statusData = await statusResp.json();
-            const configuratorName = (statusData.display_name || statusData.username || '').trim();
+            let configuratorName = (statusData.display_name || statusData.username || '').trim();
             if (!configuratorName) { console.log('[MergeCheck] no configuratorName'); return null; }
+            // 管理员导出他人记录时，改用被导出记录的真实配置人做“同人同日”过滤：
+            // 否则管理员姓名与记录配置人不一致 → 合并候选为空 → 必须切到对应账号才能合并导出。
+            if (configuratorName === ADMIN_DISPLAY_NAME && window.bbcdViewDetailMode && window.bbcdViewDetailRecord) {
+                const recCfg = (window.bbcdViewDetailRecord.configuratorName || window.bbcdViewDetailRecord.creatorName || '').trim();
+                if (recCfg) configuratorName = recCfg;
+            }
 
             const rows = [...document.querySelectorAll('#bbcdConfigTable tbody tr')].filter(tr => tr._src);
             const seen = new Set();
@@ -5879,7 +5885,7 @@
                 <td>${bbcdEsc(item.configuratorName || item.creatorName || '—')}</td>
                 <td>${bbcdEsc(item.configureDate || '—')}</td>
                 <td>${bbcdEsc(item.validityDate || '—')}</td>
-                <td>${item.auditUserName ? '<span class="badge bg-success">已审核</span>' : '<span class="badge bg-secondary">未审核</span>'}</td>
+                <td>${item.auditUserName ? bbcdEsc(item.auditUserName) : ''}</td>
                 <td><i class="fas fa-eye solution-config-icon me-1" data-idx="${realIdx}" data-tab="d" title="查看详情" style="cursor:pointer;color:#14b8a6;"></i>${renderDeleteIcon(item, realIdx, 'dtab-delete-btn')}</td>
             </tr>`;
         }).join('');
