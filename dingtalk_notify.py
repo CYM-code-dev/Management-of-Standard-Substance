@@ -35,11 +35,11 @@ CONFIG_FILE = "config.json"
 STATE_FILE = "dingtalk_state.json"
 _DINGTALK_LOG = "[DingTalk]"
 
-# 调度状态（_last_run_date / _last_alert_date 持久化到 STATE_FILE，重启不丢）
+# 调度状态（_last_run_date / _last_eod_alert_date 持久化到 STATE_FILE，重启不丢）
 _flag = False
 _thread = None
 _last_run_date = None     # 当天已成功发送（或确认无到期项）→ 当天不再重试/补发
-_last_alert_date = None   # 当天已发过失败告警 → 重试时不重复告警刷屏
+_last_eod_alert_date = None  # 当天已发过"截止查询失败"最终警告 → 每天最多1条
 _last_attempt_dt = None   # 上次尝试时刻 → 控制 retry_interval_minutes 重试间隔
 
 
@@ -54,14 +54,14 @@ def _load_cfg():
 
 
 def _load_state():
-    """读取持久化状态（last_run_date / last_alert_date），使重启后判重/补发正确。"""
-    global _last_run_date, _last_alert_date
+    """读取持久化状态（last_run_date / last_eod_alert_date），使重启后判重/补发正确。"""
+    global _last_run_date, _last_eod_alert_date
     try:
         with open(STATE_FILE, encoding="utf-8") as f:
             st = json.load(f)
     except Exception:
         return
-    for key in ("last_run_date", "last_alert_date"):
+    for key in ("last_run_date", "last_eod_alert_date"):
         v = st.get(key)
         if not v:
             continue
@@ -72,7 +72,7 @@ def _load_state():
         if key == "last_run_date":
             _last_run_date = d
         else:
-            _last_alert_date = d
+            _last_eod_alert_date = d
 
 
 def _save_state():
@@ -80,7 +80,7 @@ def _save_state():
     try:
         st = {
             "last_run_date": _last_run_date.isoformat() if _last_run_date else None,
-            "last_alert_date": _last_alert_date.isoformat() if _last_alert_date else None,
+            "last_eod_alert_date": _last_eod_alert_date.isoformat() if _last_eod_alert_date else None,
         }
         with open(STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(st, f, ensure_ascii=False, indent=2)
@@ -360,19 +360,19 @@ def _build_message(items, cfg):
 
 
 # ==================== 主流程 ====================
-def _fail_alert(reason, cfg):
-    """当天只发一次失败告警（防重试时刷屏）。"""
-    global _last_alert_date
+def _eod_warning(cutoff_h, cfg):
+    """到截止点仍当天未成功发送 → 发一次最终警告（每天最多1条）。"""
+    global _last_eod_alert_date
     today = datetime.date.today()
-    if _last_alert_date == today or not cfg.get("alert_on_session_failure", True):
+    if _last_eod_alert_date == today or not cfg.get("alert_on_session_failure", True):
         return
     send_markdown(
-        "标液提醒-执行失败",
-        f"⚠️ **LIMS标准溶液提醒未能执行**\n\n{reason}\n\n"
-        "服务将每隔数分钟自动重试；持续失败请检查标液系统登录/网络。",
+        "标液提醒-今日查询失败",
+        f"⚠️ **今日标液查询失败，请人工核查**\n\n"
+        f"已自动重试至 {cutoff_h}:00 截止，仍未成功推送今日即将过期提醒。",
         cfg,
     )
-    _last_alert_date = today
+    _last_eod_alert_date = today
     _save_state()
 
 
@@ -395,7 +395,6 @@ def run_once():
         items = _collect_expiring(system, cfg)
     except Exception as e:
         print(f"{_DINGTALK_LOG} 执行失败: {e}")
-        _fail_alert(f"原因：{e}", cfg)
         return
 
     if not items:
@@ -422,8 +421,10 @@ def _worker():
             now = datetime.datetime.now()
             today = now.date()
             # 活动窗口 [trigger_hour, retry_until_hour]：准点起、截止点止，之后当天不再尝试
-            start = now.replace(hour=int(cfg.get("trigger_hour", 15)), minute=0, second=0, microsecond=0)
-            cutoff = now.replace(hour=int(cfg.get("retry_until_hour", 21)), minute=0, second=0, microsecond=0)
+            start_h = int(cfg.get("trigger_hour", 15))
+            cutoff_h = int(cfg.get("retry_until_hour", 21))
+            start = now.replace(hour=start_h, minute=0, second=0, microsecond=0)
+            cutoff = now.replace(hour=cutoff_h, minute=0, second=0, microsecond=0)
             retry_min = int(cfg.get("retry_interval_minutes", 5))
             # 触发：工作日、在活动窗口内、当天未完成、距上次尝试≥重试间隔。
             # 既准点发，也能在错过/失败/重启后补发与重试，到截止点当天停止。
@@ -435,6 +436,10 @@ def _worker():
             if due:
                 _last_attempt_dt = now
                 run_once()
+            elif (is_workday(today, cfg) and now > cutoff
+                  and _last_run_date != today):
+                # 过了截止点仍当天未发送 → 发一次最终警告（每天1条）
+                _eod_warning(cutoff_h, cfg)
         except Exception as e:
             print(f"{_DINGTALK_LOG} 调度异常: {e}")
         time.sleep(60)
