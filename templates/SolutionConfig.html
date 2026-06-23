@@ -1176,7 +1176,7 @@
       </div>
       <div class="modal-body">
         <table class="table table-sm table-hover align-middle mb-0">
-          <thead class="table-light"><tr><th>标题</th><th>创建时间</th><th>到期时间</th><th class="text-center">.D数据</th><th class="text-end">操作</th></tr></thead>
+          <thead class="table-light"><tr><th>标题</th><th>创建时间</th><th>到期时间</th><th class="text-center">.D数据</th><th class="text-start">操作</th></tr></thead>
           <tbody id="draftListTbody"></tbody>
         </table>
         <div id="draftListEmpty" class="text-center text-muted small py-4 d-none">暂无草稿</div>
@@ -7274,7 +7274,7 @@
         };
     }
 
-    /** 保存草稿（新建或更新当前 _currentDraftId）。标题：新标液编号 | 保存日期 | 创建人 */
+    /** 保存草稿（新建或更新当前 _currentDraftId）。标题：新标液编号 | 保存日期（创建人单独存于 created_by_name，列表独立成列）*/
     async function verifySaveDraft() {
         const payload = verifyCollectDraftPayload();
         if (!payload) { alert('请先获取核查信息'); return; }
@@ -7285,7 +7285,7 @@
             const solCode = (_verifyData?.new_solution?.solutionCode || '未命名');
             const t = new Date();
             const ymd = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
-            const autoTitle = solCode + ' | ' + ymd + ' | ' + ((typeof _currentDisplayName !== 'undefined' && _currentDisplayName) || '');
+            const autoTitle = solCode + ' | ' + ymd;
             const body = { payload: payload, title: (_currentDraftTitle || autoTitle) };
             if (_currentDraftId) body.draft_id = _currentDraftId;
             const resp = await fetch('/api/verification/draft/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -7426,33 +7426,50 @@
     async function draftOpenList() {
         const tbody = document.getElementById('draftListTbody');
         const empty = document.getElementById('draftListEmpty');
+        const isAdmin = (_currentDisplayName || '') === ADMIN_DISPLAY_NAME;
+        const cols = 6;   // 含「创建人」列（两视角统一）
         if (empty) empty.classList.add('d-none');
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted small py-3">加载中...</td></tr>';
+        // 标题与表头按视角切换
+        const titleEl = document.querySelector('#draftListModal .modal-title');
+        if (titleEl) titleEl.innerHTML = isAdmin
+            ? '<i class="fas fa-folder-open me-1"></i>全部核查草稿 <span class="small text-muted fw-normal">（管理员视角，含所有账号）</span>'
+            : '<i class="fas fa-folder-open me-1"></i>我的核查草稿 <span class="small text-muted fw-normal">（仅本账号可见，到期自动删除）</span>';
+        const thead = document.querySelector('#draftListModal thead tr');
+        if (thead) thead.innerHTML = '<th>标题</th><th>创建人</th><th>创建时间</th><th>到期时间</th><th class="text-center">.D数据</th><th class="text-start">操作</th>';
+        tbody.innerHTML = '<tr><td colspan="' + cols + '" class="text-center text-muted small py-3">加载中...</td></tr>';
         bootstrap.Modal.getOrCreateInstance(document.getElementById('draftListModal')).show();
         try {
             const resp = await fetch('/api/verification/draft/list');
             const data = await resp.json();
-            if (!data.success) { tbody.innerHTML = '<tr><td colspan="5" class="text-danger small">' + bbcdEsc(data.message || '加载失败') + '</td></tr>'; return; }
+            if (!data.success) { tbody.innerHTML = '<tr><td colspan="' + cols + '" class="text-danger small">' + bbcdEsc(data.message || '加载失败') + '</td></tr>'; return; }
             const list = data.drafts || [];
             if (!list.length) { tbody.innerHTML = ''; if (empty) empty.classList.remove('d-none'); return; }
             tbody.innerHTML = list.map(d => {
                 const dData = d.has_d_data ? '<span class="badge bg-success">是</span>' : '<span class="badge bg-secondary">否</span>';
+                const ownerAttr = d.created_by_username ? (' data-draft-owner="' + bbcdEsc(d.created_by_username) + '"') : '';
+                const openBtn = '<button type="button" class="btn btn-sm p-0 lh-1 border-0 text-primary" data-action="open" data-draft-id="' + bbcdEsc(d.draft_id) + '"' + ownerAttr + ' title="打开"><i class="fas fa-folder-open"></i></button>';
+                const delBtn = d.mine ? '<button type="button" class="btn btn-sm p-0 lh-1 border-0 text-danger ms-2" data-action="delete" data-draft-id="' + bbcdEsc(d.draft_id) + '" title="删除"><i class="fas fa-trash"></i></button>' : '';
+                // 标题兼容旧格式：去掉末尾" | 创建人"（创建人已单独成列）
+                let title = d.title || (d.draft_id || '').slice(0, 8);
+                if (d.created_by_name && title.endsWith(' | ' + d.created_by_name)) {
+                    title = title.slice(0, -(' | ' + d.created_by_name).length);
+                }
                 return '<tr>'
-                    + '<td class="small">' + bbcdEsc(d.title || (d.draft_id || '').slice(0, 8)) + '</td>'
+                    + '<td class="small">' + bbcdEsc(title) + '</td>'
+                    + '<td class="text-muted">' + bbcdEsc(d.created_by_name || '') + '</td>'
                     + '<td class="small text-muted">' + bbcdEsc(d.created_at || '') + '</td>'
                     + '<td class="small text-muted">' + bbcdEsc(d.expires_at || '') + '</td>'
                     + '<td class="text-center">' + dData + '</td>'
-                    + '<td class="text-end text-nowrap">'
-                    + '<button class="btn btn-sm btn-outline-primary me-1" data-action="open" data-draft-id="' + bbcdEsc(d.draft_id) + '"><i class="fas fa-folder-open"></i> 打开</button>'
-                    + '<button class="btn btn-sm btn-outline-danger" data-action="delete" data-draft-id="' + bbcdEsc(d.draft_id) + '"><i class="fas fa-trash"></i></button>'
-                    + '</td></tr>';
+                    + '<td class="text-start text-nowrap">' + openBtn + delBtn + '</td></tr>';
             }).join('');
-        } catch (e) { tbody.innerHTML = '<tr><td colspan="5" class="text-danger small">加载异常: ' + bbcdEsc(e.message) + '</td></tr>'; }
+        } catch (e) { tbody.innerHTML = '<tr><td colspan="' + cols + '" class="text-danger small">加载异常: ' + bbcdEsc(e.message) + '</td></tr>'; }
     }
 
-    async function draftOpenOne(draftId) {
+    async function draftOpenOne(draftId, ownerUsername) {
         try {
-            const resp = await fetch('/api/verification/draft/' + encodeURIComponent(draftId));
+            const url = '/api/verification/draft/' + encodeURIComponent(draftId)
+                + (ownerUsername ? ('?username=' + encodeURIComponent(ownerUsername)) : '');
+            const resp = await fetch(url);
             const data = await resp.json();
             if (!data.success || !data.draft) { alert('打开失败: ' + (data.message || '草稿不存在或已过期')); return; }
             bootstrap.Modal.getOrCreateInstance(document.getElementById('draftListModal')).hide();
@@ -7632,13 +7649,25 @@
         return !!name && _projData(name).owner === _exportPresets.currentUser;
     }
 
+    /** 当前用户是否为预设管理员（管理员可编辑/删除所有人的项目，但不重命名他人项目） */
+    function isPresetAdmin() {
+        return (_exportPresets.currentUser || '') === ADMIN_DISPLAY_NAME;
+    }
+
+    /** 当前用户能否编辑指定项目的内容/删除（自己的项目，或管理员对任意项目） */
+    function canEditPreset(name) {
+        return !!name && (isMyProject(name) || isPresetAdmin());
+    }
+
     /** 按当前编辑项目的归属，切换管理模态框各操作按钮/input 的只读态 */
     function refreshPresetEditableState() {
-        var mine = isMyProject(_presetEditingProject);
-        ['presetRenameProjectBtn', 'presetDelProjectBtn', 'presetImportBtn', 'presetAddRowBtn'].forEach(function (id) {
-            var b = document.getElementById(id); if (b) b.disabled = !mine;
+        var editable = canEditPreset(_presetEditingProject);   // 可编辑内容/删除（含管理员对他人项目）
+        var mine = isMyProject(_presetEditingProject);         // 仅 owner（重命名仍限 owner 自己）
+        var rn = document.getElementById('presetRenameProjectBtn'); if (rn) rn.disabled = !mine;
+        ['presetDelProjectBtn', 'presetImportBtn', 'presetAddRowBtn'].forEach(function (id) {
+            var b = document.getElementById(id); if (b) b.disabled = !editable;
         });
-        var ig = document.getElementById('presetIgnoreInput'); if (ig) ig.readOnly = !mine;
+        var ig = document.getElementById('presetIgnoreInput'); if (ig) ig.readOnly = !editable;
     }
 
     // ---- 预设管理模态框 ----
@@ -7663,7 +7692,8 @@
         var names = Object.keys(_exportPresets.projects || {});
         if (!names.length) { sel.innerHTML = '<option value="">（暂无项目）</option>'; return; }
         sel.innerHTML = names.map(function (n) {
-            var tag = isMyProject(n) ? '' : ('（' + bbcdEsc(_projData(n).owner || '他人') + '·只读）');
+            var own = _projData(n).owner || '他人';
+            var tag = isMyProject(n) ? '' : (isPresetAdmin() ? ('（' + bbcdEsc(own) + '）') : ('（' + bbcdEsc(own) + '·只读）'));
             return '<option value="' + bbcdEsc(n) + '"' + (n === _presetEditingProject ? ' selected' : '') + '>' + bbcdEsc(n) + tag + '</option>';
         }).join('');
     }
@@ -7674,14 +7704,14 @@
             tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted small">请先「新建」一个项目</td></tr>';
             return;
         }
-        var mine = isMyProject(_presetEditingProject);
+        var editable = canEditPreset(_presetEditingProject);
         var list = _projData(_presetEditingProject).items;
         if (!list.length) {
-            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted small">' + (mine ? '暂无条目，点「添加一行」或「从当前核查结果导入」' : '他人项目，只读') + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted small">' + (editable ? '暂无条目，点「添加一行」或「从当前核查结果导入」' : '他人项目，只读') + '</td></tr>';
             return;
         }
-        var ro = mine ? '' : ' readonly';
-        var dis = mine ? '' : ' disabled';
+        var ro = editable ? '' : ' readonly';
+        var dis = editable ? '' : ' disabled';
         tbody.innerHTML = list.map(function (r, i) {
             return '<tr>' +
                 '<td><input type="text" class="form-control form-control-sm py-0 preset-key" data-i="' + i + '" value="' + bbcdEsc(r.key) + '" style="font-size:0.75rem;"' + ro + '></td>' +
@@ -7750,7 +7780,7 @@
 
     async function presetDelProject() {
         if (!_presetEditingProject) { alert('请先选择项目'); return; }
-        if (!isMyProject(_presetEditingProject)) { alert('他人项目只读，不能删除'); return; }
+        if (!canEditPreset(_presetEditingProject)) { alert('他人项目只读，不能删除'); return; }
         if (!confirm('确定删除项目「' + _presetEditingProject + '」及其全部预设？')) return;
         var deleted = _presetEditingProject;
         // 调专用删除接口：服务端只删这一项（owner==dn 才删），不碰其他项目
@@ -7776,14 +7806,14 @@
 
     function presetAddRow() {
         if (!_presetEditingProject) { alert('请先「新建」或选择一个项目'); return; }
-        if (!isMyProject(_presetEditingProject)) { alert('他人项目只读'); return; }
+        if (!canEditPreset(_presetEditingProject)) { alert('他人项目只读'); return; }
         presetCollectFromDOM();
         _exportPresets.projects[_presetEditingProject].items.push({ key: '', exportName: '' });
         renderPresetRows();
     }
 
     function presetDelRow(i) {
-        if (!isMyProject(_presetEditingProject)) return;
+        if (!canEditPreset(_presetEditingProject)) return;
         presetCollectFromDOM();
         var arr = _exportPresets.projects[_presetEditingProject].items;
         if (arr && arr[i] != null) arr.splice(i, 1);
@@ -7793,7 +7823,7 @@
     /** 把当前核查结果(_verifyRows) 的 物质→导出名称 合并导入到当前项目 */
     function presetImportFromVerify() {
         if (!_verifyRows || !_verifyRows.length) { alert('当前核查结果为空，请先生成核查结果（.D解析或手动录入）'); return; }
-        if (_presetEditingProject && !isMyProject(_presetEditingProject)) { alert('他人项目只读，不能导入'); return; }
+        if (_presetEditingProject && !canEditPreset(_presetEditingProject)) { alert('他人项目只读，不能导入'); return; }
         if (!_presetEditingProject) {
             var name = prompt('当前无项目，请输入要导入到的项目名称：', '新项目');
             if (!name) return;
@@ -7809,7 +7839,7 @@
         var n = 0;
         _verifyRows.forEach(function (r) {
             if (!r) return;
-            var key = (r.substanceName || r.reportName || '').trim();
+            var key = (r.reportName || r.substanceName || '').trim();   // 优先报告中解析的物质名称，缺失再用 LIMS 名
             if (key && r.exportName) { byKey[key] = r.exportName; n++; }
         });
         _exportPresets.projects[_presetEditingProject].items = Object.keys(byKey).map(function (k) { return { key: k, exportName: byKey[k] }; });
@@ -8173,7 +8203,7 @@
             const btn = e.target.closest('button[data-action]');
             if (!btn) return;
             const id = btn.dataset.draftId;
-            if (btn.dataset.action === 'open') draftOpenOne(id);
+            if (btn.dataset.action === 'open') draftOpenOne(id, btn.dataset.draftOwner || '');
             else if (btn.dataset.action === 'delete') { if (confirm('删除该草稿？')) draftDeleteOne(id); }
         });
         // 导出名称预设

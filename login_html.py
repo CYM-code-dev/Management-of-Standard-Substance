@@ -201,7 +201,9 @@ def set_user_presets(display_name, presets):
     """合并保存当前用户的预设变更。以服务端全局池为权威：
     他人项目(owner≠dn)钉死保留；我的项目(owner==dn)以提交为准(增/改/删)；
     新建(服务端无此名)仅 owner==dn 或 owner 缺失才接受；伪造他人 owner 的提交忽略。
-    lastProject 单独按 dn 存。这样前端两个 POST 入口(保存/切换套用)都安全。"""
+    管理员例外：可改他人项目内容(items/ignore)，owner 保持原作者；不删除/改名他人项目
+    （删除他人项目走专用接口 /export_presets/delete）。他人项目仍一律在步骤1保留，管理员
+    的修改在步骤2覆盖，故管理员全量保存不会误删其快照外的他人项目。lastProject 单独按 dn 存。"""
     with _presets_migration_lock:
         config = load_config()
         if config.get('verifyExportPresets'):
@@ -215,12 +217,13 @@ def set_user_presets(display_name, presets):
         if isinstance(presets, dict) and 'lastProject' in presets:
             last[display_name] = presets.get('lastProject') or ''
 
+        is_admin = (display_name or '').strip() == _ADMIN_DISPLAY_NAME
         new_global = {}
-        # 1) 他人项目：原样保留服务端版本（提交中对它们的任何变更一律忽略）
+        # 1) 他人项目：原样保留服务端版本（含管理员——兜底防误删；管理员对其的修改在步骤2覆盖）
         for name, sd in glob.items():
             if isinstance(sd, dict) and sd.get('owner') != display_name:
                 new_global[name] = {'owner': sd.get('owner', ''), 'items': sd.get('items', []), 'ignore': sd.get('ignore', [])}
-        # 2) 当前用户提交的项目：仅自己的(owner==dn 或服务端无此名的新建)才采纳
+        # 2) 提交的项目：我的项目(owner==dn)以提交为准；管理员可改他人项目(items/ignore，owner保持原作者)
         for name, sub in submitted.items():
             if not isinstance(sub, dict):
                 continue
@@ -229,11 +232,13 @@ def set_user_presets(display_name, presets):
                 # 新建：仅 owner==dn 或 owner 缺失才接受；伪造他人 owner 忽略
                 if sub.get('owner', '') == display_name or sub.get('owner', '') == '':
                     new_global[name] = {'owner': display_name, 'items': _norm_items(sub.get('items', [])), 'ignore': sub.get('ignore', []) or []}
-            elif isinstance(sd, dict) and sd.get('owner') == display_name:
-                # 我的项目：以提交为准
-                new_global[name] = {'owner': display_name, 'items': _norm_items(sub.get('items', [])), 'ignore': sub.get('ignore', []) or []}
-            # else: 服务端已有且 owner≠dn → 他人项目，已在步骤1保留，忽略提交
-        # 3) 删除：我的项目(owner==dn)在提交中不再出现 → 不写入 new_global（天然删除）
+            elif isinstance(sd, dict) and (sd.get('owner') == display_name or is_admin):
+                # 我的项目以提交为准；管理员改他人项目以提交为准但 owner 保持原作者
+                owner = display_name if sd.get('owner') == display_name else sd.get('owner', '')
+                new_global[name] = {'owner': owner, 'items': _norm_items(sub.get('items', [])), 'ignore': sub.get('ignore', []) or []}
+            # else: 服务端已有且 owner≠dn 且非管理员 → 他人项目，已在步骤1保留，忽略提交
+        # 3) 删除：我的项目(owner==dn)在提交中不再出现 → 不写入 new_global（天然删除）。
+        #    他人项目即便管理员提交里没有，也已由步骤1保留（删除他人项目须走专用接口）。
 
         config['verifyExportPresetsGlobal'] = new_global
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
@@ -750,7 +755,7 @@ def lims_set_export_presets():
 
 @app.route('/api/lims/export_presets/delete', methods=['POST'])
 def lims_delete_export_preset_project():
-    """只删除当前用户拥有的指定预设项目（他人项目只读拒绝），不碰其他项目。
+    """删除指定预设项目：仅 owner==自己 可删；管理员可删任意项目。不碰其他项目。
     供前端「删除项目」即时生效用——避免全量保存顺带提交窗口内其他未保存编辑。"""
     if not session.get('logged_in'):
         return jsonify({"success": False, "message": "未登录"}), 401
@@ -767,15 +772,18 @@ def lims_delete_export_preset_project():
             config = _migrate_presets_to_global(config)
         glob = config.get('verifyExportPresetsGlobal', {}) or {}
         proj = glob.get(name)
-        if isinstance(proj, dict) and proj.get('owner') == dn:
+        if isinstance(proj, dict) and (proj.get('owner') == dn or dn == _ADMIN_DISPLAY_NAME):
             del glob[name]
         elif proj is None:
             pass  # 项目不存在，视为已删（幂等）
         else:
             return jsonify({"success": False, "message": "无权删除该项目（他人项目只读）"}), 403
+        # 清理所有用户 lastProject 中指向该项目的值（管理员删他人项目时，原作者等人的偏好也要清）
         lp = config.get('verifyExportPresetsLastProject', {})
-        if isinstance(lp, dict) and lp.get(dn) == name:
-            lp[dn] = ''
+        if isinstance(lp, dict):
+            for k, v in list(lp.items()):
+                if v == name:
+                    lp[k] = ''
         config['verifyExportPresetsGlobal'] = glob
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
@@ -4282,23 +4290,6 @@ def lims_parse_epatemp_content():
                 try: os.unlink(tmp.name)
                 except OSError: pass
 
-    # 去重：同一文件内，同一化合物如果存在 -149 离子变体，只保留 -149
-    import re as _re
-    base_map = {}
-    for c in all_compounds:
-        base = _re.sub(r'[-–]\d{2,4}$', '', c['name'])
-        key = (base, c.get('source_file', ''))
-        base_map.setdefault(key, []).append(c)
-    filtered = []
-    for (base, _sf), compounds in base_map.items():
-        variant_149 = base + '-149'
-        c149 = next((c for c in compounds if c['name'] == variant_149), None)
-        if c149 and len(compounds) > 1:
-            filtered.append(c149)
-        else:
-            filtered.extend(compounds)
-    all_compounds = filtered
-
     msg = '解析成功，提取到 ' + str(len(all_compounds)) + ' 个化合物'
     if skipped:
         msg += '（以下文件夹无epatemp.txt已跳过: ' + ', '.join(skipped) + '）'
@@ -4818,6 +4809,26 @@ def _draft_write_atomic(path, obj):
     os.replace(tmp, path)
 
 
+def _draft_iter_all_docs():
+    """遍历 drafts/ 下所有用户目录的草稿，yield (user_dir, filename, doc)。供管理员视角用。
+    跳过非目录/非 .json/读取失败；不删除任何文件（过期是否显示由调用方按 expires_at 判断）。"""
+    if not os.path.isdir(DRAFT_DIR):
+        return
+    for user_dir in os.listdir(DRAFT_DIR):
+        ud = os.path.join(DRAFT_DIR, user_dir)
+        if not os.path.isdir(ud):
+            continue
+        for fn in os.listdir(ud):
+            if not fn.endswith('.json'):
+                continue
+            try:
+                with open(os.path.join(ud, fn), 'r', encoding='utf-8') as f:
+                    doc = json.load(f)
+            except Exception:
+                continue
+            yield user_dir, fn, doc
+
+
 @app.route('/api/verification/draft/save', methods=['POST'])
 def verification_draft_save():
     if not session.get('logged_in'):
@@ -4862,25 +4873,54 @@ def verification_draft_list():
     if not session.get('logged_in'):
         return jsonify({"success": False, "message": "未登录"}), 401
     username = session.get('username') or 'anon'
-    _draft_purge_expired(username)
-    d = _draft_user_dir(username)
-    out = []
-    for fn in os.listdir(d):
-        if not fn.endswith('.json'):
-            continue
+    is_admin = (session.get('display_name') or '').strip() == _ADMIN_DISPLAY_NAME
+    now = datetime.datetime.now()
+
+    def _expired(doc):
+        exp = doc.get('expires_at', '')
         try:
-            with open(os.path.join(d, fn), 'r', encoding='utf-8') as f:
-                doc = json.load(f)
+            return bool(exp) and datetime.datetime.strptime(exp, '%Y-%m-%d %H:%M:%S') < now
         except Exception:
-            continue
-        payload = doc.get('payload') or {}
-        out.append({
-            "draft_id": doc.get('draft_id', fn[:-5]),
-            "title": doc.get('title', ''),
-            "created_at": doc.get('created_at', ''),
-            "expires_at": doc.get('expires_at', ''),
-            "has_d_data": bool(payload.get('epatempContents')),
-        })
+            return False
+
+    out = []
+    if is_admin:
+        # 管理员视角：遍历所有账号草稿，过滤已过期（仅不显示，不删他人文件）
+        for user_dir, fn, doc in _draft_iter_all_docs():
+            if _expired(doc):
+                continue
+            payload = doc.get('payload') or {}
+            out.append({
+                "draft_id": doc.get('draft_id', fn[:-5]),
+                "title": doc.get('title', ''),
+                "created_at": doc.get('created_at', ''),
+                "expires_at": doc.get('expires_at', ''),
+                "has_d_data": bool(payload.get('epatempContents')),
+                "created_by_name": doc.get('created_by_name', ''),
+                "created_by_username": doc.get('created_by_username', user_dir),
+                "mine": doc.get('created_by_username', '') == username,
+            })
+    else:
+        _draft_purge_expired(username)
+        d = _draft_user_dir(username)
+        for fn in os.listdir(d):
+            if not fn.endswith('.json'):
+                continue
+            try:
+                with open(os.path.join(d, fn), 'r', encoding='utf-8') as f:
+                    doc = json.load(f)
+            except Exception:
+                continue
+            payload = doc.get('payload') or {}
+            out.append({
+                "draft_id": doc.get('draft_id', fn[:-5]),
+                "title": doc.get('title', ''),
+                "created_at": doc.get('created_at', ''),
+                "expires_at": doc.get('expires_at', ''),
+                "has_d_data": bool(payload.get('epatempContents')),
+                "created_by_name": doc.get('created_by_name', ''),
+                "mine": True,
+            })
     out.sort(key=lambda x: x.get('created_at', ''), reverse=True)
     return jsonify({"success": True, "drafts": out})
 
@@ -4892,7 +4932,14 @@ def verification_draft_load(draft_id):
     if not re.match(r'^[A-Za-z0-9]{32}$', draft_id):
         return jsonify({"success": False, "message": "草稿不存在或已过期"}), 404
     username = session.get('username') or 'anon'
-    path = os.path.join(_draft_user_dir(username), draft_id + '.json')
+    is_admin = (session.get('display_name') or '').strip() == _ADMIN_DISPLAY_NAME
+    if is_admin:
+        # 管理员可加载他人草稿：按 ?username= 定位目录（_draft_user_dir 已过滤防路径穿越）
+        target = (request.args.get('username') or '').strip()
+        d = _draft_user_dir(target) if target else _draft_user_dir(username)
+    else:
+        d = _draft_user_dir(username)   # 非管理员忽略 username 参数，强制自己目录
+    path = os.path.join(d, draft_id + '.json')
     if not os.path.exists(path):
         return jsonify({"success": False, "message": "草稿不存在或已过期"}), 404
     try:
