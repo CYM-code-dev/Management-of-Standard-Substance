@@ -603,6 +603,85 @@ def status():
         return jsonify({"logged_in": True, "username": system.current_user, "display_name": session['display_name'], "pid": session.get('pid')})
     return jsonify({"logged_in": False})
 
+
+# ==================== 节假日/调休（按年本地缓存 + 缺失才外部查询）====================
+# 数据源：timor.tech/api/holiday/year（需带 User-Agent，否则 403）
+# 返回 { 'YYYY-MM-DD': true(放假) | false(周末补班) }，仅含“异常日期”，未收录按周末判断
+HOLIDAYS_CACHE_DIR = "holidays_cache"
+_HOLIDAYS_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+
+
+def _holiday_cache_path(year):
+    return os.path.join(HOLIDAYS_CACHE_DIR, f"{year}.json")
+
+
+def _load_holiday_cache(year):
+    """读本地年度缓存，返回 {date: bool} 或 None。"""
+    try:
+        with open(_holiday_cache_path(year), encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+    return None
+
+
+def _save_holiday_cache(year, mapping):
+    try:
+        os.makedirs(HOLIDAYS_CACHE_DIR, exist_ok=True)
+        with open(_holiday_cache_path(year), "w", encoding="utf-8") as f:
+            json.dump(mapping, f, ensure_ascii=False, sort_keys=True)
+    except Exception as e:
+        print(f"[Holidays] 写缓存失败 year={year}: {e}")
+
+
+def _fetch_holidays_from_timor(year):
+    """请求 timor.tech 年度接口，返回 {date: bool}（true=放假, false=补班）或 None。"""
+    try:
+        r = requests.get(f"https://timor.tech/api/holiday/year/{year}-01-01",
+                         timeout=15, headers={"User-Agent": _HOLIDAYS_UA})
+        if r.status_code != 200:
+            print(f"[Holidays] timor.tech HTTP {r.status_code} year={year}")
+            return None
+        j = r.json()
+        if j.get("code") != 0:
+            print(f"[Holidays] timor.tech code={j.get('code')} year={year}")
+            return None
+        mapping = {}
+        for info in (j.get("holiday") or {}).values():
+            ds = info.get("date")
+            if ds:
+                mapping[ds] = bool(info.get("holiday"))
+        return mapping or None
+    except Exception as e:
+        print(f"[Holidays] 请求异常 year={year}: {e}")
+        return None
+
+
+def get_holidays(year):
+    """按年获取节假日映射：本地缓存优先，缺失则请求 timor.tech 并写回本地。
+    返回 (mapping, source)：mapping={date:bool} 或 None；source ∈ cache/fresh/none。"""
+    mapping = _load_holiday_cache(year)
+    if mapping is not None:
+        return mapping, "cache"
+    mapping = _fetch_holidays_from_timor(year)
+    if mapping is None:
+        return None, "none"
+    _save_holiday_cache(year, mapping)
+    return mapping, "fresh"
+
+
+@app.route('/api/holidays/<int:year>', methods=['GET'])
+def api_holidays(year):
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    if year < 2000 or year > 2100:
+        return jsonify({"success": False, "message": "年份无效"}), 400
+    mapping, source = get_holidays(year)
+    return jsonify({"success": True, "year": year, "holidays": mapping or {}, "source": source})
+
+
 @app.route('/api/logout', methods=['POST'])
 def logout():
     session.clear()
@@ -4979,4 +5058,11 @@ if __name__ == '__main__':
     print("  耗材查询主页: http://127.0.0.1:5000/")
     print("  有机标准品管理: http://127.0.0.1:5000/organic-std")
     start_niimbot_server()
+    # 钉钉标液过期提醒：仅在 reloader 子进程启动调度线程，避免双实例重复发送
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        try:
+            import dingtalk_notify
+            dingtalk_notify.start()
+        except Exception as e:
+            print(f"[DingTalk] 调度器启动失败: {e}")
     app.run(host='0.0.0.0', port=5000, debug=True)
