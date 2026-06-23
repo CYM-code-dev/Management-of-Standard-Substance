@@ -15,4 +15,4 @@ pypdfium2==5.8.*
 PyPDF2==3.0.*
 chardet==5.2.*
 pywin32==312.*
-ddddocr==1.6.1  # 钉钉标液提醒：LIMS 登录验证码 OCR（算术题 A+B）
+ddddocr==1.6.1  # dingtalk notify: LIMS login captcha OCR (arithmetic A+B)
