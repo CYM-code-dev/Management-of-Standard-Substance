@@ -485,6 +485,7 @@
             <select class="form-select" id="usageStatus">
                 <option>未开封</option>
                 <option>开封</option>
+                <option>用完</option>
             </select>
         </div>
     </div>
@@ -835,7 +836,7 @@
             const originalIdDisplay = (item.originalId && item.originalId.toString().trim() !== '') ? item.originalId : '—';
             const labNoValue = item.labNo || '';
             const labNoCell = (labNoValue && labNoValue !== '/') ? `<div class="labno-cell">${escapeHtml(labNoValue)}<i class="fas fa-file-pdf cert-icon" data-labno="${escapeAttr(labNoValue)}" title="打开证书"></i></div>` : (labNoValue === '/' ? escapeHtml(labNoValue) : '—');
-            html += `<tr class="${expired ? 'expired-row' : ''}"><td>${escapeHtml(originalIdDisplay)}</td><td>${escapeHtml(item.group)}</td><td>${labNoCell}</td><td><div class="d-flex align-items-center justify-content-between gap-1"><strong>${escapeHtml(item.name)}</strong><i class="fas fa-vial solution-config-icon" data-name="${escapeAttr(item.name)}" data-labno="${escapeAttr(item.labNo || '')}" title="储备液配置"></i></div></td><td>${escapeHtml(item.cas)}</td><td>${escapeHtml(item.spec)}</td><td>${expiryDisplay}</td><td>${escapeHtml(item.location)}</td><td>${storageDisplay}</td><td><span class="badge ${item.usage === '开封' ? 'bg-warning text-dark' : 'bg-success'}">${item.usage}</span></td><td class="action-icons"><i class="fas fa-edit text-primary" onclick="openEditModal(${item.id})" title="编辑"></i><i class="fas fa-trash-alt text-danger" onclick="openDeleteModal(${item.id}, '${escapeHtml(item.name).replace(/'/g, "\\'")}')" title="删除"></i></td></tr>`;
+            html += `<tr class="${expired ? 'expired-row' : ''}"><td>${escapeHtml(originalIdDisplay)}</td><td>${escapeHtml(item.group)}</td><td>${labNoCell}</td><td><div class="d-flex align-items-center justify-content-between gap-1"><strong>${escapeHtml(item.name)}</strong><i class="fas fa-vial solution-config-icon" data-name="${escapeAttr(item.name)}" data-labno="${escapeAttr(item.labNo || '')}" title="储备液配置"></i></div></td><td>${escapeHtml(item.cas)}</td><td>${escapeHtml(item.spec)}</td><td>${expiryDisplay}</td><td>${escapeHtml(item.location)}</td><td>${storageDisplay}</td><td><span class="badge ${item.usage === '用完' ? 'bg-danger' : item.usage === '开封' ? 'bg-warning text-dark' : 'bg-success'}">${item.usage}</span></td><td class="action-icons"><i class="fas fa-edit text-primary" onclick="openEditModal(${item.id})" title="编辑"></i><i class="fas fa-trash-alt text-danger" onclick="openDeleteModal(${item.id}, '${escapeHtml(item.name).replace(/'/g, "\\'")}')" title="删除"></i></td></tr>`;
         });
         tbody.innerHTML = html;
         document.getElementById('recordCount').innerText = data.length;

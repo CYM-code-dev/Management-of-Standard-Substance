@@ -962,6 +962,139 @@ def parse_existing_records_xls(sheet):
         records.append({'row_index': row_idx, 'original_id': original_id, 'lab_no': lab_no})
     return records
 
+
+# 标准品 Excel「即将过期」提醒所需字段别名（与前端 OrganicStd.html 的 colMap 保持一致，
+# 按表头名定位列号，不依赖固定列顺序）
+_EXPIRY_FIELD_ALIASES = {
+    'group': ['组别'],
+    'labNo': ['实验室编号', '内部编号'],
+    'name': ['标品名称', '名称'],
+    'cas': ['CAS号', 'CAS'],
+    'expiry': ['有效期', '效期', '有效期至'],
+    'usage': ['使用情况', '使用'],
+}
+
+
+def _map_headers_to_idx(headers):
+    """按 _EXPIRY_FIELD_ALIASES 把表头映射成 {field: 列号}。"""
+    norm = {}
+    for col, h in enumerate(headers):
+        if h is None:
+            continue
+        norm[str(h).strip()] = col
+    idx = {}
+    for field, names in _EXPIRY_FIELD_ALIASES.items():
+        for nm in names:
+            if nm in norm:
+                idx[field] = norm[nm]
+                break
+    return idx
+
+
+def _find_header_row(peeked):
+    """在 peeked（前若干行）中找出表头行：匹配已知列别名最多(≥3)的那行。
+    返回 (在 peeked 中的下标, {field: 列号})；找不到返回 (None, {})。
+    用于跳过标题行（如首行「有机标品存放记录表」，真正表头在第 2 行）。"""
+    best_pos, best_idx, best_score = None, {}, 0
+    for pos, row in enumerate(peeked):
+        idx = _map_headers_to_idx(row)
+        if len(idx) > best_score:
+            best_score, best_pos, best_idx = len(idx), pos, idx
+    if best_score >= 3:
+        return best_pos, best_idx
+    return None, {}
+
+
+def read_excel_expiry_rows(path):
+    """读取标准品 Excel，按【表头名】映射返回每行提醒所需字段（不依赖固定列号/行号）。
+
+    供 dingtalk_notify「标准品即将过期」月度提醒使用：只读提醒需要的列，纯读取不改文件。
+    自动跳过标题行：在前 12 行里找出真正的表头行（匹配已知列别名最多者）。
+    返回 [{group, labNo, name, cas, expiry_raw, row_index}, ...]
+    expiry_raw 为单元格原值（datetime / str / int / None），日期解析交给调用方。
+    文件不存在/打不开时抛异常，由调用方捕获后当天继续重试。
+    """
+    def _str(v):
+        return str(v).strip() if v is not None else ''
+
+    def _build(vals, idx, exp_col, row_no, exp_raw):
+        return {
+            'group': _str(vals[idx['group']]) if 'group' in idx and idx['group'] < len(vals) else '',
+            'labNo': _str(vals[idx['labNo']]) if 'labNo' in idx and idx['labNo'] < len(vals) else '',
+            'name': _str(vals[idx['name']]) if 'name' in idx and idx['name'] < len(vals) else '',
+            'cas': _str(vals[idx['cas']]) if 'cas' in idx and idx['cas'] < len(vals) else '',
+            'usage': _str(vals[idx['usage']]) if 'usage' in idx and idx['usage'] < len(vals) else '',
+            'expiry_raw': exp_raw,
+            'row_index': row_no,
+        }
+
+    rows = []
+    low = path.lower()
+    if low.endswith('.xls') and not low.endswith('.xlsx'):
+        book = xlrd.open_workbook(path)
+        sheet = None
+        for nm in _KNOWN_SHEET_NAMES:
+            try:
+                sheet = book.sheet_by_name(nm); break
+            except Exception:
+                continue
+        if sheet is None:
+            sheet = book.sheet_by_index(0)
+        if sheet.nrows < 2:
+            return rows
+        peeked = [[sheet.cell_value(r, c) for c in range(sheet.ncols)]
+                  for r in range(min(12, sheet.nrows))]
+        hdr_pos, idx = _find_header_row(peeked)
+        if hdr_pos is None:
+            return rows
+        exp_col = idx.get('expiry')
+        for r in range(hdr_pos + 1, sheet.nrows):  # 0-based，表头行之后
+            vals = [sheet.cell_value(r, c) for c in range(sheet.ncols)]
+            if is_row_empty(vals):
+                continue
+            exp_raw = None
+            if exp_col is not None and exp_col < len(vals):
+                # xlrd 日期单元格 ctype=3，需按 datemode 转回 datetime；否则原样
+                if sheet.cell_type(r, exp_col) == xlrd.XL_CELL_DATE:
+                    try:
+                        exp_raw = xlrd.xldate.xldate_as_datetime(vals[exp_col], book.datemode)
+                    except Exception:
+                        exp_raw = vals[exp_col]
+                else:
+                    exp_raw = vals[exp_col]
+            rows.append(_build(vals, idx, exp_col, r + 1, exp_raw))
+    else:
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        try:
+            ws = wb[detect_sheet_name(wb)]
+            row_iter = ws.iter_rows(min_row=1, values_only=True)
+            peeked = []
+            for _ in range(12):
+                try:
+                    peeked.append(list(next(row_iter)))
+                except StopIteration:
+                    break
+            hdr_pos, idx = _find_header_row(peeked)
+            if hdr_pos is None:
+                return rows
+            exp_col = idx.get('expiry')
+            # 数据行 = peeked 中表头之后 + 剩余迭代；row_index 为 Excel 行号(1-based)
+            data = [(vals, hdr_pos + 2 + offset)
+                    for offset, vals in enumerate(peeked[hdr_pos + 1:])]
+            next_row_no = len(peeked) + 1
+            for vals in row_iter:
+                data.append((list(vals), next_row_no))
+                next_row_no += 1
+            for vals, row_no in data:
+                if is_row_empty(vals):
+                    continue
+                exp_raw = vals[exp_col] if exp_col is not None and exp_col < len(vals) else None
+                rows.append(_build(vals, idx, exp_col, row_no, exp_raw))
+        finally:
+            wb.close()
+    return rows
+
+
 def find_insert_position(records, new_id):
     new_type = get_prefix_type(new_id)
     new_num = extract_number(new_id)

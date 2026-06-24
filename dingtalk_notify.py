@@ -41,6 +41,8 @@ _thread = None
 _last_run_date = None     # 当天已成功发送（或确认无到期项）→ 当天不再重试/补发
 _last_eod_alert_date = None  # 当天已发过"截止查询失败"最终警告 → 每天最多1条
 _last_attempt_dt = None   # 上次尝试时刻 → 控制 retry_interval_minutes 重试间隔
+_last_excel_notify_date = None  # Excel月度提醒：当天已成功发送（或确认无到期项）→ 当天不再重试
+_last_excel_attempt_dt = None   # Excel月度提醒：上次尝试时刻 → 控制重试间隔
 
 
 # ==================== 配置 / 工作日 ====================
@@ -53,15 +55,24 @@ def _load_cfg():
         return {}
 
 
+def _excel_path():
+    """读 config.json 根的 defaults.excelPath（_load_cfg 只返回 dingtalk 段，取不到）。"""
+    try:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            return (json.load(f).get("defaults") or {}).get("excelPath") or ""
+    except Exception:
+        return ""
+
+
 def _load_state():
-    """读取持久化状态（last_run_date / last_eod_alert_date），使重启后判重/补发正确。"""
-    global _last_run_date, _last_eod_alert_date
+    """读取持久化状态（last_run_date / last_eod_alert_date / last_excel_notify_date），使重启后判重/补发正确。"""
+    global _last_run_date, _last_eod_alert_date, _last_excel_notify_date
     try:
         with open(STATE_FILE, encoding="utf-8") as f:
             st = json.load(f)
     except Exception:
         return
-    for key in ("last_run_date", "last_eod_alert_date"):
+    for key in ("last_run_date", "last_eod_alert_date", "last_excel_notify_date"):
         v = st.get(key)
         if not v:
             continue
@@ -71,6 +82,8 @@ def _load_state():
             continue
         if key == "last_run_date":
             _last_run_date = d
+        elif key == "last_excel_notify_date":
+            _last_excel_notify_date = d
         else:
             _last_eod_alert_date = d
 
@@ -81,6 +94,7 @@ def _save_state():
         st = {
             "last_run_date": _last_run_date.isoformat() if _last_run_date else None,
             "last_eod_alert_date": _last_eod_alert_date.isoformat() if _last_eod_alert_date else None,
+            "last_excel_notify_date": _last_excel_notify_date.isoformat() if _last_excel_notify_date else None,
         }
         with open(STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(st, f, ensure_ascii=False, indent=2)
@@ -139,6 +153,39 @@ def next_workday(d, cfg=None):
             return cur
         cur += datetime.timedelta(days=1)
     return cur
+
+
+def _parse_expiry_date(val):
+    """把 Excel 有效期单元格原值解析成 datetime.date；失败返回 None。
+    支持 datetime/date 对象与多种日期字符串格式。"""
+    if val is None:
+        return None
+    if isinstance(val, datetime.datetime):
+        return val.date()
+    if isinstance(val, datetime.date):
+        return val
+    s = str(val).strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%Y%m%d",
+                "%d-%m-%Y", "%m/%d/%Y", "%Y年%m月%d日"):
+        try:
+            return datetime.datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _excel_target_date(year, month, day, cfg=None):
+    """月度提醒的目标发送日：从 day 号往前回溯到首个工作日
+    （day 是工作日即用 day；否则回到上一个工作日）。26 号每月都有，无月末越界。"""
+    cfg = cfg if cfg is not None else _load_cfg()
+    d = datetime.date(year, month, day)
+    for _ in range(day):
+        if is_workday(d, cfg):
+            return d
+        d -= datetime.timedelta(days=1)
+    return d
 
 
 # ==================== LIMS 会话获取 ====================
@@ -303,6 +350,34 @@ def _collect_expiring(system, cfg):
     return matches
 
 
+def _collect_excel_expiring(today, advance_days):
+    """读默认 Excel 路径，返回「今天 ≤ 有效期 ≤ 今天+advance_days」的条目（按有效期升序）。
+    每条 {group, labNo, name, cas, expiry(datetime.date)}。读/解析异常上抛由调用方处理。"""
+    path = _excel_path()
+    if not path:
+        print(f"{_DINGTALK_LOG} defaults.excelPath 未配置，跳过 Excel 月度提醒")
+        return []
+    rows = _get_lh().read_excel_expiry_rows(path)
+    horizon = today + datetime.timedelta(days=advance_days)
+    out = []
+    for r in rows:
+        # 使用情况为「用完」的不通知
+        if "用完" in (r.get("usage") or ""):
+            continue
+        exp = _parse_expiry_date(r.get("expiry_raw"))
+        if exp is None or not (today <= exp <= horizon):
+            continue
+        out.append({
+            "group": r.get("group") or "",
+            "labNo": r.get("labNo") or "",
+            "name": r.get("name") or "",
+            "cas": r.get("cas") or "",
+            "expiry": exp,
+        })
+    out.sort(key=lambda x: x["expiry"])
+    return out
+
+
 # ==================== 钉钉发送（加签） ====================
 def _sign_url(webhook, secret):
     ts = str(round(time.time() * 1000))
@@ -355,6 +430,27 @@ def _build_message(items, cfg):
         vd = str(it.get("validityDate") or "")[:10]      # "YYYY-MM-DD"
         vd_md = vd[5:] if len(vd) >= 10 else ""           # -> "MM-DD"
         lines.append(f"{i}. {_type_label(order)}·**{name}**（{order} · {code}）｜ {person} ｜ {vd_md}")
+        lines.append("")
+    return title, "\n".join(lines)
+
+
+def _build_excel_message(rows, cfg):
+    """标准品 Excel 即将过期月度提醒的 markdown。rows 来自 _collect_excel_expiring。"""
+    dates = sorted(r["expiry"] for r in rows)
+    rng = dates[0].isoformat() if dates[0] == dates[-1] else f"{dates[0].isoformat()} ~ {dates[-1].isoformat()}"
+    n = len(rows)
+    adv = int((cfg.get("excel_expiry") or {}).get("advance_days", 40))
+    title = f"📅 标准品即将过期月度提醒（{n}个）"
+    lines = [
+        f"以下 **{n}** 个标准品将于 **{adv}天内**（{rng}）到期，请及时确认：",
+        "",
+    ]
+    for i, r in enumerate(rows, 1):
+        group = r["group"] or "未分组"
+        lab = r["labNo"] or "-"
+        name = r["name"] or "(未命名)"
+        cas = r["cas"] or "-"
+        lines.append(f"{i}. 【{group}】{lab} · **{name}** ｜ CAS号: {cas} ｜ 有效期: {r['expiry'].isoformat()}")
         lines.append("")
     return title, "\n".join(lines)
 
@@ -412,8 +508,42 @@ def run_once():
     # 发送失败：不标记完成 → 自动重试
 
 
+def run_excel_notify(advance_days=None):
+    """执行一次 Excel 月度提醒：读默认 Excel→筛「今天~今天+advance_days」到期→发送。
+    成功发送 或 确认无到期项 → 标记当天完成（持久化）；
+    任一环节失败 → 不标记，由调度器在窗口内重试。"""
+    global _last_excel_notify_date
+    cfg = _load_cfg()
+    if not cfg.get("webhook"):
+        print(f"{_DINGTALK_LOG} dingtalk 配置缺失，跳过 Excel 月度提醒")
+        return
+    if advance_days is None:
+        advance_days = int((cfg.get("excel_expiry") or {}).get("advance_days", 40))
+    today = datetime.date.today()
+
+    try:
+        rows = _collect_excel_expiring(today, advance_days)
+    except Exception as e:
+        print(f"{_DINGTALK_LOG} Excel 月度提醒采集失败: {e}")
+        return
+
+    if not rows:
+        print(f"{_DINGTALK_LOG} Excel 无即将过期标准品，不发送")
+        _last_excel_notify_date = today
+        _save_state()
+        return
+
+    title, md = _build_excel_message(rows, cfg)
+    ok, data = send_markdown(title, md, cfg)
+    print(f"{_DINGTALK_LOG} Excel 月度提醒发送 {len(rows)} 条，{'成功' if ok else '失败'}: {data}")
+    if ok:
+        _last_excel_notify_date = today
+        _save_state()
+    # 发送失败：不标记完成 → 自动重试
+
+
 def _worker():
-    global _last_attempt_dt
+    global _last_attempt_dt, _last_excel_attempt_dt
     print(f"{_DINGTALK_LOG} 调度线程已启动")
     while _flag:
         try:
@@ -440,6 +570,27 @@ def _worker():
                   and _last_run_date != today):
                 # 过了截止点仍当天未发送 → 发一次最终警告（每天1条）
                 _eod_warning(cutoff_h, cfg)
+
+            # ===== Excel 月度提醒（与 LIMS 提醒独立）：目标日(默认26号，休息日则前一工作日)
+            # 的 [hour, cutoff_hour] 窗口内、当天未完成、距上次尝试≥重试间隔 → 触发。
+            # 不复用 elif：两条支线可同日各自触发。
+            ee = cfg.get("excel_expiry") or {}
+            if ee.get("enabled", True):
+                e_day = int(ee.get("day", 26))
+                e_hour = int(ee.get("hour", 9))
+                e_cutoff = int(ee.get("cutoff_hour", 11))
+                adv = int(ee.get("advance_days", 40))
+                target = _excel_target_date(today.year, today.month, e_day, cfg)
+                e_start = now.replace(hour=e_hour, minute=0, second=0, microsecond=0)
+                e_end = now.replace(hour=e_cutoff, minute=0, second=0, microsecond=0)
+                e_due = (today == target
+                         and e_start <= now <= e_end
+                         and _last_excel_notify_date != today
+                         and (_last_excel_attempt_dt is None
+                              or (now - _last_excel_attempt_dt).total_seconds() >= retry_min * 60))
+                if e_due:
+                    _last_excel_attempt_dt = now
+                    run_excel_notify(adv)
         except Exception as e:
             print(f"{_DINGTALK_LOG} 调度异常: {e}")
         time.sleep(60)
@@ -461,15 +612,19 @@ if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser(description="钉钉标液提醒：手动触发/测试")
     ap.add_argument("--run-now", action="store_true", help="立即执行一次采集+发送")
+    ap.add_argument("--run-excel-now", action="store_true", help="立即执行一次 Excel 月度提醒采集+发送")
     ap.add_argument("--test-send", action="store_true", help="发送一条测试消息验证加签通道")
     ap.add_argument("--test-ocr", action="store_true", help="强制走 OCR 登录并验证查询（不发钉钉、不写状态）")
-    ap.add_argument("--check-workday", action="store_true", help="打印今天/下一工作日")
+    ap.add_argument("--check-workday", action="store_true", help="打印今天/下一工作日/Excel月度提醒目标日")
     args = ap.parse_args()
 
     if args.check_workday:
         cfg = _load_cfg()
         t = datetime.date.today()
+        ee = cfg.get("excel_expiry") or {}
+        e_day = int(ee.get("day", 26))
         print(f"今天 {t} is_workday={is_workday(t, cfg)} 下一工作日={next_workday(t, cfg)}")
+        print(f"Excel月度提醒目标日(day={e_day})={_excel_target_date(t.year, t.month, e_day, cfg)}")
     elif args.test_send:
         ok, data = send_markdown("测试-标液提醒通道", "✅ 钉钉标液提醒通道测试成功。")
         print(f"test-send -> ok={ok} data={data}")
@@ -504,5 +659,7 @@ if __name__ == "__main__":
             sys.exit(1)
     elif args.run_now:
         run_once()
+    elif args.run_excel_now:
+        run_excel_notify()
     else:
         ap.print_help()
