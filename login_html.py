@@ -1131,6 +1131,13 @@ def copy_cell_style(src, dst):
         dst.alignment = src.alignment.copy()
 
 
+def _excel_save_error_detail(e):
+    """把 Excel 写入异常翻译成用户可读提示。PermissionError 通常是文件正被 Excel 打开被锁。"""
+    if isinstance(e, PermissionError):
+        return "该 Excel 可能正被别人打开，请关闭后重试"
+    return str(e)
+
+
 @app.route('/api/add_to_excel', methods=['POST'])
 def add_to_excel():
     if not session.get('logged_in'):
@@ -1236,7 +1243,7 @@ def add_to_excel():
 
         return jsonify({"success": True, "message": "数据已同步到 Excel"})
     except Exception as e:
-        return jsonify({"success": False, "message": f"写入 Excel 失败: {str(e)}"}), 500
+        return jsonify({"success": False, "message": f"写入 Excel 失败: {_excel_save_error_detail(e)}"}), 500
 
 
 @app.route('/api/update_lims_unit', methods=['POST'])
@@ -4025,7 +4032,7 @@ def update_excel_record():
             return jsonify({"success": False, "message": "仅支持 .xls 或 .xlsx"}), 400
 
     except Exception as e:
-        return jsonify({"success": False, "message": f"更新 Excel 失败: {str(e)}"}), 500
+        return jsonify({"success": False, "message": f"更新 Excel 失败: {_excel_save_error_detail(e)}"}), 500
 
 
 

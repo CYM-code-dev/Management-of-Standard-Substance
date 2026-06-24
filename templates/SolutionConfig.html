@@ -2870,6 +2870,10 @@
 
     function bbcdUpdateCode(force) {
         if (!bbcdCodeAuto && !force) return;
+        // 详情查看/导出模式：保留已加载的 rec.solutionCode，不按 configureDate 重算。
+        // configureDate 可能有历史/时区偏差（存成 UTC 日期，比本地少一天），重算会用错误日期
+        // 覆盖正确的已存自编号（如 D-8948 悬停 …20260624、详情被覆盖成 …20260623）。
+        if (window.bbcdViewDetailMode) return;
         const codeEl = document.getElementById('bbcdSolutionCode');
         if (!codeEl) return;
 
