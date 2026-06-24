@@ -595,7 +595,6 @@
     let loginModalInstance = null;
     let queryResultModalInstance = null;
     let currentLimsItem = null;
-    let originalConcUnit = '';
     let queryPageNo = 1;
     let queryTotalPages = 1;
     let queryRecords = 0;
@@ -1064,7 +1063,6 @@ function filterData() {
         if (existing) {
             fillFormFromExcelRecord(existing);
             document.getElementById('limsRecordId').value = trimVal(item.id);
-            originalConcUnit = document.getElementById('concUnit').value;
             applyDuplicateHighlight();
             alert(`实验室编号 ${labNoVal} 已存在于 Excel 数据库，下方显示的是 Excel 中已有的记录`);
             return;
@@ -1076,7 +1074,6 @@ function filterData() {
         document.getElementById('concentration').value = trimVal(item.concentration);
         const unitVal = trimVal(item.concentrationUnitName);
         document.getElementById('concUnit').value = unitVal;
-        originalConcUnit = unitVal;
         document.getElementById('limsRecordId').value = trimVal(item.id);
         document.getElementById('manufacturer').value = trimVal(item.factoryName);
         document.getElementById('expiry').value = trimVal(item.validDate);
@@ -1155,7 +1152,6 @@ function filterData() {
         document.getElementById('modalTitle').innerText = '新增标准品';
         document.getElementById('editId').value = '';
         currentLimsItem = null;
-        originalConcUnit = '';
         document.getElementById('limsRecordId').value = '';
         const today = new Date();
         const year = today.getFullYear();
@@ -1178,7 +1174,6 @@ function filterData() {
         document.getElementById('name').value = item.name;
         document.getElementById('cas').value = item.cas;
         currentLimsItem = null;
-        originalConcUnit = '';
         document.getElementById('limsRecordId').value = '';
         const specStr = item.spec || '';
         const slashIdx = specStr.indexOf(' / ');
@@ -1217,7 +1212,6 @@ function filterData() {
         document.getElementById('concUnit').value = '';
         document.getElementById('limsRecordId').value = '';
         currentLimsItem = null;
-        originalConcUnit = '';
         clearDuplicateHighlight();
     }
 
@@ -1284,35 +1278,9 @@ function filterData() {
             saveBtn.innerHTML = originalText;
         }
 
-        // Excel 写入成功（或未配置路径），尝试 LIMS 回写浓度单位
-        const limsId = document.getElementById('limsRecordId').value;
-        console.log('[LIMS debug]', {limsId, currentLimsItem: !!currentLimsItem, concUnitVal, originalConcUnit, changed: concUnitVal !== originalConcUnit});
-        if (limsId && currentLimsItem && concUnitVal && concUnitVal !== originalConcUnit) {
-            saveBtn.disabled = true;
-            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 同步 LIMS...';
-            try {
-                const resp = await fetch('/api/update_lims_unit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        recordId: limsId,
-                        concentrationUnitName: concUnitVal,
-                        limsItem: currentLimsItem
-                    }),
-                    credentials: 'include'
-                });
-                const data = await resp.json();
-                if (!data.success) {
-                    alert('LIMS 浓度单位同步失败：' + data.message + '\n（Excel 已保存成功）');
-                } else {
-                    originalConcUnit = concUnitVal;
-                }
-            } catch (err) {
-                alert('LIMS 同步异常：' + err.message + '\n（Excel 已保存成功）');
-            }
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = originalText;
-        }
+        // LIMS 浓度单位回写已禁用：原实现对 /consumableBill/{id} 做全量替换 PUT，
+        // 会清空记录其余字段（故障实例 CK-FCM-2026039）。详情 GET 返回 405 无法安全 merge，
+        // 待向 LIMS 管理员确认正确更新契约后再恢复。浓度单位仍照常保存到 Excel/本地 spec 字段。
 
         // 更新本地数据
         if (id) {

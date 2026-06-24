@@ -1243,42 +1243,10 @@ def add_to_excel():
 def update_lims_unit():
     if not session.get('logged_in'):
         return jsonify({"success": False, "message": "未登录"}), 401
-    try:
-        data = request.get_json()
-        record_id = data.get('recordId')
-        new_unit = data.get('concentrationUnitName', '').strip()
-        lims_item = data.get('limsItem')
-        if not record_id or not lims_item:
-            return jsonify({"success": False, "message": "缺少记录ID或原始数据"}), 400
-
-        system = get_system()
-        if not system.current_user:
-            return _expired_response()
-
-        form_data = {}
-        form_data['concentrationUnitName'] = new_unit
-        form_data['pid'] = system.current_pid
-        form_data['pname'] = system.current_user
-        form_data['loginId'] = system.current_pid
-        form_data['_method'] = 'PUT'
-
-        url = f"{system.base_url}/detectionManager/manager/consumableBill/{record_id}"
-        for k in list(form_data.keys()):
-            if form_data[k] is None:
-                form_data[k] = ''
-        resp = system.session.post(url, data=form_data)
-        if resp.status_code != 200:
-            try: detail = resp.text[:2000]
-            except: pass
-            print(f"[LIMS UPDATE] response: {detail}")
-            return jsonify({"success": False, "message": f"LIMS 请求失败，状态码: {resp.status_code}，{detail}"})
-        result = resp.json()
-        if result.get('success'):
-            return jsonify({"success": True, "message": "浓度单位已同步到 LIMS"})
-        else:
-            return jsonify({"success": False, "message": result.get('errorDesc', '更新失败')})
-    except Exception as e:
-        return jsonify({"success": False, "message": f"LIMS 同步异常: {str(e)}"}), 500
+    # 已禁用：原实现对 /consumableBill/{recordId} 做全量替换 PUT（仅带 concentrationUnitName），
+    # 会把记录其余字段清空（故障实例：CK-FCM-2026039）。LIMS 详情接口 GET 返回 405、无法按 id
+    # 安全 merge；在向 LIMS 管理员确认正确的更新契约之前，停止一切回写，避免再损坏记录。
+    return jsonify({"success": False, "message": "LIMS 浓度单位回写已禁用（全量替换会清空记录，待确认安全更新方式）"})
 
 
 @app.route('/api/lims/receive', methods=['POST'])

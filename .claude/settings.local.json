@@ -143,7 +143,22 @@
       "Bash(git ls-tree *)",
       "Bash(grep -iE 'test|dump|tmp|temp|debug|backup|\\\\.bak$|\\\\.orig$|\\\\.log$|cache|session|__pycache__|\\\\.pyc$|新建文件夹|outline')",
       "Bash(git diff *)",
-      "Bash(.venv/Scripts/python -m py_compile login_html.py dingtalk_notify.py)"
+      "Bash(.venv/Scripts/python -m py_compile login_html.py dingtalk_notify.py)",
+      "Bash(ls -la session_*.json)",
+      "Bash(.venv/Scripts/python -c \"import json,os,time; [print\\(f, '->', 'OK' if os.path.exists\\(f\\) else 'MISSING', json.load\\(open\\(f,encoding='utf-8'\\)\\).get\\('username'\\), json.load\\(open\\(f,encoding='utf-8'\\)\\).get\\('login_time'\\)\\) for f in ['session_sjr.json','session_MYN.json'] if os.path.exists\\(f\\)]\")",
+      "Bash(.venv/Scripts/python recover_diag.py)",
+      "Bash(.venv/Scripts/python recover_scan.py)",
+      "Bash(ping -n 1 files.cirs-ck.com)",
+      "Bash(net use *)",
+      "Bash(cmd //c 'dir \"\\\\\\\\files.cirs-ck.com\\\\轻工公盘\\\\有机\\\\3-有机耗品\\\\有机标准品.xlsx\"')",
+      "Bash(.venv/Scripts/python read_excel_target.py)",
+      "Bash(.venv/Scripts/python recover_locate.py)",
+      "Bash(.venv/Scripts/python recover_fingerprint.py)",
+      "Bash(.venv/Scripts/python recover_bydate.py)",
+      "Bash(.venv/Scripts/python test_get_detail.py)",
+      "Bash(.venv/Scripts/python test_get_detail2.py)",
+      "Bash(.venv/Scripts/python -c \"import ast; ast.parse\\(open\\('login_html.py',encoding='utf-8'\\).read\\(\\)\\); print\\('login_html.py syntax OK'\\)\")",
+      "Bash(.venv/Scripts/python -c \"import ast; ast.parse\\(open\\('login_html.py',encoding='utf-8'\\).read\\(\\)\\); print\\('login_html.py OK'\\)\")"
     ]
   },
   "enableAllProjectMcpServers": true,
