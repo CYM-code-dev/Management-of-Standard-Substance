@@ -274,10 +274,10 @@ def _type_label(order):
 
 
 def _collect_expiring(system, cfg):
-    """返回即将过期、需通知的记录列表。"""
+    """返回即将过期、需通知的记录列表（不按配制人筛选）。
+    按 notify_groups 的配制人名单分组路由由 run_once 完成。"""
     today = datetime.date.today()
     nw = next_workday(today, cfg)
-    configurators = set(cfg.get("configurators") or [])
     min_days = int(cfg.get("min_total_validity_days", 3))
 
     seen, matches = set(), []
@@ -306,10 +306,6 @@ def _collect_expiring(system, cfg):
             # 整瓶有效期 > 阈值 天才通知（短效液不刷屏）
             if (vdate - cdate).days <= min_days:
                 continue
-            # 配制人在名单内
-            person = str(it.get("configuratorName") or it.get("creatorName") or "").strip()
-            if person not in configurators:
-                continue
             # 已废弃的跳过
             if it.get("disposeUserName"):
                 continue
@@ -318,6 +314,33 @@ def _collect_expiring(system, cfg):
     # 按到期日升序
     matches.sort(key=lambda x: str(x.get("validityDate") or ""))
     return matches
+
+
+def _person_of(it):
+    return str(it.get("configuratorName") or it.get("creatorName") or "").strip()
+
+
+def _route_by_group(items, cfg):
+    """按 notify_groups 把记录按配制人路由到不同群：返回 [(group, [items]), ...]，
+    仅保留有命中的组，顺序同 notify_groups。不在任何组名单内的记录被丢弃。
+    无 notify_groups 时回退单组（顶层 webhook + 顶层 configurators），兼容旧配置。"""
+    groups = cfg.get("notify_groups") or []
+    if not groups:
+        top = {
+            "webhook": cfg.get("webhook"),
+            "secret": cfg.get("secret"),
+            "configurators": cfg.get("configurators") or [],
+        }
+        names = set(top["configurators"])
+        routed = [it for it in items if _person_of(it) in names]
+        return [(top, routed)] if routed else []
+    out = []
+    for g in groups:
+        names = set(g.get("configurators") or [])
+        routed = [it for it in items if _person_of(it) in names]
+        if routed:
+            out.append((g, routed))
+    return out
 
 
 def _collect_excel_expiring(today, advance_days):
@@ -462,12 +485,12 @@ def _eod_warning(cutoff_h, cfg):
 
 
 def run_once():
-    """执行一次完整的：取会话→采集→发送。
-    成功发送 或 确认无到期项 → 标记当天完成（持久化）；
-    任一环节失败 → 不标记，由调度器按 retry_interval_minutes 重试。"""
+    """执行一次完整的：取会话→采集→按配制人分组发送到各自钉钉群。
+    采集成功（或确认无到期项）→ 标记当天完成（持久化）；
+    采集环节失败 → 不标记，由调度器按 retry_interval_minutes 重试。"""
     global _last_run_date
     cfg = _load_cfg()
-    if not cfg.get("webhook"):
+    if not (cfg.get("notify_groups") or cfg.get("webhook")):
         print(f"{_DINGTALK_LOG} dingtalk 配置缺失，跳过")
         return
     today = datetime.date.today()
@@ -477,24 +500,39 @@ def run_once():
         system = _acquire_system(cfg)
         if system is None:
             raise RuntimeError("无可用 LIMS 登录会话（内存/磁盘/OCR 均失败）")
-        items = _collect_expiring(system, cfg)
+        all_items = _collect_expiring(system, cfg)
     except Exception as e:
         print(f"{_DINGTALK_LOG} 执行失败: {e}")
         return
 
-    if not items:
+    if not all_items:
         print(f"{_DINGTALK_LOG} 今日无即将过期标液，不发送")
         _last_run_date = today
         _save_state()
         return
 
-    title, md = _build_message(items, cfg)
-    ok, data = send_markdown(title, md, cfg)
-    print(f"{_DINGTALK_LOG} 发送 {len(items)} 条，{'成功' if ok else '失败'}: {data}")
-    if ok:
+    # 按配制人分组，每组发到各自群
+    groups = _route_by_group(all_items, cfg)
+    if not groups:
+        print(f"{_DINGTALK_LOG} 采集到 {len(all_items)} 条，但无配制人落在任一通知组名单内，不发送")
         _last_run_date = today
         _save_state()
-    # 发送失败：不标记完成 → 自动重试
+        return
+
+    for g, items in groups:
+        # _build_message 用 configurators 决定组内排序，故把本组名单注入子 cfg
+        sub_cfg = dict(cfg)
+        sub_cfg["configurators"] = g.get("configurators") or []
+        title, md = _build_message(items, sub_cfg)
+        ok, data = send_markdown(title, md, cfg,
+                                 webhook=g.get("webhook"), secret=g.get("secret"))
+        names = ",".join(g.get("configurators") or [])
+        print(f"{_DINGTALK_LOG} 组[{names}] 发送 {len(items)} 条，{'成功' if ok else '失败'}: {data}")
+
+    # 采集成功即标记当天完成：避免重试导致已成功群组重复发送刷屏；
+    # 单组发送失败当天接受丢失（见日志），不再重试。
+    _last_run_date = today
+    _save_state()
 
 
 def run_excel_notify(advance_days=None):
@@ -503,7 +541,7 @@ def run_excel_notify(advance_days=None):
     任一环节失败 → 不标记，由调度器在窗口内重试。"""
     global _last_excel_notify_date
     cfg = _load_cfg()
-    if not cfg.get("webhook"):
+    if not (cfg.get("excel_webhook") or cfg.get("webhook")):
         print(f"{_DINGTALK_LOG} dingtalk 配置缺失，跳过 Excel 月度提醒")
         return
     if advance_days is None:
@@ -628,23 +666,24 @@ if __name__ == "__main__":
         if not (acc.get("username") and acc.get("password")):
             print(f"{_DINGTALK_LOG} ocr_account 未配置 username/password，无法测试")
             sys.exit(1)
-        lh = _get_lh()
-        system = lh.RemoteSystem("dt_ocr")
         t0 = time.time()
         try:
-            ok = _ocr_login(system, acc["username"], acc["password"])
+            system = lims_auto_login.auto_login(acc["username"], acc["password"])
         except Exception as e:
             print(f"{_DINGTALK_LOG} OCR 登录异常（检查 ddddocr 是否装好 / LIMS 是否可达）: {e}")
             sys.exit(1)
-        print(f"{_DINGTALK_LOG} OCR 登录: {'成功' if ok else '失败'}（耗时 {time.time()-t0:.1f}s）")
-        if not ok:
+        print(f"{_DINGTALK_LOG} OCR 登录: {'成功' if system else '失败'}（耗时 {time.time()-t0:.1f}s）")
+        if not system:
             print(f"{_DINGTALK_LOG} OCR 登录失败：检查 ddddocr 识别 / ocr_account 账号密码是否正确")
             sys.exit(1)
         try:
             items = _fetch_all(system, "SOLUTION_TYPE_D")
             print(f"{_DINGTALK_LOG} 查询验证: SOLUTION_TYPE_D 返回 {len(items)} 条")
             matches = _collect_expiring(system, cfg)
-            print(f"{_DINGTALK_LOG} 即将过期且需通知: {len(matches)} 条")
+            print(f"{_DINGTALK_LOG} 即将过期且需通知(全部): {len(matches)} 条")
+            for g, g_items in _route_by_group(matches, cfg):
+                names = ",".join(g.get("configurators") or [])
+                print(f"{_DINGTALK_LOG}   组[{names}] -> {len(g_items)} 条")
             print(f"{_DINGTALK_LOG} OK OCR 登录 + 查询 全链路正常")
         except Exception as e:
             print(f"{_DINGTALK_LOG} 登录成功但查询失败: {e}")
