@@ -407,6 +407,23 @@ def send_markdown(title, md_text, cfg=None):
 
 
 def _build_message(items, cfg):
+    # 排序：第一关键字=配制人（按 configurators 名单顺序，名单外排最后），
+    #       第二关键字=标液类型（工作液 D → 应用液 C → 储备液 B），
+    #       末位再按到期日升序，保证组内稳定。
+    configurators = cfg.get("configurators") or []
+    person_order = {name: i for i, name in enumerate(configurators)}
+    type_order = {"D": 0, "C": 1, "B": 2}
+    _pidx_fallback = len(person_order)
+
+    def _sort_key(it):
+        order = str(it.get("configureOrder") or "")
+        pfx = order.split("-")[0].upper()
+        person = str(it.get("configuratorName") or it.get("creatorName") or "").strip()
+        return (person_order.get(person, _pidx_fallback), person,
+                type_order.get(pfx, 99), str(it.get("validityDate") or ""))
+
+    items = sorted(items, key=_sort_key)
+
     # 日期范围取自实际到期日（最早~最晚），单日则只显示一个日期
     vdates = sorted(str(it.get("validityDate") or "")[:10] for it in items)
     md = [d[5:] for d in vdates if len(d) >= 10]  # -> "MM-DD"

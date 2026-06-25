@@ -160,7 +160,8 @@
       "Bash(.venv/Scripts/python -c \"import ast; ast.parse\\(open\\('login_html.py',encoding='utf-8'\\).read\\(\\)\\); print\\('login_html.py syntax OK'\\)\")",
       "Bash(.venv/Scripts/python -c \"import ast; ast.parse\\(open\\('login_html.py',encoding='utf-8'\\).read\\(\\)\\); print\\('login_html.py OK'\\)\")",
       "Bash(.venv/Scripts/python check_lock.py)",
-      "Bash(.venv/Scripts/python diag_d8948.py)"
+      "Bash(.venv/Scripts/python diag_d8948.py)",
+      "Bash(PYTHONIOENCODING=utf-8 python *)"
     ]
   },
   "enableAllProjectMcpServers": true,
