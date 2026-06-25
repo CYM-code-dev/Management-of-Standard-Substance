@@ -358,11 +358,13 @@ def _sign_url(webhook, secret):
     return f"{webhook}&timestamp={ts}&sign={sign}"
 
 
-def send_markdown(title, md_text, cfg=None):
-    """加签后发送 markdown；返回 (ok, resp_json)。"""
+def send_markdown(title, md_text, cfg=None, webhook=None, secret=None):
+    """加签后发送 markdown；返回 (ok, resp_json)。
+    webhook/secret 未传则取 cfg.webhook/cfg.secret（LIMS 标液提醒群）。
+    Excel 月度提醒走另一个群时由调用方传入 excel_webhook/excel_secret。"""
     cfg = cfg if cfg is not None else _load_cfg()
-    webhook = cfg.get("webhook")
-    secret = cfg.get("secret")
+    webhook = webhook or cfg.get("webhook")
+    secret = secret or cfg.get("secret")
     if not webhook or not secret:
         print(f"{_DINGTALK_LOG} 缺少 webhook/secret 配置")
         return False, {"errcode": -1, "errmsg": "missing webhook/secret"}
@@ -521,7 +523,10 @@ def run_excel_notify(advance_days=None):
         return
 
     title, md = _build_excel_message(rows, cfg)
-    ok, data = send_markdown(title, md, cfg)
+    # Excel 月度提醒走独立群（excel_webhook/excel_secret），未配置则回落全局 webhook/secret
+    ok, data = send_markdown(title, md, cfg,
+                             webhook=cfg.get("excel_webhook"),
+                             secret=cfg.get("excel_secret"))
     print(f"{_DINGTALK_LOG} Excel 月度提醒发送 {len(rows)} 条，{'成功' if ok else '失败'}: {data}")
     if ok:
         _last_excel_notify_date = today
