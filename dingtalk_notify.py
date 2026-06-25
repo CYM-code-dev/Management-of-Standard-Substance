@@ -23,13 +23,14 @@ import glob
 import hashlib
 import hmac
 import json
-import re
 import sys
 import threading
 import time
 from urllib.parse import quote_plus
 
 import requests
+
+import lims_auto_login
 
 CONFIG_FILE = "config.json"
 STATE_FILE = "dingtalk_state.json"
@@ -199,39 +200,6 @@ def _get_lh():
     return login_html
 
 
-def _ocr_solve(ocr, img_bytes):
-    """算术验证码 A+B：取 ddddocr 文本前两位数字字符求和（屏蔽尾部 '=?' 误读）。"""
-    text = ocr.classification(img_bytes)
-    digits = [int(c) for c in re.findall(r"\d", text)]
-    if len(digits) < 2:
-        return None, text
-    return digits[0] + digits[1], text
-
-
-def _ocr_login(system, username, password, max_retry=3):
-    """用 ddddocr 识别验证码并登录 system；成功返回 True。"""
-    import ddddocr
-    from io import BytesIO
-    ocr = ddddocr.DdddOcr(show_ad=False)
-    for _ in range(max_retry):
-        img = system.get_captcha_image()
-        if img is None:
-            time.sleep(1)
-            continue
-        buf = BytesIO()
-        img.save(buf, format="JPEG")
-        total, text = _ocr_solve(ocr, buf.getvalue())
-        if total is None:
-            time.sleep(1)
-            continue
-        ok, msg = system.login(username, password, str(total))
-        if ok:
-            print(f"{_DINGTALK_LOG} OCR 登录成功（识别={text!r} 答案={total}）")
-            return True
-        # 验证码错会重试；账号错则继续重试无意义但无害
-    return False
-
-
 def _acquire_system(cfg):
     """按 内存会话→磁盘 session 文件→OCR 登录 的顺序取一个可用 RemoteSystem；无则 None。"""
     lh = _get_lh()
@@ -258,13 +226,15 @@ def _acquire_system(cfg):
         except Exception:
             continue
 
-    # 3) OCR 自动登录（专用账号）
+    # 3) OCR 自动登录（专用账号）—— 复用 lims_auto_login，返回 LoginResult
+    #    （字段与 RemoteSystem 鸭子兼容：session/base_url/current_pid/current_real_name）
     acc = cfg.get("ocr_account") or {}
     if acc.get("username") and acc.get("password"):
-        sys_ = RemoteSystem("dt_ocr")
         try:
-            if _ocr_login(sys_, acc["username"], acc["password"]):
-                return sys_
+            res = lims_auto_login.auto_login(acc["username"], acc["password"])
+            if res:
+                print(f"{_DINGTALK_LOG} OCR 登录成功（{res.current_real_name}）")
+                return res
         except Exception as e:
             print(f"{_DINGTALK_LOG} OCR 登录异常: {e}")
     return None

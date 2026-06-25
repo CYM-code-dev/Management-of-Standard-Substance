@@ -1,0 +1,42 @@
+[
+  {
+    "i": 0,
+    "raw": "qt07",
+    "digits": [
+      0,
+      7
+    ],
+    "sum": 7,
+    "file": "D:\\Agent\\标准品管理\\Management-of-Standard-Substance\\scripts\\_captcha_samples\\cap_00.jpg"
+  },
+  {
+    "i": 1,
+    "raw": "2+9-7",
+    "digits": [
+      2,
+      9
+    ],
+    "sum": 11,
+    "file": "D:\\Agent\\标准品管理\\Management-of-Standard-Substance\\scripts\\_captcha_samples\\cap_01.jpg"
+  },
+  {
+    "i": 2,
+    "raw": "5+52",
+    "digits": [
+      5,
+      5
+    ],
+    "sum": 10,
+    "file": "D:\\Agent\\标准品管理\\Management-of-Standard-Substance\\scripts\\_captcha_samples\\cap_02.jpg"
+  },
+  {
+    "i": 3,
+    "raw": "6t77",
+    "digits": [
+      6,
+      7
+    ],
+    "sum": 13,
+    "file": "D:\\Agent\\标准品管理\\Management-of-Standard-Substance\\scripts\\_captcha_samples\\cap_03.jpg"
+  }
+]

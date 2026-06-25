@@ -16,58 +16,32 @@ LIMS 登录验证码是算术题 `A + B = ?`，答案为 A+B 的和（0~18）。
 import argparse
 import json
 import os
-import re
-import time
-from io import BytesIO
+import sys
 
-import requests
 import ddddocr
 
-BASE = "http://192.168.12.234:60015"
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/101.0.4951.64 Safari/537.36",
-    "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
-    "Accept-Language": "zh-CN,zh;q=0.9",
-    "Referer": f"{BASE}/web/login.html",
-}
+# 让脚本能从项目根 import lims_auto_login
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import lims_auto_login
+
+BASE = lims_auto_login.BASE_URL
 OUT_DIR = os.path.join(os.path.dirname(__file__), "_captcha_samples")
-
-
-def fetch_captcha(session):
-    """复用 login_html.RemoteSystem.get_captcha_image 的请求方式，返回图片字节。"""
-    ts = str(int(time.time() * 1000))
-    url = f"{BASE}/detectionManager/core/security/validatecodes?{ts}&r={ts}"
-    resp = session.get(url, headers=HEADERS, timeout=10)
-    resp.raise_for_status()
-    return resp.content
-
-
-def ocr_solve(ocr, img_bytes):
-    """算术验证码 A+B=?：ddddocr 能读对两个操作数，但尾部 '=?' 常被误读为
-    数字/符号（如 '2+1-9'、'9+89'、'7+7>'）。故只取**前两位数字字符**作为 A、B 求和，
-    天然屏蔽尾部杂讯。返回 (原始识别文本, [A,B], A+B 或 None)。"""
-    text = ocr.classification(img_bytes)
-    digits = [int(d) for d in re.findall(r"\d", text)]  # 逐个数字字符
-    if len(digits) < 2:
-        return text, digits, None
-    ab = digits[:2]
-    return text, ab, ab[0] + ab[1]
 
 
 def run_recognize_only(n):
     os.makedirs(OUT_DIR, exist_ok=True)
-    session = requests.Session()
-    session.verify = False
+    session = lims_auto_login.new_session()
     ocr = ddddocr.DdddOcr(show_ad=False)
     manifest = []
     for i in range(n):
         try:
-            img = fetch_captcha(session)
+            img = lims_auto_login.fetch_captcha(session)
+            if img is None:
+                raise RuntimeError("抓取返回空")
         except Exception as e:
             print(f"[{i}] 抓取失败: {e}")
             continue
-        text, digits, total = ocr_solve(ocr, img)
+        text, digits, total = lims_auto_login.solve_captcha(ocr, img)
         path = os.path.join(OUT_DIR, f"cap_{i:02d}.jpg")
         with open(path, "wb") as f:
             f.write(img)
@@ -79,23 +53,25 @@ def run_recognize_only(n):
 
 
 def run_login(n, username, password):
-    # 懒加载：登录模式才 import login_html（避免识别模式触发 Flask 模块副作用）
-    from login_html import RemoteSystem  # noqa
-    sys_ = RemoteSystem("ocr_test")
+    # 复用 lims_auto_login 的 session/验证码/登录，不再依赖 login_html（无 Flask 副作用）
+    session = lims_auto_login.new_session()
     ocr = ddddocr.DdddOcr(show_ad=False)
     ok = 0
     for i in range(n):
-        img = sys_.get_captcha_image()
+        img = lims_auto_login.fetch_captcha(session)
         if img is None:
             print(f"[{i}] 取验证码失败")
             continue
-        buf = BytesIO()
-        img.save(buf, format="JPEG")
-        text, digits, total = ocr_solve(ocr, buf.getvalue())
-        success, msg = sys_.login(username, password, str(total))
+        text, digits, total = lims_auto_login.solve_captcha(ocr, img)
+        if total is None:
+            print(f"[{i:02d}] raw={text!r:20} sum=None -> FAIL: 识别不到两位数字")
+            continue
+        success, msg = lims_auto_login.login(session, username, password, str(total))
         print(f"[{i:02d}] raw={text!r:20} sum={total} -> {'OK' if success else 'FAIL: ' + msg}")
         if success:
             ok += 1
+            # 登录成功后 cookie 已绑死该 session；后续轮次需新 session 才能再登录同账号
+            session = lims_auto_login.new_session()
     print(f"\n登录成功率: {ok}/{n} = {ok / n * 100:.1f}%")
 
 
