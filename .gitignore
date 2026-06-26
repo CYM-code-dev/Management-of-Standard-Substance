@@ -6,6 +6,9 @@ session_*.json
 users_config.json
 config.json
 dingtalk_state.json
+portal_config.ini
+portal_auto_login.log
+portal_auto_login_nssm.log
 
 # Python
 __pycache__/
