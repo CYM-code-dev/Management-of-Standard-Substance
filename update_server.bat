@@ -29,16 +29,42 @@ if %errorlevel% neq 0 (
 )
 echo.
 
-echo [4/4] restart service...
+echo [4/5] restart FlaskStdMgr service...
 set "NSSM_PATH="
 where nssm >nul 2>&1 && set "NSSM_PATH=nssm"
 if not defined NSSM_PATH if exist "%PROJECT_DIR%\nssm.exe" set "NSSM_PATH=%PROJECT_DIR%\nssm.exe"
 if defined NSSM_PATH (
     %NSSM_PATH% restart FlaskStdMgr
-    if errorlevel 1 echo [WARN] nssm restart failed
+    if errorlevel 1 echo [WARN] nssm restart FlaskStdMgr failed
 ) else (
-    echo [WARN] nssm not found, cannot restart service automatically
+    echo [WARN] nssm not found, cannot restart FlaskStdMgr
     echo        Please restart manually: nssm restart FlaskStdMgr
+)
+echo.
+
+echo [5/5] PortalAutoLogin service...
+REM portal_config.ini is gitignored (holds plaintext wifi/portal password),
+REM so it never arrives via git - must exist on server already or service crash-loops.
+if not exist "%PROJECT_DIR%\portal_config.ini" (
+    echo [SKIP] portal_config.ini missing - put it next to portal_auto_login.py, then re-run
+) else if not defined NSSM_PATH (
+    echo [SKIP] nssm not found, cannot install PortalAutoLogin
+) else (
+    %NSSM_PATH% status PortalAutoLogin >nul 2>&1
+    if not errorlevel 1 (
+        echo        Restarting PortalAutoLogin...
+        %NSSM_PATH% restart PortalAutoLogin
+        if errorlevel 1 echo [WARN] nssm restart PortalAutoLogin failed
+    ) else (
+        echo        Installing PortalAutoLogin...
+        %NSSM_PATH% install PortalAutoLogin "%PROJECT_DIR%\.venv\Scripts\python.exe" "%PROJECT_DIR%\portal_auto_login.py"
+        %NSSM_PATH% set PortalAutoLogin AppDirectory "%PROJECT_DIR%"
+        %NSSM_PATH% set PortalAutoLogin AppStdout "%PROJECT_DIR%\portal_auto_login_nssm.log"
+        %NSSM_PATH% set PortalAutoLogin AppStderr "%PROJECT_DIR%\portal_auto_login_nssm.log"
+        %NSSM_PATH% set PortalAutoLogin AppExit Default Restart
+        %NSSM_PATH% set PortalAutoLogin Start SERVICE_AUTO_START
+        %NSSM_PATH% start PortalAutoLogin
+    )
 )
 echo.
 
