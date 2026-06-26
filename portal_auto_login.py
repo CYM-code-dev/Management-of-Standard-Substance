@@ -18,12 +18,25 @@ from urllib.parse import quote
 from xml.sax.saxutils import escape as xml_escape
 
 import requests
+from Crypto.Cipher import AES
 
 BASE_DIR = dirname(__file__)
 CONFIG_PATH = join(BASE_DIR, "portal_config.ini")
 LOG_PATH = join(BASE_DIR, "portal_auto_login.log")
 
 ONLINE_MARKER = "Microsoft Connect Test"
+
+# Panabit 认证页密码加密:AES-128-ECB + ZeroPadding,密钥写死在前端 crypto.js。
+# 逆向自 portal.ck.cirs.group/assert/crypto.js 的 pa_aes_encode();密钥 Panabit@1024_key。
+PORTAL_AES_KEY = b"Panabit@1024_key"
+
+
+def pa_aes_encode(plaintext):
+    """复刻前端 pa_aes_encode:明文按 ZeroPadding 补 0 到整块,AES-128-ECB,输出 hex。"""
+    data = plaintext.encode("utf-8")
+    pad = (-len(data)) % 16 or 16  # CryptoJS ZeroPadding:已对齐则补一整块
+    data += b"\x00" * pad
+    return AES.new(PORTAL_AES_KEY, AES.MODE_ECB).encrypt(data).hex()
 
 _handler = logging.FileHandler(LOG_PATH, encoding="utf-8")
 _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
@@ -99,6 +112,18 @@ def wifi_connected(ssid):
         return False
 
 
+def wifi_in_range(ssid):
+    """CIRS-CK 是否在网卡可见范围内(含已连接)。查询失败时保守放行,沿用尽力尝试。"""
+    try:
+        r = subprocess.run(
+            ["netsh", "wlan", "show", "networks"],
+            capture_output=True, timeout=10,
+        )
+        return ssid in (r.stdout or b"").decode("ascii", errors="ignore")
+    except subprocess.SubprocessError:
+        return True
+
+
 def connect_wifi(ssid, wifi_password):
     """导入 WLAN profile 后发起连接;未保存过该 WiFi 也能连。"""
     if wifi_connected(ssid):
@@ -125,14 +150,24 @@ def connect_wifi(ssid, wifi_password):
 
 
 def login(session, cfg):
-    """回放抓包登录请求:username GB2312 编码,password 用配置里的哈希原样发送。"""
+    """发登录请求:username GB2312 编码,password = AES 加密后的明文密码。"""
     u = gb2312_quote(cfg["username"])
+    p = pa_aes_encode(cfg["password"])
     q = (
         "route=webauth&action=user_login&auth_type=panabit"
-        f"&ip=&mac=&code=&username={u}&password={cfg['password']}&remember_me=1"
+        f"&ip=&mac=&code=&username={u}&password={p}&remember_me=1"
     )
     r = session.post(f"http://{cfg['portal_host']}/api?{q}", timeout=10)
-    log.info("登录响应 %s: %s", r.status_code, r.text[:200].replace("\n", " "))
+    try:
+        body = r.json()
+        code, msg = body.get("code"), body.get("msg", "")
+    except ValueError:
+        code, msg = None, r.text[:160]
+    if code == 0:
+        log.info("认证成功 (code:0)")
+    else:
+        # code:1 多半是"当前已在线、无可认证会话",非真实失败;仅当 captive 态仍 code:1 才需排查
+        log.warning("认证未通过 code:%s msg:%s —— 若已在线属正常", code, msg)
 
 
 def main():
@@ -150,13 +185,16 @@ def main():
                 log.info("在线,跳过")
             else:
                 log.info("检测到离线,尝试恢复")
-                if cfg["ssid"]:
-                    connect_wifi(cfg["ssid"], cfg["wifi_password"])
-                    time.sleep(5)
-                login(session, cfg)
-                time.sleep(3)
-                online2 = is_online(session, cfg["probe_url"])
-                log.info("登录后 %s", "在线" if online2 else "仍离线")
+                if cfg["ssid"] and not wifi_in_range(cfg["ssid"]):
+                    log.info("%s 不在范围内,等信号恢复", cfg["ssid"])
+                else:
+                    if cfg["ssid"]:
+                        connect_wifi(cfg["ssid"], cfg["wifi_password"])
+                        time.sleep(5)
+                    login(session, cfg)
+                    time.sleep(3)
+                    online2 = is_online(session, cfg["probe_url"])
+                    log.info("登录后 %s", "在线" if online2 else "仍离线")
         except Exception as e:
             log.error("本轮异常: %s", e)  # 吞掉,下一轮继续;nssm 兜底重启
         time.sleep(cfg["interval"])

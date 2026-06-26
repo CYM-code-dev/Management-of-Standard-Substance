@@ -179,7 +179,7 @@ def _parse_expiry_date(val):
 
 def _excel_target_date(year, month, day, cfg=None):
     """月度提醒的目标发送日：从 day 号往前回溯到首个工作日
-    （day 是工作日即用 day；否则回到上一个工作日）。26 号每月都有，无月末越界。"""
+    （day 是工作日即用 day；否则回到上一个工作日）。25 号每月都有，无月末越界。"""
     cfg = cfg if cfg is not None else _load_cfg()
     d = datetime.date(year, month, day)
     for _ in range(day):
@@ -601,12 +601,12 @@ def _worker():
                 # 过了截止点仍当天未发送 → 发一次最终警告（每天1条）
                 _eod_warning(cutoff_h, cfg)
 
-            # ===== Excel 月度提醒（与 LIMS 提醒独立）：目标日(默认26号，休息日则前一工作日)
+            # ===== Excel 月度提醒（与 LIMS 提醒独立）：目标日(默认25号，休息日则前一工作日)
             # 的 [hour, cutoff_hour] 窗口内、当天未完成、距上次尝试≥重试间隔 → 触发。
             # 不复用 elif：两条支线可同日各自触发。
             ee = cfg.get("excel_expiry") or {}
             if ee.get("enabled", True):
-                e_day = int(ee.get("day", 26))
+                e_day = int(ee.get("day", 25))
                 e_hour = int(ee.get("hour", 9))
                 e_cutoff = int(ee.get("cutoff_hour", 11))
                 adv = int(ee.get("advance_days", 40))
@@ -652,7 +652,7 @@ if __name__ == "__main__":
         cfg = _load_cfg()
         t = datetime.date.today()
         ee = cfg.get("excel_expiry") or {}
-        e_day = int(ee.get("day", 26))
+        e_day = int(ee.get("day", 25))
         print(f"今天 {t} is_workday={is_workday(t, cfg)} 下一工作日={next_workday(t, cfg)}")
         print(f"Excel月度提醒目标日(day={e_day})={_excel_target_date(t.year, t.month, e_day, cfg)}")
     elif args.test_send:
