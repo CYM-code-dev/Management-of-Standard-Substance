@@ -343,22 +343,23 @@ def _route_by_group(items, cfg):
     return out
 
 
-def _collect_excel_expiring(today, advance_days):
-    """读默认 Excel 路径，返回「今天 ≤ 有效期 ≤ 今天+advance_days」的条目（按有效期升序）。
+def _collect_excel_expiring(today, min_days, max_days):
+    """读默认 Excel 路径，返回「今天+min_days ≤ 有效期 ≤ 今天+max_days」的条目（按有效期升序）。
     每条 {group, labNo, name, cas, expiry(datetime.date)}。读/解析异常上抛由调用方处理。"""
     path = _excel_path()
     if not path:
         print(f"{_DINGTALK_LOG} defaults.excelPath 未配置，跳过 Excel 月度提醒")
         return []
     rows = _get_lh().read_excel_expiry_rows(path)
-    horizon = today + datetime.timedelta(days=advance_days)
+    lo = today + datetime.timedelta(days=min_days)
+    hi = today + datetime.timedelta(days=max_days)
     out = []
     for r in rows:
         # 使用情况为「用完」的不通知
         if "用完" in (r.get("usage") or ""):
             continue
         exp = _parse_expiry_date(r.get("expiry_raw"))
-        if exp is None or not (today <= exp <= horizon):
+        if exp is None or not (lo <= exp <= hi):
             continue
         out.append({
             "group": r.get("group") or "",
@@ -451,10 +452,12 @@ def _build_excel_message(rows, cfg):
     dates = sorted(r["expiry"] for r in rows)
     rng = dates[0].isoformat() if dates[0] == dates[-1] else f"{dates[0].isoformat()} ~ {dates[-1].isoformat()}"
     n = len(rows)
-    adv = int((cfg.get("excel_expiry") or {}).get("advance_days", 40))
+    ee = cfg.get("excel_expiry") or {}
+    min_days = int(ee.get("min_days", 31))
+    max_days = int(ee.get("max_days", 60))
     title = f"📅 标准品即将过期月度提醒（{n}个）"
     lines = [
-        f"以下 **{n}** 个标准品将于 **{adv}天内**（{rng}）到期，请及时确认：",
+        f"以下 **{n}** 个标准品将于 **{min_days}~{max_days}天内**（{rng}）到期，请及时确认：",
         "",
     ]
     for i, r in enumerate(rows, 1):
@@ -535,8 +538,8 @@ def run_once():
     _save_state()
 
 
-def run_excel_notify(advance_days=None):
-    """执行一次 Excel 月度提醒：读默认 Excel→筛「今天~今天+advance_days」到期→发送。
+def run_excel_notify(min_days=None, max_days=None):
+    """执行一次 Excel 月度提醒：读默认 Excel→筛「今天+min_days~今天+max_days」到期→发送。
     成功发送 或 确认无到期项 → 标记当天完成（持久化）；
     任一环节失败 → 不标记，由调度器在窗口内重试。"""
     global _last_excel_notify_date
@@ -544,12 +547,15 @@ def run_excel_notify(advance_days=None):
     if not (cfg.get("excel_webhook") or cfg.get("webhook")):
         print(f"{_DINGTALK_LOG} dingtalk 配置缺失，跳过 Excel 月度提醒")
         return
-    if advance_days is None:
-        advance_days = int((cfg.get("excel_expiry") or {}).get("advance_days", 40))
+    ee = cfg.get("excel_expiry") or {}
+    if min_days is None:
+        min_days = int(ee.get("min_days", 31))
+    if max_days is None:
+        max_days = int(ee.get("max_days", 60))
     today = datetime.date.today()
 
     try:
-        rows = _collect_excel_expiring(today, advance_days)
+        rows = _collect_excel_expiring(today, min_days, max_days)
     except Exception as e:
         print(f"{_DINGTALK_LOG} Excel 月度提醒采集失败: {e}")
         return
@@ -609,7 +615,8 @@ def _worker():
                 e_day = int(ee.get("day", 25))
                 e_hour = int(ee.get("hour", 9))
                 e_cutoff = int(ee.get("cutoff_hour", 11))
-                adv = int(ee.get("advance_days", 40))
+                e_min = int(ee.get("min_days", 31))
+                e_max = int(ee.get("max_days", 60))
                 target = _excel_target_date(today.year, today.month, e_day, cfg)
                 e_start = now.replace(hour=e_hour, minute=0, second=0, microsecond=0)
                 e_end = now.replace(hour=e_cutoff, minute=0, second=0, microsecond=0)
@@ -620,7 +627,7 @@ def _worker():
                               or (now - _last_excel_attempt_dt).total_seconds() >= retry_min * 60))
                 if e_due:
                     _last_excel_attempt_dt = now
-                    run_excel_notify(adv)
+                    run_excel_notify(e_min, e_max)
         except Exception as e:
             print(f"{_DINGTALK_LOG} 调度异常: {e}")
         time.sleep(60)

@@ -2545,7 +2545,7 @@
             const cell = tr.querySelector(`.bbcd-d-conc[data-dilution="${dilutionIdx}"]`);
             if (cell) {
                 const v = parseFloat(cell.value);
-                if (isFinite(v) && v > 0) {
+                if (isFinite(v) && v >= 0) {
                     vals.push(v);
                     ws.push(bbcdRowWeight(tr));
                 }

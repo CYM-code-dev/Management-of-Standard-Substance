@@ -164,7 +164,8 @@
       "Bash(PYTHONIOENCODING=utf-8 python *)",
       "Bash(wc -l login_html.py)",
       "Bash(ls -la login_html.py portal_auto_login.py)",
-      "Bash(sc query *)"
+      "Bash(sc query *)",
+      "Bash(.venv/Scripts/python -c \"import ast; ast.parse\\(open\\('dingtalk_notify.py',encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")"
     ]
   },
   "enableAllProjectMcpServers": true,
