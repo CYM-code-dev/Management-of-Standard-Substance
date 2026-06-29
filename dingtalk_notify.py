@@ -453,7 +453,7 @@ def _build_excel_message(rows, cfg):
     rng = dates[0].isoformat() if dates[0] == dates[-1] else f"{dates[0].isoformat()} ~ {dates[-1].isoformat()}"
     n = len(rows)
     ee = cfg.get("excel_expiry") or {}
-    min_days = int(ee.get("min_days", 31))
+    min_days = int(ee.get("min_days", 30))
     max_days = int(ee.get("max_days", 60))
     title = f"📅 标准品即将过期月度提醒（{n}个）"
     lines = [
@@ -549,7 +549,7 @@ def run_excel_notify(min_days=None, max_days=None):
         return
     ee = cfg.get("excel_expiry") or {}
     if min_days is None:
-        min_days = int(ee.get("min_days", 31))
+        min_days = int(ee.get("min_days", 30))
     if max_days is None:
         max_days = int(ee.get("max_days", 60))
     today = datetime.date.today()
@@ -615,7 +615,7 @@ def _worker():
                 e_day = int(ee.get("day", 25))
                 e_hour = int(ee.get("hour", 9))
                 e_cutoff = int(ee.get("cutoff_hour", 11))
-                e_min = int(ee.get("min_days", 31))
+                e_min = int(ee.get("min_days", 30))
                 e_max = int(ee.get("max_days", 60))
                 target = _excel_target_date(today.year, today.month, e_day, cfg)
                 e_start = now.replace(hour=e_hour, minute=0, second=0, microsecond=0)
