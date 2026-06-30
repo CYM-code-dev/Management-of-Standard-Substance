@@ -10,6 +10,7 @@ import base64
 import hashlib
 import re
 import uuid
+import csv
 from io import BytesIO
 from urllib.parse import urlencode
 
@@ -36,7 +37,9 @@ CONFIG_FILE = 'config.json'
 MANUAL_UPLOAD_DIR = 'manual_uploads'
 
 # 仪器使用率上报存储（HTA 仪器使用率统计.hta 提交）
-DEVICE_USAGE_FILE = 'device_usage.json'
+DEVICE_USAGE_FILE = 'device_usage.csv'
+_DEVICE_USAGE_COLS = ['device_id', 'period_start', 'period_end', 'usage_maint_sec',
+                      'usage_maint_hours', 'workdays', 'rate', 'submitted_at']
 _device_usage_lock = threading.Lock()
 
 # 导出名称预设迁移锁：防止并发首次访问时多用户同时触发旧格式迁移互相覆盖
@@ -5022,18 +5025,33 @@ def _draft_iter_all_docs():
 
 # ==================== 仪器使用率上报（HTA 提交，开放不认证） ====================
 def _load_device_usage():
+    """读 device_usage.csv -> list[dict]，数值字段还原为数字。"""
+    if not os.path.exists(DEVICE_USAGE_FILE):
+        return []
     try:
-        with open(DEVICE_USAGE_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        return data if isinstance(data, list) else []
+        with open(DEVICE_USAGE_FILE, 'r', encoding='utf-8-sig', newline='') as f:
+            rows = list(csv.DictReader(f))
     except Exception:
         return []
+    for r in rows:
+        try:
+            r['usage_maint_sec'] = int(float(r.get('usage_maint_sec') or 0))
+            r['usage_maint_hours'] = float(r.get('usage_maint_hours') or 0.0)
+            r['workdays'] = int(float(r.get('workdays') or 0))
+            r['rate'] = float(r.get('rate') or 0.0)
+        except (ValueError, TypeError):
+            pass
+    return rows
 
 
 def _save_device_usage(records):
+    """原子写 CSV（utf-8-sig 带 BOM，Excel 直接打开中文不乱码）。"""
     tmp = DEVICE_USAGE_FILE + '.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        json.dump(records, f, ensure_ascii=False, indent=2)
+    with open(tmp, 'w', encoding='utf-8-sig', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(_DEVICE_USAGE_COLS)
+        for r in records:
+            w.writerow([r.get(c, '') for c in _DEVICE_USAGE_COLS])
     os.replace(tmp, DEVICE_USAGE_FILE)
 
 
