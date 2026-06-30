@@ -35,6 +35,10 @@ CORS(app, supports_credentials=True)
 CONFIG_FILE = 'config.json'
 MANUAL_UPLOAD_DIR = 'manual_uploads'
 
+# 仪器使用率上报存储（HTA 仪器使用率统计.hta 提交）
+DEVICE_USAGE_FILE = 'device_usage.json'
+_device_usage_lock = threading.Lock()
+
 # 导出名称预设迁移锁：防止并发首次访问时多用户同时触发旧格式迁移互相覆盖
 _presets_migration_lock = threading.Lock()
 
@@ -5016,6 +5020,81 @@ def _draft_iter_all_docs():
             yield user_dir, fn, doc
 
 
+# ==================== 仪器使用率上报（HTA 提交，开放不认证） ====================
+def _load_device_usage():
+    try:
+        with open(DEVICE_USAGE_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _save_device_usage(records):
+    tmp = DEVICE_USAGE_FILE + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(records, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, DEVICE_USAGE_FILE)
+
+
+@app.route('/api/device/usage/submit', methods=['POST'])
+def device_usage_submit():
+    p = request.get_json(silent=True) or {}
+    device_id = (p.get('device_id') or '').strip()
+    period_start = (p.get('period_start') or '').strip()
+    period_end = (p.get('period_end') or '').strip()
+    if not device_id or not period_start or not period_end:
+        return jsonify({"success": False, "message": "缺少 device_id/period_start/period_end"}), 400
+    try:
+        rate = float(p.get('rate'))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "rate 非数值"}), 400
+
+    # 字段顺序固定：device_id 在 rate 前（HTA 端用正则解析 list 响应依赖此顺序）
+    rec = {
+        "device_id": device_id,
+        "period_start": period_start,
+        "period_end": period_end,
+        "usage_maint_sec": int(p.get('usage_maint_sec') or 0),
+        "usage_maint_hours": float(p.get('usage_maint_hours') or 0.0),
+        "workdays": int(p.get('workdays') or 0),
+        "rate": rate,
+        "submitted_at": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    }
+    with _device_usage_lock:
+        records = _load_device_usage()
+        idx = next((i for i, r in enumerate(records)
+                    if r.get('device_id') == device_id
+                    and r.get('period_start') == period_start
+                    and r.get('period_end') == period_end), None)
+        if idx is None:
+            records.append(rec)
+        else:
+            records[idx] = rec
+        _save_device_usage(records)
+    return jsonify({"success": True, "message": "已记录"})
+
+
+@app.route('/api/device/usage/list', methods=['GET'])
+def device_usage_list():
+    period_start = (request.args.get('period_start') or '').strip()
+    period_end = (request.args.get('period_end') or '').strip()
+    records = _load_device_usage()
+    if period_start and period_end:
+        records = [r for r in records
+                   if r.get('period_start') == period_start and r.get('period_end') == period_end]
+    out = [{
+        "device_id": r.get('device_id', ''),
+        "rate": r.get('rate', 0.0),
+        "usage_maint_hours": r.get('usage_maint_hours', 0.0),
+        "workdays": r.get('workdays', 0),
+        "submitted_at": r.get('submitted_at', ''),
+    } for r in records]
+    return jsonify({"success": True, "period_start": period_start,
+                    "period_end": period_end, "records": out})
+
+
+# ==================== 标液期间核查：草稿 ====================
 @app.route('/api/verification/draft/save', methods=['POST'])
 def verification_draft_save():
     if not session.get('logged_in'):
