@@ -44,6 +44,9 @@ _last_eod_alert_date = None  # 当天已发过"截止查询失败"最终警告 �
 _last_attempt_dt = None   # 上次尝试时刻 → 控制 retry_interval_minutes 重试间隔
 _last_excel_notify_date = None  # Excel月度提醒：当天已成功发送（或确认无到期项）→ 当天不再重试
 _last_excel_attempt_dt = None   # Excel月度提醒：上次尝试时刻 → 控制重试间隔
+_last_device_remind_date = None  # 设备使用率提醒：当天已发送 → 当天不再重试
+_last_device_check_date = None   # 设备使用率检查：当天已处理 → 当天不再重试
+_last_device_attempt_dt = None   # 设备使用率：上次尝试时刻 → 控制重试间隔
 
 
 # ==================== 配置 / 工作日 ====================
@@ -66,14 +69,22 @@ def _excel_path():
 
 
 def _load_state():
-    """读取持久化状态（last_run_date / last_eod_alert_date / last_excel_notify_date），使重启后判重/补发正确。"""
+    """读取持久化状态（last_run_date / last_eod_alert_date / last_excel_notify_date /
+    last_device_remind_date / last_device_check_date），使重启后判重/补发正确。"""
     global _last_run_date, _last_eod_alert_date, _last_excel_notify_date
+    global _last_device_remind_date, _last_device_check_date
     try:
         with open(STATE_FILE, encoding="utf-8") as f:
             st = json.load(f)
     except Exception:
         return
-    for key in ("last_run_date", "last_eod_alert_date", "last_excel_notify_date"):
+    for key, target in (
+        ("last_run_date", "_last_run_date"),
+        ("last_excel_notify_date", "_last_excel_notify_date"),
+        ("last_device_remind_date", "_last_device_remind_date"),
+        ("last_device_check_date", "_last_device_check_date"),
+        ("last_eod_alert_date", "_last_eod_alert_date"),
+    ):
         v = st.get(key)
         if not v:
             continue
@@ -81,12 +92,7 @@ def _load_state():
             d = datetime.datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
         except Exception:
             continue
-        if key == "last_run_date":
-            _last_run_date = d
-        elif key == "last_excel_notify_date":
-            _last_excel_notify_date = d
-        else:
-            _last_eod_alert_date = d
+        globals()[target] = d
 
 
 def _save_state():
@@ -96,6 +102,8 @@ def _save_state():
             "last_run_date": _last_run_date.isoformat() if _last_run_date else None,
             "last_eod_alert_date": _last_eod_alert_date.isoformat() if _last_eod_alert_date else None,
             "last_excel_notify_date": _last_excel_notify_date.isoformat() if _last_excel_notify_date else None,
+            "last_device_remind_date": _last_device_remind_date.isoformat() if _last_device_remind_date else None,
+            "last_device_check_date": _last_device_check_date.isoformat() if _last_device_check_date else None,
         }
         with open(STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(st, f, ensure_ascii=False, indent=2)
@@ -187,6 +195,30 @@ def _excel_target_date(year, month, day, cfg=None):
             return d
         d -= datetime.timedelta(days=1)
     return d
+
+
+def _nth_workday_after_26(year, month, n, cfg=None):
+    """从 month 的 27 号起严格向后数的第 n 个工作日（n>=1）。
+    27 号本身若是工作日即第 1 个；否则顺延。跨月/跨年由 timedelta 自然推进，
+    is_workday 按各日期所在年取节假日缓存。"""
+    cfg = cfg if cfg is not None else _load_cfg()
+    cur = datetime.date(year, month, 27)
+    found = 0
+    for _ in range(40):
+        if is_workday(cur, cfg):
+            found += 1
+            if found == n:
+                return cur
+        cur += datetime.timedelta(days=1)
+    return cur
+
+
+def _device_period(today):
+    """本期 = 上月27号 ~ 本月26号（与 device_usage.csv 的 period_start/period_end 对齐，返回 ISO 串）。"""
+    end = datetime.date(today.year, today.month, 26)
+    first = datetime.date(today.year, today.month, 1)
+    start = (first - datetime.timedelta(days=1)).replace(day=27)  # 上月末日→replace 为上月27号
+    return start.isoformat(), end.isoformat()
 
 
 # ==================== LIMS 会话获取 ====================
@@ -578,8 +610,61 @@ def run_excel_notify(min_days=None, max_days=None):
     # 发送失败：不标记完成 → 自动重试
 
 
+# ==================== 设备使用率 月度提醒 ====================
+DEVICE_REMIND_TEXT = '【月度提醒】请于今日下班前完成"设备使用率"数据的提交，谢谢配合'
+
+
+def _required_device_ids(cfg):
+    return [str(x).strip() for x in ((cfg.get("device_usage") or {}).get("required_ids") or [])
+            if str(x).strip()]
+
+
+def run_device_remind():
+    """26号后第1个工作日：发固定提交提醒到默认群；成功即标记当天完成。"""
+    global _last_device_remind_date
+    cfg = _load_cfg()
+    if not cfg.get("webhook"):
+        print(f"{_DINGTALK_LOG} dingtalk webhook 缺失，跳过设备使用率提醒")
+        return
+    ok, data = send_markdown("设备使用率-月度提交提醒", DEVICE_REMIND_TEXT, cfg)
+    print(f"{_DINGTALK_LOG} 设备使用率提醒发送，{'成功' if ok else '失败'}: {data}")
+    if ok:
+        _last_device_remind_date = datetime.date.today()
+        _save_state()
+
+
+def run_device_check():
+    """26号后第2个工作日：读 device_usage.csv，对照本期(上月27~本月26)找缺失编号并通知。
+    全部已提交 → 标记完成不发；发送失败 → 不标记，窗口内自动重试。"""
+    global _last_device_check_date
+    cfg = _load_cfg()
+    required = _required_device_ids(cfg)
+    if not required:
+        print(f"{_DINGTALK_LOG} device_usage.required_ids 未配置，跳过检查")
+        return
+    today = datetime.date.today()
+    p_start, p_end = _device_period(today)
+    import device_usage
+    rows = device_usage._load_device_usage()
+    present = {r.get("device_id") for r in rows
+               if r.get("period_start") == p_start and r.get("period_end") == p_end}
+    missing = [i for i in required if i not in present]
+    if not missing:
+        print(f"{_DINGTALK_LOG} 设备使用率本期({p_start}~{p_end})全部已提交，不发送")
+        _last_device_check_date = today
+        _save_state()
+        return
+    md = ("以下编号缺少本期使用率统计信息，请及时补充：\n\n"
+          + "\n\n".join(f"- {i}" for i in missing))
+    ok, data = send_markdown("设备使用率-本期缺失提醒", md, cfg)
+    print(f"{_DINGTALK_LOG} 设备使用率缺失通知({len(missing)}个)发送，{'成功' if ok else '失败'}: {data}")
+    if ok:
+        _last_device_check_date = today
+        _save_state()
+
+
 def _worker():
-    global _last_attempt_dt, _last_excel_attempt_dt
+    global _last_attempt_dt, _last_excel_attempt_dt, _last_device_attempt_dt
     print(f"{_DINGTALK_LOG} 调度线程已启动")
     while _flag:
         try:
@@ -628,6 +713,28 @@ def _worker():
                 if e_due:
                     _last_excel_attempt_dt = now
                     run_excel_notify(e_min, e_max)
+
+            # ===== 设备使用率月度提醒（默认群，与 LIMS/Excel 支线独立）：
+            #   26号后第1个工作日 [9,12) 发提交提醒；
+            #   第2个工作日 [17,21) 读 device_usage.csv 查本期缺失并通知。
+            du = cfg.get("device_usage") or {}
+            if du.get("enabled", True):
+                t1 = _nth_workday_after_26(today.year, today.month, 1, cfg)
+                t2 = _nth_workday_after_26(today.year, today.month, 2, cfg)
+                dev_retry_ok = (_last_device_attempt_dt is None
+                                or (now - _last_device_attempt_dt).total_seconds() >= retry_min * 60)
+                r_start = now.replace(hour=9, minute=0, second=0, microsecond=0)
+                r_end = now.replace(hour=12, minute=0, second=0, microsecond=0)
+                c_start = now.replace(hour=17, minute=0, second=0, microsecond=0)
+                c_end = now.replace(hour=21, minute=0, second=0, microsecond=0)
+                if (today == t1 and r_start <= now <= r_end
+                        and _last_device_remind_date != today and dev_retry_ok):
+                    _last_device_attempt_dt = now
+                    run_device_remind()
+                elif (today == t2 and c_start <= now <= c_end
+                      and _last_device_check_date != today and dev_retry_ok):
+                    _last_device_attempt_dt = now
+                    run_device_check()
         except Exception as e:
             print(f"{_DINGTALK_LOG} 调度异常: {e}")
         time.sleep(60)
@@ -650,6 +757,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="钉钉标液提醒：手动触发/测试")
     ap.add_argument("--run-now", action="store_true", help="立即执行一次采集+发送")
     ap.add_argument("--run-excel-now", action="store_true", help="立即执行一次 Excel 月度提醒采集+发送")
+    ap.add_argument("--run-device-remind", action="store_true", help="立即发送一次设备使用率提交提醒")
+    ap.add_argument("--run-device-check", action="store_true", help="立即查 device_usage.csv 本期缺失并通知")
     ap.add_argument("--test-send", action="store_true", help="发送一条测试消息验证加签通道")
     ap.add_argument("--test-ocr", action="store_true", help="强制走 OCR 登录并验证查询（不发钉钉、不写状态）")
     ap.add_argument("--check-workday", action="store_true", help="打印今天/下一工作日/Excel月度提醒目标日")
@@ -662,6 +771,9 @@ if __name__ == "__main__":
         e_day = int(ee.get("day", 25))
         print(f"今天 {t} is_workday={is_workday(t, cfg)} 下一工作日={next_workday(t, cfg)}")
         print(f"Excel月度提醒目标日(day={e_day})={_excel_target_date(t.year, t.month, e_day, cfg)}")
+        print(f"设备使用率 26号后第1个工作日={_nth_workday_after_26(t.year, t.month, 1, cfg)} "
+              f"第2个工作日={_nth_workday_after_26(t.year, t.month, 2, cfg)} "
+              f"本期={_device_period(t)}")
     elif args.test_send:
         ok, data = send_markdown("测试-标液提醒通道", "✅ 钉钉标液提醒通道测试成功。")
         print(f"test-send -> ok={ok} data={data}")
@@ -699,5 +811,9 @@ if __name__ == "__main__":
         run_once()
     elif args.run_excel_now:
         run_excel_notify()
+    elif args.run_device_remind:
+        run_device_remind()
+    elif args.run_device_check:
+        run_device_check()
     else:
         ap.print_help()
