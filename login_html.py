@@ -5094,6 +5094,25 @@ def device_usage_list():
                     "period_end": period_end, "records": out})
 
 
+@app.route('/api/device/usage/delete', methods=['POST'])
+def device_usage_delete():
+    p = request.get_json(silent=True) or {}
+    period_start = (p.get('period_start') or '').strip()
+    period_end = (p.get('period_end') or '').strip()
+    device_ids = p.get('device_ids') or []
+    if not isinstance(device_ids, list) or not device_ids or not period_start or not period_end:
+        return jsonify({"success": False, "message": "参数不足"}), 400
+    ids = set(str(x) for x in device_ids)
+    with _device_usage_lock:
+        records = _load_device_usage()
+        before = len(records)
+        records = [r for r in records if not (r.get('device_id') in ids
+                                              and r.get('period_start') == period_start
+                                              and r.get('period_end') == period_end)]
+        _save_device_usage(records)
+    return jsonify({"success": True, "removed": before - len(records)})
+
+
 # ==================== 标液期间核查：草稿 ====================
 @app.route('/api/verification/draft/save', methods=['POST'])
 def verification_draft_save():
