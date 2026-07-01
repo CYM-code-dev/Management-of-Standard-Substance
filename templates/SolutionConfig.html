@@ -7975,6 +7975,26 @@
         };
     }
 
+    /** 两个预设对象是否全参数精确一致（标量字段 String 化比较；takeVolumes 去空后逐项比较） */
+    function _wsPresetEquals(a, b) {
+        if (!a || !b) return false;
+        const scalars = ['validityDays','storage','dilutionCount','customType','medium','volume','gradualDilution','uvMode','matrixMode'];
+        for (const k of scalars) {
+            if (String(a[k] ?? '') !== String(b[k] ?? '')) return false;
+        }
+        const norm = arr => (Array.isArray(arr) ? arr : []).map(x => String(x ?? '').trim()).filter(Boolean);
+        return JSON.stringify(norm(a.takeVolumes)) === JSON.stringify(norm(b.takeVolumes));
+    }
+
+    /** 详情打开后：收集当前配置，若与某已存预设完全一致则自动选中该预设（仅提示，不改表单） */
+    function _wsAutoSelectMatchingPreset() {
+        const sel = document.getElementById('wsPresetSelect');
+        if (!sel) return;
+        const cur = _wsCollectFromModal();
+        const hit = Object.keys(_wsPresets.presets || {}).find(n => _wsPresetEquals(_wsPresets.presets[n], cur));
+        sel.value = hit || '';
+    }
+
     /** 套用预设到当前工作液模态框 */
     function applyWsPreset() {
         const sel = document.getElementById('wsPresetSelect');
@@ -8213,7 +8233,10 @@
         // 打开工作液(D)配置模态框时加载预设下拉（默认保持「—未选择—」，不自动回填上次选择）
         document.getElementById('bbcdConfigModal')?.addEventListener('shown.bs.modal', () => {
             if (document.getElementById('bbcdSolType').value === 'SOLUTION_TYPE_D') {
-                loadWsPresets(false);
+                // 加载预设后，详情模式下若当前配置与某预设完全一致则自动选中（仅提示已存，不改表单）
+                loadWsPresets(false).then(() => {
+                    if (window.bbcdViewDetailMode) _wsAutoSelectMatchingPreset();
+                });
                 // 新建模式（非详情）下显式确保配置预设控件可见，避免上次详情模式残留 display:none
                 if (!window.bbcdViewDetailMode) {
                     document.querySelectorAll('.bbcd-dilution-row').forEach(el => el.classList.remove('d-none'));
