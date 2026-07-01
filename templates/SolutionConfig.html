@@ -3623,9 +3623,13 @@
 
         // 5. Buttons - 权限控制 + 审核状态（保存/审核按钮）
         const editAllowed = canEditRecord(rec);
-        // 详情模式下，工作液配置预设仅在可编辑时显示（只读记录禁露按钮：applyWsPreset 用 .value= 赋值会绕过 readOnly）
-        if (isD && editAllowed) {
+        // 详情模式下，工作液配置预设：
+        // - 可编辑：套用/存为/删除 三按钮全显
+        // - 只读（已审核等）：仍显存为/删除，但不显套用（applyWsPreset 用 .value= 赋值会绕过 readOnly，故隐藏以免误改）
+        if (isD) {
             document.querySelectorAll('.ws-preset-el').forEach(el => el.classList.remove('d-none'));
+            const applyBtn = document.getElementById('wsApplyPresetBtn');
+            if (applyBtn) applyBtn.classList.toggle('d-none', !editAllowed);
         }
         bbcdRefreshDetailButtons(rec);
         document.getElementById('bbcdExportBtn').disabled = false;
