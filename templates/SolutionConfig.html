@@ -877,36 +877,42 @@
           <input type="text" id="bbcdDevice" class="form-control form-control-sm" list="solDeviceOptions" placeholder="选择或输入" autocomplete="off" style="display:none;">
           <label class="form-label mb-0 small fw-bold text-nowrap" id="bbcdMediumLabel" style="display:none;">溶剂/介质 *</label>
           <input type="text" id="bbcdMediumD" class="form-control form-control-sm" list="solMediumOptions" placeholder="选择或输入" autocomplete="off" style="display:none;">
-        </div>
-
-        <!-- 工作液稀释点配置区域（仅对 SOLUTION_TYPE_D 可见） -->
-        <div id="bbcdDilutionSection" style="display:none;" class="mb-3">
-          <div class="d-flex align-items-center gap-3 mb-2">
-            <label class="form-label mb-0 fw-bold">稀释点数量</label>
+          <!-- 工作液稀释点配置（仅 D 类型；作为本网格第4行，与上方 保存条件/类型 列对齐） -->
+          <label class="form-label mb-0 small fw-bold text-nowrap bbcd-dilution-row d-none">稀释点数量</label>
+          <div class="d-flex align-items-center gap-2 flex-wrap bbcd-dilution-row d-none" style="grid-column:span 3;">
             <input type="number" class="form-control form-control-sm" id="bbcdDilutionCount"
-                   min="1" max="12" value="5" style="width:80px;">
-            <button type="button" class="btn btn-sm btn-outline-primary" id="bbcdGenerateDilutionBtn">
-              <i class="fas fa-sync-alt me-1"></i>生成稀释点
+                   min="1" max="12" value="5" style="width:64px;">
+            <button type="button" class="btn btn-sm btn-outline-primary px-2" id="bbcdGenerateDilutionBtn" title="生成稀释点">
+              <i class="fas fa-sync-alt"></i>
             </button>
-            <label class="form-label mb-0 fw-bold ms-3">逐级稀释</label>
+            <label class="form-label mb-0 small fw-bold text-nowrap">逐级稀释</label>
             <label class="onoffswitch">
               <input type="checkbox" class="onoffswitch-checkbox" id="bbcdGradualDilution" checked>
               <span class="onoffswitch-switch"></span>
             </label>
             <small class="text-muted" id="bbcdGradualHint" style="display:none;">开启后逐级稀释</small>
-            <label class="form-label mb-0 fw-bold ms-3">紫外</label>
+            <label class="form-label mb-0 small fw-bold text-nowrap">紫外</label>
             <label class="onoffswitch">
               <input type="checkbox" class="onoffswitch-checkbox" id="bbcdUVMode">
               <span class="onoffswitch-switch"></span>
             </label>
-            <label class="form-label mb-0 fw-bold ms-3">基体</label>
+            <label class="form-label mb-0 small fw-bold text-nowrap">基体</label>
             <label class="onoffswitch">
               <input type="checkbox" class="onoffswitch-checkbox" id="bbcdMatrixMode">
               <span class="onoffswitch-switch"></span>
             </label>
-            <button type="button" class="btn btn-sm btn-outline-secondary ms-2" id="bbcdResetWorkingSolutionBtn" title="重置">
+            <button type="button" class="btn btn-sm btn-outline-secondary px-2" id="bbcdResetWorkingSolutionBtn" title="重置">
               <i class="fas fa-undo"></i>
             </button>
+          </div>
+          <span class="form-label mb-0 small fw-bold text-nowrap bbcd-dilution-row ws-preset-el d-none">预设</span>
+          <select id="wsPresetSelect" class="form-select form-select-sm bbcd-dilution-row ws-preset-el d-none">
+            <option value="">—未选择—</option>
+          </select>
+          <div class="d-flex align-items-center gap-1 bbcd-dilution-row ws-preset-el d-none" style="grid-column:span 2;">
+            <button type="button" class="btn btn-sm btn-outline-info px-2" id="wsApplyPresetBtn" title="套用预设"><i class="fas fa-magic"></i></button>
+            <button type="button" class="btn btn-sm btn-outline-success px-2" id="wsSavePresetBtn" title="存为预设"><i class="fas fa-save"></i></button>
+            <button type="button" class="btn btn-sm btn-outline-danger px-2" id="wsDelPresetBtn" title="删除预设"><i class="fas fa-trash"></i></button>
           </div>
         </div>
 
@@ -3215,6 +3221,15 @@
     // 标志：用户已选择类型，等待类型选择弹窗关闭后打开配置弹窗
     let bbcdPendingTypeSelection = false;
 
+    // .bbcd-dilution-row / .ws-preset-el 中含 d-flex 元素，其 !important 会盖过内联 display:none，
+    // 故显隐统一用 d-none class 切换（d-none 同为 !important 且样式表中靠后，可压住 d-flex）
+    function bbcdToggleDilutionRow(show) {
+        document.querySelectorAll('.bbcd-dilution-row').forEach(el => el.classList.toggle('d-none', !show));
+    }
+    function bbcdToggleWsPreset(show) {
+        document.querySelectorAll('.ws-preset-el').forEach(el => el.classList.toggle('d-none', !show));
+    }
+
     async function bbcdOpenConfig() {
         let selectedIdx, items;
         // If bbcdSelectedItems was pre-populated (e.g., from dTab), use it directly
@@ -3303,11 +3318,8 @@
         document.getElementById('bbcdExportBtn').innerHTML = '<i class="fas fa-file-word me-1"></i>导出记录';
         document.getElementById('bbcdPrintLabelBtn').innerHTML = '<i class="fas fa-print me-1"></i>打印标签';
 
-        // 显示/隐藏稀释点区域
-        const dilutionSection = document.getElementById('bbcdDilutionSection');
-        if (dilutionSection) {
-            dilutionSection.style.display = isWorkingSolution ? 'block' : 'none';
-        }
+        // 显示/隐藏稀释点配置行（与表单共享网格；仅工作液 D 可见；新建模式下预设控件一并显示）
+        document.querySelectorAll('.bbcd-dilution-row').forEach(el => el.classList.toggle('d-none', !isWorkingSolution));
 
         // 显示/隐藏工作液溶剂/介质输入框
         const mediumLabel = document.getElementById('bbcdMediumLabel');
@@ -3599,7 +3611,9 @@
         const isD = (solType === 'SOLUTION_TYPE_D');
 
         // 4. Show/hide sections
-        document.getElementById('bbcdDilutionSection').style.display = isD ? 'block' : 'none';
+        // 稀释点配置行随 D 显隐；预设控件默认隐藏，可编辑时在下方 editAllowed 处再放开
+        document.querySelectorAll('.bbcd-dilution-row').forEach(el => el.classList.toggle('d-none', !isD));
+        document.querySelectorAll('.ws-preset-el').forEach(el => el.classList.add('d-none'));
         const mediumLabel = document.getElementById('bbcdMediumLabel');
         const mediumD = document.getElementById('bbcdMediumD');
         if (mediumLabel) mediumLabel.style.display = isD ? '' : 'none';
@@ -3609,6 +3623,10 @@
 
         // 5. Buttons - 权限控制 + 审核状态（保存/审核按钮）
         const editAllowed = canEditRecord(rec);
+        // 详情模式下，工作液配置预设仅在可编辑时显示（只读记录禁露按钮：applyWsPreset 用 .value= 赋值会绕过 readOnly）
+        if (isD && editAllowed) {
+            document.querySelectorAll('.ws-preset-el').forEach(el => el.classList.remove('d-none'));
+        }
         bbcdRefreshDetailButtons(rec);
         document.getElementById('bbcdExportBtn').disabled = false;
         document.getElementById('bbcdPrintLabelBtn').disabled = false;
@@ -7882,6 +7900,162 @@
     // ==================== /导出名称预设 ====================
 
 
+    // ==================== 工作液配置参数预设（按用户私有） ====================
+    var _wsPresets = { lastPreset: "", presets: {}, currentUser: "" };
+
+    async function loadWsPresets(selectLast) {
+        try {
+            const resp = await fetch('/api/lims/ws_presets');
+            const j = await resp.json();
+            if (!j.success) { console.warn('加载工作液预设失败:', j.message); return; }
+            _wsPresets = j.presets || { lastPreset: "", presets: {}, currentUser: "" };
+        } catch (e) { console.warn('加载工作液预设异常:', e.message); return; }
+        _renderWsPresetSelect(selectLast);
+    }
+
+    function _renderWsPresetSelect(selectLast) {
+        const sel = document.getElementById('wsPresetSelect');
+        if (!sel) return;
+        const names = Object.keys(_wsPresets.presets || {});
+        const last = _wsPresets.lastPreset || '';
+        sel.innerHTML = '<option value="">—未选择—</option>' +
+            names.map(n => '<option value="' + bbcdEsc(n) + '">' + bbcdEsc(n) + '</option>').join('');
+        if (selectLast && last && names.indexOf(last) >= 0) sel.value = last;
+    }
+
+    function _wsPersist() {
+        return fetch('/api/lims/ws_presets', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ presets: _wsPresets })
+        });
+    }
+
+    /** 收集当前工作液模态框的配置参数为一个预设对象 */
+    function _wsCollectFromModal() {
+        const count = parseInt(document.getElementById('bbcdDilutionCount').value, 10) || 0;
+        // 定容体积：优先批填框，否则取第一个稀释点的定容输入
+        let volume = (document.getElementById('bbcdBatchVolumeAll')?.value || '').trim();
+        if (!volume) {
+            const v0 = document.querySelector('.bbcd-dilution-vol');
+            if (v0) volume = (v0.value || '').trim();
+        }
+        // 每点移取体积：优先批填框，否则取该点第一个移取输入
+        const takeVolumes = [];
+        for (let i = 0; i < count; i++) {
+            let q = (document.querySelector('.bbcd-batch-qty[data-idx="' + i + '"]')?.value || '').trim();
+            if (!q) {
+                const q0 = document.querySelector('.bbcd-d-qty[data-dilution="' + i + '"]');
+                if (q0) q = (q0.value || '').trim();
+            }
+            if (q) takeVolumes.push(q);
+        }
+        // 有效期时长：由 配置日期→有效期至 推算天数；推不出则留空
+        let days = '';
+        const cd = document.getElementById('bbcdConfigureDate').value;
+        const vd = document.getElementById('bbcdValidityDate').value;
+        if (cd && vd) {
+            const diff = Math.round((new Date(vd) - new Date(cd)) / 86400000);
+            if (isFinite(diff)) days = diff;
+        }
+        return {
+            validityDays: days,
+            storage: (document.getElementById('bbcdStorage').value || '').trim(),
+            dilutionCount: count || '',
+            customType: (document.getElementById('bbcdCustomType').value || '').trim(),
+            medium: (document.getElementById('bbcdMediumD').value || '').trim(),
+            volume: volume,
+            takeVolumes: takeVolumes,
+            gradualDilution: document.getElementById('bbcdGradualDilution').checked,
+            uvMode: document.getElementById('bbcdUVMode').checked,
+            matrixMode: document.getElementById('bbcdMatrixMode').checked,
+        };
+    }
+
+    /** 套用预设到当前工作液模态框 */
+    function applyWsPreset() {
+        const sel = document.getElementById('wsPresetSelect');
+        const name = sel ? sel.value : '';
+        if (!name) { alert('请先选择一个预设'); return; }
+        const p = (_wsPresets.presets || {})[name];
+        if (!p) { alert('预设不存在，请先加载'); return; }
+
+        if (p.storage) document.getElementById('bbcdStorage').value = p.storage;
+        if (p.customType) document.getElementById('bbcdCustomType').value = p.customType;
+        if (p.medium) document.getElementById('bbcdMediumD').value = p.medium;
+
+        // 有效期时长 → 重算 有效期至（基准为配置日期，缺失则用今天）
+        if (typeof p.validityDays === 'number') {
+            const cd = document.getElementById('bbcdConfigureDate').value || new Date().toISOString().slice(0, 10);
+            const base = new Date(cd);
+            base.setDate(base.getDate() + p.validityDays);
+            document.getElementById('bbcdValidityDate').value = base.toISOString().slice(0, 10);
+        }
+
+        // 稀释点数量 → 生成 → 填定容/移取（三个开关须在生成前回填：逐级稀释影响生成，紫外/基体影响浓度）
+        const count = typeof p.dilutionCount === 'number' ? p.dilutionCount : 0;
+        if (count > 0) {
+            if ('gradualDilution' in p) document.getElementById('bbcdGradualDilution').checked = !!p.gradualDilution;
+            if ('uvMode' in p) document.getElementById('bbcdUVMode').checked = !!p.uvMode;
+            if ('matrixMode' in p) document.getElementById('bbcdMatrixMode').checked = !!p.matrixMode;
+            document.getElementById('bbcdDilutionCount').value = count;
+            bbcdGenerateDilutionPoints();   // 同步渲染表格
+            if (p.volume) {
+                const vIn = document.getElementById('bbcdBatchVolumeAll');
+                if (vIn) { vIn.value = p.volume; bbcdBatchFillVolumeAll(); }
+            }
+            const takes = Array.isArray(p.takeVolumes) ? p.takeVolumes : [];
+            for (let i = 0; i < count && i < takes.length; i++) {
+                if (!takes[i]) continue;
+                const qIn = document.querySelector('.bbcd-batch-qty[data-idx="' + i + '"]');
+                if (qIn) { qIn.value = takes[i]; bbcdBatchFillQty(i); }
+            }
+        }
+        _wsPresets.lastPreset = name;
+        _wsPersist().catch(() => {});
+    }
+
+    async function saveWsPreset() {
+        await loadWsPresets(false);
+        const sel = document.getElementById('wsPresetSelect');
+        let name = sel ? sel.value : '';
+        if (!name) {
+            name = prompt('请输入预设名称：');
+            if (!name) return;
+            name = name.trim();
+            if (!name) return;
+        } else if (!confirm('将当前配置覆盖保存到预设「' + name + '」？')) {
+            return;
+        }
+        _wsPresets.presets = _wsPresets.presets || {};
+        _wsPresets.presets[name] = _wsCollectFromModal();
+        _wsPresets.lastPreset = name;
+        try {
+            const resp = await _wsPersist();
+            const j = await resp.json();
+            if (!j.success) { alert('保存失败：' + (j.message || '')); return; }
+            _renderWsPresetSelect(true);
+            alert('已保存预设「' + name + '」');
+        } catch (e) { alert('保存异常：' + e.message); }
+    }
+
+    async function delWsPreset() {
+        const sel = document.getElementById('wsPresetSelect');
+        const name = sel ? sel.value : '';
+        if (!name) { alert('请先选择要删除的预设'); return; }
+        if (!confirm('确定删除预设「' + name + '」？')) return;
+        await loadWsPresets(false);
+        delete _wsPresets.presets[name];
+        if (_wsPresets.lastPreset === name) _wsPresets.lastPreset = '';
+        try {
+            const resp = await _wsPersist();
+            const j = await resp.json();
+            if (!j.success) { alert('删除失败：' + (j.message || '')); return; }
+            _renderWsPresetSelect(false);
+        } catch (e) { alert('删除异常：' + e.message); }
+    }
+    // ==================== /工作液配置参数预设 ====================
+
+
         document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('bbcdQueryBtn').addEventListener('click', bbcdQuery);
         document.getElementById('bbcdFilterSolType').addEventListener('change', () => bbcdRenderResults(bbcdLastResults));
@@ -8027,6 +8201,23 @@
 
         // 为"生成稀释点"按钮添加监听器
         document.getElementById('bbcdGenerateDilutionBtn')?.addEventListener('click', bbcdGenerateDilutionPoints);
+
+        // 工作液配置预设：套用/存为预设/删除
+        document.getElementById('wsApplyPresetBtn')?.addEventListener('click', applyWsPreset);
+        document.getElementById('wsSavePresetBtn')?.addEventListener('click', saveWsPreset);
+        document.getElementById('wsDelPresetBtn')?.addEventListener('click', delWsPreset);
+        // 打开工作液(D)配置模态框时加载预设下拉（默认保持「—未选择—」，不自动回填上次选择）
+        document.getElementById('bbcdConfigModal')?.addEventListener('shown.bs.modal', () => {
+            if (document.getElementById('bbcdSolType').value === 'SOLUTION_TYPE_D') {
+                loadWsPresets(false);
+                // 新建模式（非详情）下显式确保配置预设控件可见，避免上次详情模式残留 display:none
+                if (!window.bbcdViewDetailMode) {
+                    document.querySelectorAll('.bbcd-dilution-row').forEach(el => el.classList.remove('d-none'));
+                }
+            } else {
+                document.querySelectorAll('.bbcd-dilution-row').forEach(el => el.classList.add('d-none'));
+            }
+        });
 
         // 为"重置"按钮添加监听器
         document.getElementById('bbcdResetWorkingSolutionBtn')?.addEventListener('click', bbcdResetWorkingSolution);

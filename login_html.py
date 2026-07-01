@@ -249,6 +249,62 @@ def set_user_presets(display_name, presets):
             json.dump(config, f, indent=2, ensure_ascii=False)
 
 
+# ==================== 工作液配置参数预设（按用户私有） ====================
+def _norm_ws_preset(p):
+    """规整单个工作液预设：标量字段去空白，整数字段校验，takeVolumes 去空串。"""
+    if not isinstance(p, dict):
+        return None
+    def _s(v):
+        return str(v).strip() if v is not None else ''
+    take = p.get('takeVolumes')
+    if not isinstance(take, list):
+        take = []
+    take = [_s(x) for x in take if _s(x) != '']
+    vd = p.get('validityDays')
+    dc = p.get('dilutionCount')
+    return {
+        'validityDays': vd if isinstance(vd, int) else '',
+        'storage': _s(p.get('storage')),
+        'dilutionCount': dc if isinstance(dc, int) else '',
+        'customType': _s(p.get('customType')),
+        'medium': _s(p.get('medium')),
+        'volume': _s(p.get('volume')),
+        'takeVolumes': take,
+    }
+
+
+def get_ws_presets(display_name):
+    """返回当前用户私有的工作液配置预设：{lastPreset, presets, currentUser}。"""
+    config = load_config()
+    allp = config.get('workingSolutionPresets', {}) or {}
+    user = allp.get(display_name, {}) or {}
+    raw = user.get('presets', {}) or {}
+    presets = {n: np for n, p in raw.items() if (np := _norm_ws_preset(p))}
+    return {"lastPreset": user.get('lastPreset', '') or '', "presets": presets, "currentUser": display_name}
+
+
+def set_ws_presets(display_name, data):
+    """全量保存当前用户的工作液预设（私有，无跨用户合并）。"""
+    config = load_config()
+    allp = config.setdefault('workingSolutionPresets', {})
+    user = allp.setdefault(display_name, {})
+    user['lastPreset'] = (data.get('lastPreset') or '') if isinstance(data, dict) else ''
+    presets = data.get('presets') if isinstance(data, dict) else None
+    clean = {}
+    if isinstance(presets, dict):
+        for name, p in presets.items():
+            name = (name or '').strip()
+            if not name:
+                continue
+            np = _norm_ws_preset(p)
+            if np:
+                clean[name] = np
+    user['presets'] = clean
+    config['workingSolutionPresets'] = allp
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+
+
 # ==================== 远程系统连接类 ====================
 def md5_1024_times(text: str) -> str:
     current = text.encode('utf-8')
@@ -870,6 +926,30 @@ def lims_delete_export_preset_project():
         config['verifyExportPresetsGlobal'] = glob
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
+    return jsonify({"success": True})
+
+
+# ==================== 工作液配置参数预设（按用户私有） ====================
+@app.route('/api/lims/ws_presets', methods=['GET'])
+def lims_get_ws_presets():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    dn = (session.get('display_name') or '').strip()
+    if not dn:
+        return jsonify({"success": False, "message": "无显示名"}), 400
+    return jsonify({"success": True, "presets": get_ws_presets(dn)})
+
+
+@app.route('/api/lims/ws_presets', methods=['POST'])
+def lims_set_ws_presets():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    dn = (session.get('display_name') or '').strip()
+    if not dn:
+        return jsonify({"success": False, "message": "无显示名"}), 400
+    # 前端发送 {presets: {lastPreset, presets:{...}, currentUser}}，取内层对象
+    payload = request.get_json() or {}
+    set_ws_presets(dn, payload.get('presets') if isinstance(payload.get('presets'), dict) else {})
     return jsonify({"success": True})
 
 
