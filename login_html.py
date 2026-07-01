@@ -742,6 +742,16 @@ def api_holidays(year):
     return jsonify({"success": True, "year": year, "holidays": mapping or {}, "source": source})
 
 
+@app.route('/holidays/<int:year>.json')
+def holidays_file(year):
+    """开放（无需登录）：直接返回 holidays_cache/<year>.json 原文件，
+    供仪器使用率统计等内部 LAN 工具读取。缓存缺失时自动拉取并落盘。"""
+    if year < 2000 or year > 2100:
+        return "", 400
+    get_holidays(year)
+    return send_from_directory(os.path.abspath(HOLIDAYS_CACHE_DIR), f"{year}.json")
+
+
 @app.route('/api/logout', methods=['POST'])
 def logout():
     session.clear()
