@@ -3624,12 +3624,14 @@
         // 5. Buttons - 权限控制 + 审核状态（保存/审核按钮）
         const editAllowed = canEditRecord(rec);
         // 详情模式下，工作液配置预设：
-        // - 可编辑：套用/存为/删除 三按钮全显
-        // - 只读（已审核等）：仍显存为/删除，但不显套用（applyWsPreset 用 .value= 赋值会绕过 readOnly，故隐藏以免误改）
+        // - 可编辑：套用/存为 二按钮显（删除在新建配置窗口管理，详情不显示）
+        // - 只读（已审核等）：仅显存为（套用会绕过 readOnly 赋值，故隐藏）
         if (isD) {
             document.querySelectorAll('.ws-preset-el').forEach(el => el.classList.remove('d-none'));
             const applyBtn = document.getElementById('wsApplyPresetBtn');
             if (applyBtn) applyBtn.classList.toggle('d-none', !editAllowed);
+            const delBtn = document.getElementById('wsDelPresetBtn');
+            if (delBtn) delBtn.classList.add('d-none');
         }
         bbcdRefreshDetailButtons(rec);
         document.getElementById('bbcdExportBtn').disabled = false;
@@ -7975,15 +7977,36 @@
         };
     }
 
-    /** 两个预设对象是否全参数精确一致（标量字段 String 化比较；takeVolumes 去空后逐项比较） */
+    /** 两个预设对象是否全参数精确一致。
+     *  数值字段用 parseFloat 比较，兼容后端 "10.00" 与用户输入 "10" 的格式差异；
+     *  文本字段 trim 后严格比较；开关按布尔比较。 */
     function _wsPresetEquals(a, b) {
         if (!a || !b) return false;
-        const scalars = ['validityDays','storage','dilutionCount','customType','medium','volume','gradualDilution','uvMode','matrixMode'];
-        for (const k of scalars) {
-            if (String(a[k] ?? '') !== String(b[k] ?? '')) return false;
+        const sameNum = (x, y) => {
+            const sx = String(x ?? '').trim(), sy = String(y ?? '').trim();
+            if (sx === sy) return true;
+            const nx = parseFloat(sx), ny = parseFloat(sy);
+            return !isNaN(nx) && !isNaN(ny) && Math.abs(nx - ny) < 1e-9;
+        };
+        const texts = ['storage','customType','medium'];
+        for (const k of texts) {
+            if (String(a[k] ?? '').trim() !== String(b[k] ?? '').trim()) return false;
+        }
+        const nums = ['validityDays','dilutionCount','volume'];
+        for (const k of nums) {
+            if (!sameNum(a[k], b[k])) return false;
+        }
+        const bools = ['gradualDilution','uvMode','matrixMode'];
+        for (const k of bools) {
+            if (!!a[k] !== !!b[k]) return false;
         }
         const norm = arr => (Array.isArray(arr) ? arr : []).map(x => String(x ?? '').trim()).filter(Boolean);
-        return JSON.stringify(norm(a.takeVolumes)) === JSON.stringify(norm(b.takeVolumes));
+        const ta = norm(a.takeVolumes), tb = norm(b.takeVolumes);
+        if (ta.length !== tb.length) return false;
+        for (let i = 0; i < ta.length; i++) {
+            if (!sameNum(ta[i], tb[i])) return false;
+        }
+        return true;
     }
 
     /** 详情打开后：收集当前配置，若与某已存预设完全一致则自动选中该预设（仅提示，不改表单） */
@@ -8240,6 +8263,10 @@
                 // 新建模式（非详情）下显式确保配置预设控件可见，避免上次详情模式残留 display:none
                 if (!window.bbcdViewDetailMode) {
                     document.querySelectorAll('.bbcd-dilution-row').forEach(el => el.classList.remove('d-none'));
+                    // 详情可能对套用/删除按钮单独隐藏，新建模式下三个按钮全部复位可见
+                    ['wsApplyPresetBtn','wsSavePresetBtn','wsDelPresetBtn'].forEach(id => {
+                        document.getElementById(id)?.classList.remove('d-none');
+                    });
                 }
             } else {
                 document.querySelectorAll('.bbcd-dilution-row').forEach(el => el.classList.add('d-none'));
