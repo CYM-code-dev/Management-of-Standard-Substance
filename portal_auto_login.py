@@ -14,7 +14,7 @@ import sys
 import tempfile
 import time
 from os.path import dirname, join
-from urllib.parse import quote
+from urllib.parse import parse_qsl, quote, urlparse
 from xml.sax.saxutils import escape as xml_escape
 
 import requests
@@ -124,9 +124,11 @@ def wifi_in_range(ssid):
         return True
 
 
-def connect_wifi(ssid, wifi_password):
-    """导入 WLAN profile 后发起连接;未保存过该 WiFi 也能连。"""
-    if wifi_connected(ssid):
+def connect_wifi(ssid, wifi_password, force=False):
+    """导入 WLAN profile 后发起连接;未保存过该 WiFi 也能连。
+    force=True 时无视“已连接”状态强制重连:断开/唤醒后网卡常报 connected 但链路已死,
+    不重连会导致 portal 登录一直 code:1(探测离线才能确认链路已失效)。"""
+    if not force and wifi_connected(ssid):
         log.info("WiFi 已连接 %s", ssid)
         return
     fd, profile_xml = tempfile.mkstemp(suffix=".xml")
@@ -137,11 +139,18 @@ def connect_wifi(ssid, wifi_password):
             ["netsh", "wlan", "add", "profile", f"filename={profile_xml}", "user=all"],
             capture_output=True, timeout=15,
         )
+        if force:
+            # 先断开 stale 关联,否则 connect 对“已连接”状态是空操作
+            subprocess.run(
+                ["netsh", "wlan", "disconnect"],
+                capture_output=True, timeout=10,
+            )
+            time.sleep(1)
         subprocess.run(
             ["netsh", "wlan", "connect", f"name={ssid}"],
             capture_output=True, timeout=15,
         )
-        log.info("已发起 WiFi 连接 %s", ssid)
+        log.info("已发起 WiFi 连接 %s%s", ssid, "（强制重连）" if force else "")
     finally:
         try:
             os.remove(profile_xml)
@@ -150,13 +159,27 @@ def connect_wifi(ssid, wifi_password):
 
 
 def login(session, cfg):
-    """发登录请求:username GB2312 编码,password = AES 加密后的明文密码。"""
+    """触发 portal 重定向拿真实 ip/mac,再用同一会话 POST /api 登录。
+    关键:capture 与 POST 共用 requests.Session,带上重定向下发的会话 cookie,
+    否则 portal 报 code:1 “请求失败,请刷新页面后重新尝试”。
+    username GB2312 编码,password/code = AES 加密后明文。"""
+    ip = mac = ""
+    try:
+        r = session.get(cfg["probe_url"], timeout=8)  # 跟随重定向,cookie 自动入 session
+    except requests.RequestException:
+        r = None
+    if r is not None:
+        # ip/mac 出现在 302 的 Location 或落地页 URL 里;逐一翻找
+        for url in [h.headers.get("Location", "") for h in r.history] + [r.url]:
+            if "wlanuserip" in url or "clientmac" in url:
+                q = dict(parse_qsl(urlparse(url).query))
+                ip = ip or q.get("wlanuserip", "")
+                mac = mac or q.get("clientmac", "")
     u = gb2312_quote(cfg["username"])
     p = pa_aes_encode(cfg["password"])
-    q = (
-        "route=webauth&action=user_login&auth_type=panabit"
-        f"&ip=&mac=&code=&username={u}&password={p}&remember_me=1"
-    )
+    code = pa_aes_encode("")  # 无图形验证码,与网页一致传 AES("")
+    q = ("route=webauth&action=user_login&auth_type=panabit"
+         f"&ip={ip}&mac={mac}&code={code}&username={u}&password={p}&remember_me=1")
     r = session.post(f"http://{cfg['portal_host']}/api?{q}", timeout=10)
     try:
         body = r.json()
@@ -166,8 +189,57 @@ def login(session, cfg):
     if code == 0:
         log.info("认证成功 (code:0)")
     else:
-        # code:1 多半是"当前已在线、无可认证会话",非真实失败;仅当 captive 态仍 code:1 才需排查
+        # code:1 多半是“当前已在线、无可认证会话”,非真实失败;仅当 captive 态仍 code:1 才需排查
         log.warning("认证未通过 code:%s msg:%s —— 若已在线属正常", code, msg)
+    return code
+
+
+RECOVER_TRIES = 8   # 离线后重试连接+登录的次数;每次间隔 ~8s
+DNS_WAIT = 5        # WiFi“已连接”后等 DHCP/DNS 起步的秒数
+POST_AUTH_WAIT = 75  # 认证成功(code:0)后等网络真正联通的秒数(经验值约1分钟,留余量)
+POST_AUTH_POLL = 5  # 认证后轮询在线的间隔
+
+
+def _wait_online(cfg, session, budget):
+    """轮询到在线或超时;认证已通过,期间不再重复登录。"""
+    deadline = time.monotonic() + budget
+    n = 0
+    while time.monotonic() < deadline:
+        n += 1
+        if is_online(session, cfg["probe_url"]):
+            log.info("等待第%d次探测:在线", n)
+            return True
+        time.sleep(POST_AUTH_POLL)
+    return False
+
+
+def recover(cfg, session):
+    """原地重试到认证通过;开机/唤醒时网卡可能还没扫到 SSID,先等它就绪再连。
+    认证成功(code:0)后网络真正联通一般还要约1分钟,此时停止重复登录,
+    只轮询到在线(POST_AUTH_WAIT),避免在联通前把 8 次重试耗光而误判失败。"""
+    log.info("检测到离线,尝试恢复")
+    connected = False
+    for i in range(1, RECOVER_TRIES + 1):
+        if is_online(session, cfg["probe_url"]):
+            log.info("第%d次探测:在线", i)
+            return
+        if cfg["ssid"] and not wifi_in_range(cfg["ssid"]):
+            log.info("第%d次:%s 不在范围内,等网卡就绪", i, cfg["ssid"])
+            time.sleep(DNS_WAIT)
+            continue
+        if cfg["ssid"] and not connected:
+            connect_wifi(cfg["ssid"], cfg["wifi_password"], force=True)
+            connected = True
+        time.sleep(DNS_WAIT)
+        code = login(session, cfg)
+        if code == 0:
+            log.info("已认证(code:0),等待网络联通(约1分钟)")
+            if _wait_online(cfg, session, POST_AUTH_WAIT):
+                return
+            log.warning("等待 %ds 后仍离线,等下一轮", POST_AUTH_WAIT)
+            return
+        time.sleep(3)
+    log.warning("重试 %d 次后仍未认证,等下一轮", RECOVER_TRIES)
 
 
 def main():
@@ -184,17 +256,7 @@ def main():
             if is_online(session, cfg["probe_url"]):
                 log.info("在线,跳过")
             else:
-                log.info("检测到离线,尝试恢复")
-                if cfg["ssid"] and not wifi_in_range(cfg["ssid"]):
-                    log.info("%s 不在范围内,等信号恢复", cfg["ssid"])
-                else:
-                    if cfg["ssid"]:
-                        connect_wifi(cfg["ssid"], cfg["wifi_password"])
-                        time.sleep(5)
-                    login(session, cfg)
-                    time.sleep(3)
-                    online2 = is_online(session, cfg["probe_url"])
-                    log.info("登录后 %s", "在线" if online2 else "仍离线")
+                recover(cfg, session)
         except Exception as e:
             log.error("本轮异常: %s", e)  # 吞掉,下一轮继续;nssm 兜底重启
         time.sleep(cfg["interval"])
