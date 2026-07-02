@@ -167,7 +167,8 @@
       "Bash(sc query *)",
       "Bash(.venv/Scripts/python -c \"import ast; ast.parse\\(open\\('dingtalk_notify.py',encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
       "Bash(.venv/Scripts/python dingtalk_notify.py --run-excel-now)",
-      "Bash(.venv/Scripts/python -c \"import ast; ast.parse\\(open\\('login_html.py',encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")"
+      "Bash(.venv/Scripts/python -c \"import ast; ast.parse\\(open\\('login_html.py',encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "mcp__codegraph__codegraph_context"
     ]
   },
   "enableAllProjectMcpServers": true,

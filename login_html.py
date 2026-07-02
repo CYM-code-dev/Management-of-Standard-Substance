@@ -71,13 +71,13 @@ def _fmt_vol(val):
 
 def _round_qty(val, unit):
     if unit == 'mL':
-        return round(val, 3) if val < 0.1 else round(val, 2)
+        return round(val, 3)
     return round(val, 4)
 
 
 def _fmt_qty(val, unit):
     if unit == 'mL':
-        return f"{val:.3f}" if val < 0.1 else f"{val:.2f}"
+        return f"{val:.3f}"
     return f"{val:.4f}"
 
 
@@ -1376,7 +1376,7 @@ def lims_receive():
         if unit == 'g':
             formatted_qty = f"{qty_val:.4f}"
         else:  # mL
-            formatted_qty = f"{qty_val:.3f}" if qty_val < 0.1 else f"{qty_val:.2f}"
+            formatted_qty = f"{qty_val:.3f}"
     except (ValueError, TypeError):
         formatted_qty = str(quantity)
     form_data = {

@@ -1982,6 +1982,11 @@
     }
 
     function solAddItem(item) {
+        const _conc = String(item && item.concentration || '').trim();
+        if (!_conc || _conc === '—' || _conc === '-') {
+            alert('没有浓度数据无法配置，请补充浓度参数后再来配置');
+            return;
+        }
         if (solItems.some(i => i.id === item.id)) {
             alert('该标准品已添加'); return;
         }
@@ -2027,21 +2032,27 @@
                 const td = document.createElement('td');
                 td.style.minWidth = '140px';
                 const unit = item.numUnitName || 'g';
-                const conc = item.concentration || '99.5';
+                const conc = item.concentration || '';
                 const concUnit = item.concentrationUnitName || (unit === 'g' ? '%' : 'μg/mL');
-                const step = unit === 'mL' ? '0.01' : '0.0001';
+                const step = unit === 'mL' ? 'any' : '0.0001';
+                const minVal = unit === 'mL' ? '0.001' : '0.0001';
                 switch (field.key) {
                     case 'name':
                         td.innerHTML = `<input type="text" class="form-control form-control-sm sol-row-name" value="${escapeAttr(item.name||'')}" title="${escapeAttr(item.name||'')}" data-idx="${idx}" style="text-overflow:ellipsis;">`;
                         break;
                     case 'conc':
                         const labNo = item.customNum || item.no || '';
-                        td.textContent = labNo ? `${labNo}/${conc} ${concUnit}` : `${conc} ${concUnit}`;
+                        // 浓度为空时显示"—"，不再兜底假值 99.5（与搜索结果浓度列一致）；计算用的默认纯度在 solCalcRowConc 里独立兜底
+                        if (conc) {
+                            td.textContent = labNo ? `${labNo}/${conc} ${concUnit}` : `${conc} ${concUnit}`;
+                        } else {
+                            td.textContent = labNo ? `${labNo}/—` : '—';
+                        }
                         td.style.textAlign = 'left';
                         break;
                     case 'qty':
                         const validNum = item.validNum != null ? item.validNum : '';
-                        td.innerHTML = `<div class="input-group input-group-sm"><input type="number" class="form-control sol-row-qty" step="${step}" min="${step}" max="${validNum}" placeholder="${validNum}" title="剩余量: ${validNum}${unit}" style="-moz-appearance:textfield;" data-idx="${idx}"><span class="input-group-text">${escapeHtml(unit)}</span></div>`;
+                        td.innerHTML = `<div class="input-group input-group-sm"><input type="number" class="form-control sol-row-qty" step="${step}" min="${minVal}" max="${validNum}" placeholder="${validNum}" title="剩余量: ${validNum}${unit}" style="-moz-appearance:textfield;" data-idx="${idx}"><span class="input-group-text">${escapeHtml(unit)}</span></div>`;
                         break;
                     case 'medium':
                         td.innerHTML = `<input class="form-control form-control-sm sol-row-medium" list="solMediumOptions" placeholder="选择或输入" autocomplete="off" data-idx="${idx}">`;
@@ -2084,6 +2095,9 @@
                     const val = parseFloat(qtyEl.value);
                     if (unit === 'g' && !isNaN(val) && val > 0) {
                         qtyEl.value = val.toFixed(4);
+                    } else if (unit === 'mL' && !isNaN(val) && val > 0) {
+                        const inputDecimals = (qtyEl.value.split('.')[1] || '').length;
+                        qtyEl.value = val.toFixed(Math.min(3, Math.max(2, inputDecimals)));
                     }
                 });
             }
@@ -2128,7 +2142,7 @@
         const vol = parseFloat(volEl.value);
         const qtyStr = qtyEl.value;
         const qtyDec = (qtyStr.split('.')[1] || '');
-        const maxDec = unit === 'mL' ? 2 : 4;
+        const maxDec = unit === 'mL' ? 3 : 4;
         // 小数位超限立即标红
         if (qtyDec.length > maxDec) {
             qtyEl.classList.add('is-invalid');
@@ -2340,7 +2354,7 @@
                 }
             }
 
-            // 单独导出其余类型
+            // 单独导出其余类型（mL/液体标液）：走 export_bbcd_docx，与"储备液配置详情"导出版式一致
             for (const idx of singleIndices) {
                 const item = solItems[idx];
                 const qty = parseFloat((tbody.querySelector(`.sol-row-qty[data-idx="${idx}"]`)||{}).value);
@@ -2348,8 +2362,8 @@
                 const concVal = (tbody.querySelector(`.sol-row-conc[data-idx="${idx}"]`)||{}).value || '';
                 const medium = (tbody.querySelector(`.sol-row-medium[data-idx="${idx}"]`)||{}).value || '';
                 if (!concVal) { alert(`第${idx+1}条请先填写领用数量和定容体积以计算浓度`); continue; }
-                const payload = solBuildRowPayload(item, idx, '', qty, vol, concVal, medium);
-                const resp = await fetch('/api/lims/export_docx', {
+                const payload = solBuildDilutionPayload(item, idx, qty, vol, concVal, medium);
+                const resp = await fetch('/api/lims/export_bbcd_docx', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(payload)
                 });
@@ -2428,6 +2442,49 @@
         };
     }
 
+    // 稀释(mL/液体标液)导出 payload：走 export_bbcd_docx，版式与"储备液配置详情"导出一致
+    // （母体标液/取量/溶剂/稀释至/浓度/编号/配制日期/有效期 多行表格）。称量(%) 仍走 solBuildRowPayload→export_docx。
+    function solBuildDilutionPayload(item, idx, qty, vol, concVal, medium) {
+        const unit = item.numUnitName || 'mL';
+        const concUnit = item.concentrationUnitName || 'μg/mL';
+        const tbody = document.getElementById('solItemsTbody');
+        const codeEl = tbody.querySelector(`.sol-row-code[data-idx="${idx}"]`);
+        const validEl = tbody.querySelector(`.sol-row-validity[data-idx="${idx}"]`);
+        const storEl = tbody.querySelector(`.sol-row-storage[data-idx="${idx}"]`);
+        const qtyInput = (tbody.querySelector(`.sol-row-qty[data-idx="${idx}"]`)||{}).value;
+        const rowCode = codeEl ? codeEl.value.trim() : '';
+        // 领用量保留至多 3 位（与参数窗口/mL 详情一致）
+        const qtyStr = (isFinite(qty) && qty > 0)
+            ? qty.toFixed(Math.min(3, Math.max(2, (String(qtyInput).split('.')[1] || '').length)))
+            : '';
+        const volStr = (typeof bbcdFmtVol === 'function' && typeof bbcdRoundVol === 'function')
+            ? bbcdFmtVol(bbcdRoundVol(vol)) : String(vol);
+        const purityRaw = parseFloat(String(item.concentration || '').replace('%','').trim());
+        const originalConc = isFinite(purityRaw) ? `${purityRaw}(${concUnit})` : String(item.concentration || '');
+        return {
+            solution_name: item.name || '',
+            solution_code: rowCode,
+            configure_date: document.getElementById('solConfigureDate').value,
+            validity_date: validEl ? validEl.value : '',
+            temperature: document.getElementById('solTemp').value.trim() || null,
+            humidity: document.getElementById('solHumid').value.trim() || null,
+            storage_condition: storEl ? storEl.value : '4℃冰箱',
+            custom_type: document.getElementById('solCustomType').value.trim() || null,
+            detail_list: [{
+                originalName: item.name || '',
+                originalConcentration: originalConc,
+                receivedQuantity: qtyStr,
+                medium: medium,
+                volume: volStr,
+                configurationConcentration: concVal,
+                configurationUnit: concUnit,
+                receivedUint: unit,   // 后端 export_bbcd_docx 读的是 receivedUint（历史拼写）
+                resultCode: rowCode,
+                originalNo: rowCode,  // 表头编号取末段，单条即自编号
+                dilutionIdx: 0,
+            }],
+        };
+    }
 
         // ===== B-BCD: 从已配储备液 B 配制混合液 =====
     let bbcdLastResults = [];
@@ -5250,7 +5307,13 @@
         const detailList = sourceGroups.map(group => {
             const firstTr = group.rows[0];
             const firstSrc = firstTr._src;
-            const qty = bbcdRoundQty(parseFloat(firstTr.querySelector('.bbcd-c-qty')?.value));
+            const qtyInput = firstTr.querySelector('.bbcd-c-qty')?.value;
+            const qty = bbcdRoundQty(parseFloat(qtyInput));
+            // 详情/导出模式 + 非 % 源(mL)：领用量保留至多 3 位，与"储备液配置参数窗口"一致；
+            // 实时配制仍走 bbcdFmtQty（<0.1→3、≥0.1→2）。浓度计算继续用 qty，不受影响。
+            const _detailMlQty = (window.bbcdViewDetailMode && !firstSrc.isPctSource && isFinite(parseFloat(qtyInput)))
+                ? parseFloat(qtyInput).toFixed(Math.min(3, Math.max(2, (String(qtyInput).split('.')[1] || '').length)))
+                : null;
 
             if (group.isMulti) {
                 const meanConc = bbcdRoundConc(group.rows.reduce((s, tr) => s + tr._src.concValue, 0) / group.rows.length);
@@ -5258,7 +5321,7 @@
                 return {
                     originalName: firstSrc.solutionName,
                     originalConcentration: `${bbcdFmtConc(meanConc)}(${firstSrc.concUnit})`,
-                    receivedQuantity: bbcdFmtQty(qty),
+                    receivedQuantity: _detailMlQty || bbcdFmtQty(qty),
                     medium, volume: volStr,
                     configurationConcentration: bbcdFmtConc(c),
                     configurationUnit: firstSrc.concUnit,
@@ -5269,7 +5332,7 @@
                 return {
                     originalName: firstSrc.solutionName,
                     originalConcentration: firstSrc.concentrationRaw,
-                    receivedQuantity: bbcdFmtQty(qty),
+                    receivedQuantity: _detailMlQty || bbcdFmtQty(qty),
                     medium, volume: volStr,
                     configurationConcentration: bbcdFmtConc(c),
                     configurationUnit: firstSrc.concUnit,
@@ -8332,9 +8395,15 @@
                 // % 源（称量 g）保留输入框原值，不按 mL 规则修约（0.0101→0.010 会丢精度）
                 const src = t.closest('tr')._src;
                 if (!src || !src.isPctSource) {
-                    // 非 % 源(mL)：<0.1 保留 3 位，≥0.1 保留 2 位（先选位再修约，避免先压 2 位丢精度）
-                    const useDec = bbcdQtyDecimals(v);
-                    t.value = bbcdFmtQty(bbcdRoundQty(v, useDec), useDec);
+                    if (window.bbcdViewDetailMode) {
+                        // 详情模式：mL 领用量保留输入精度（最多 3 位），与"储备液配置参数窗口"一致
+                        const inputDec = (t.value.split('.')[1] || '').length;
+                        t.value = v.toFixed(Math.min(3, Math.max(2, inputDec)));
+                    } else {
+                        // 非 % 源(mL)：<0.1 保留 3 位，≥0.1 保留 2 位（先选位再修约，避免先压 2 位丢精度）
+                        const useDec = bbcdQtyDecimals(v);
+                        t.value = bbcdFmtQty(bbcdRoundQty(v, useDec), useDec);
+                    }
                 }
                 bbcdRecalcRow(t.closest('tr'));
                 bbcdUpdateCode(!!window.bbcdViewDetailMode);
@@ -8527,8 +8596,12 @@
         document.getElementById('solResultAddBtn').addEventListener('click', () => {
             const selectedItems = [...solSelectedMap.values()];
             if (!selectedItems.length) return;
+            const _before = solItems.length;
             selectedItems.forEach(it => solAddItem(it));
-            bootstrap.Modal.getOrCreateInstance(document.getElementById('solConfigModal')).show();
+            // 仅当真正加入了至少一项才打开配置弹窗（全部无浓度被拦时不打开）
+            if (solItems.length > _before) {
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('solConfigModal')).show();
+            }
         });
         document.getElementById('solConfigModal').addEventListener('hidden.bs.modal', () => {
             solItems = [];
