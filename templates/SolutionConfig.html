@@ -947,7 +947,7 @@
         <button class="btn btn-sm btn-outline-secondary" id="bbcdExportBtn" disabled><i class="fas fa-file-word me-1"></i>导出记录</button>
         <button class="btn btn-sm btn-outline-secondary" id="bbcdPrintLabelBtn" disabled><i class="fas fa-print me-1"></i>打印标签</button>
         <button class="btn btn-sm btn-primary" id="bbcdSaveBtn" disabled><i class="fas fa-save me-1"></i>保存配置</button>
-        <button class="btn btn-sm bg-secondary text-white border-0" id="bbcdAuditBtn" style="display:none;">未审核</button>
+        <button class="btn btn-sm bg-warning text-dark border-0" id="bbcdAuditBtn" style="display:none;">未审核</button>
       </div>
     </div>
   </div>
@@ -3558,7 +3558,7 @@
             if (window.bbcdViewDetailMode && rec && rec.id) {
                 const audited = !!rec.auditUserName;
                 auditBtn.style.display = '';
-                auditBtn.className = audited ? 'btn btn-sm bg-success text-white border-0' : 'btn btn-sm bg-secondary text-white border-0';
+                auditBtn.className = audited ? 'btn btn-sm bg-success text-white border-0' : 'btn btn-sm bg-warning text-dark border-0';
                 auditBtn.innerHTML = audited ? '<i class="fas fa-check-circle me-1"></i>已审核' : '<i class="fas fa-clock me-1"></i>未审核';
                 auditBtn.disabled = false;
             } else {
