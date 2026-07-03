@@ -2485,6 +2485,156 @@ def lims_save_solution_b():
         return jsonify({"success": False, "message": f"配置异常: {str(e)}"}), 500
 
 
+@app.route('/api/lims/save_solution_mix', methods=['POST'])
+def lims_save_solution_mix():
+    """N-1：多个标准品 A 混合定容到 1 瓶。
+    复刻 lims_save_solution 的 detail 构造，改为 N 个 detail + 共享 volume/medium，
+    pageType=A（标准品作源的合法页类型），顶层 originalCode/controlledNo/concentration 分号拼接。
+    与 save_solution 同一上游 saveSolutionConfigure。"""
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    p = request.get_json() or {}
+    system = get_system()
+    username = session.get('username', '')
+    if system.current_user != username:
+        system.current_user = username
+        system.load_session()
+    pid = session.get('pid') or system.current_pid or ''
+    pname = session.get('display_name') or system.current_real_name or username
+    if not pid:
+        return jsonify({"success": False, "message": "无法获取用户PID，请重新登录"}), 401
+
+    items = p.get('items') or []
+    if not items:
+        return jsonify({"success": False, "message": "无标准品源"}), 400
+
+    volume_ml = _round_vol(float(p.get('volume_ml', 1)))
+    medium = p.get('medium', '')
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    vol_display = _fmt_vol(volume_ml)
+
+    detail_items = []
+    conc_parts = []
+    original_code_parts = []
+    controlled_parts = []
+    earliest_expiry = ''
+
+    for idx, it in enumerate(items):
+        purity_str = str(it.get('purity_str', '99.5'))
+        try:
+            purity_value = float(purity_str.replace('%', '').strip())
+        except Exception:
+            purity_value = 99.5
+        original_unit = it.get('original_unit', '%')
+        received_unit = it.get('received_unit', 'g')
+        try:
+            use_quantity = _round_qty(float(it.get('use_quantity', 1)), received_unit)
+        except Exception:
+            use_quantity = float(it.get('use_quantity', 1))
+        receive_id = str(it.get('receive_id', ''))
+        original_id = str(it.get('original_id', ''))
+        original_name = it.get('original_name', '')
+        controlled_no = it.get('controlled_no', '')
+        batch_no = it.get('batch_no', '')
+        solution_code = it.get('solution_code', '')
+        expiry_date = it.get('expiry_date', '')
+        original_no = it.get('original_no') or f"A-{original_id}\n{batch_no}\n{solution_code}"
+
+        if original_unit == '%':
+            config_conc = purity_value / 100.0 * use_quantity * 1_000_000 / volume_ml
+        else:
+            config_conc = purity_value * use_quantity / volume_ml
+        config_conc = _round_conc(config_conc, original_unit)
+        conc_display = _fmt_conc(config_conc, original_unit)
+        qty_display = _fmt_qty(use_quantity, received_unit)
+
+        detail_items.append({
+            "id": None, "createDatetime": now_str, "serialVersionUID": None,
+            "configureId": None, "originalId": receive_id,
+            "originalCode": it.get('original_code') or f"L-{receive_id}",
+            "originalName": original_name,
+            "originalConcentration": f"{purity_str}({original_unit})",
+            "concentrationCount": f"{purity_str}({original_unit})",
+            "originalUnit": original_unit,
+            "receivedQuantity": qty_display, "receivedUint": received_unit,
+            "useUantity": qty_display, "useUnit": received_unit,
+            "medium": medium,
+            "volume": vol_display, "unit": "mL",
+            "configurationConcentration": conc_display,
+            "configurationUnit": "μg/mL", "configurationUncertainty": None,
+            "remark": None, "consumableReceive": None, "dataid": original_id,
+            "configurationRecordId": None, "creatorName": None, "creatorId": None,
+            "modifierName": None, "modifyDatetime": now_str,
+            "conversionFactor": None if original_unit == "μg/mL" else "1",
+            "dilutionFactor": None,
+            "originalNo": original_no,
+            "_X_ID": f"row_{int(time.time()) + idx}",
+        })
+        conc_parts.append(f"{original_name}:{conc_display}(μg/mL)")
+        original_code_parts.append(f"A-{original_id}")
+        if controlled_no:
+            controlled_parts.append(controlled_no)
+        if expiry_date and (not earliest_expiry or expiry_date < earliest_expiry):
+            earliest_expiry = expiry_date
+
+    payload = {
+        "id": None, "createDatetime": now_str, "serialVersionUID": None,
+        "solutionName": p.get('solution_name', ''),
+        "solutionCode": p.get('solution_code', ''),
+        "deviceIds": None, "deviceNames": p.get('device_names'),
+        "configureDate": p.get('configure_date'),
+        "validityDate": p.get('validity_date', ''),
+        "storageCondition": p.get('storage_condition'),
+        "storageLocation": p.get('storage_location', '4-1-华业4-1'),
+        "concentration": ";".join(conc_parts),
+        "concentrationCount": ";".join(conc_parts),
+        "concentrationUnitName": None, "uncertainty": None, "configureOrder": None,
+        "originalCode": ";".join(original_code_parts),
+        "controlledNo": ";".join(controlled_parts),
+        "medium": None, "configuratorId": None,
+        "solutionType": p.get('solution_type', 'SOLUTION_TYPE_B'),
+        "configuratorName": None, "constantVolume": 0, "totalConstantVolume": 0,
+        "usedConstantVolume": 0, "remark": None, "diluteStatus": False,
+        "consumableReceive": None, "customType": p.get('customType'), "auditUserName": None,
+        "auditTime": None, "diluteConcentrationControl": "[]",
+        "pageType": "SOLUTION_TYPE_A",
+        "saveDetailList": json.dumps(detail_items, ensure_ascii=False),
+        "originalValidityDate": earliest_expiry,
+        "configurationTemplateId": None, "intermediateTemplateId": None,
+        "temperature": p.get('temperature'), "humidity": p.get('humidity'),
+        "computingFormula": None, "configurationMethod": None,
+        "configurationProcess": None, "nextAuditUserName": None,
+        "disposeUserName": None, "disposeTime": None, "disposeWay": None,
+        "configurationSolutionTemplateId": None, "configurationRecordId": None,
+        "creatorName": None, "creatorId": None, "modifierName": None,
+        "modifyDatetime": now_str, "receivedUint": items[0].get('original_unit', '%'),
+        "pid": pid, "pname": pname, "loginId": pid,
+    }
+
+    try:
+        url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/saveSolutionConfigure"
+        headers = {
+            "Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544",
+            "Content-Type": "application/json;charset=UTF-8",
+        }
+        resp = system.session.post(url, json=payload, headers=headers)
+        if resp.status_code in (401, 403) or _resp_looks_expired(resp):
+            return _expired_response()
+        if not resp.ok:
+            print(f"[save_solution_mix] status={resp.status_code} body={resp.text[:500]}")
+            return jsonify({"success": False, "message": f"LIMS 请求失败，状态码: {resp.status_code}"}), 502
+        result = resp.json()
+        if not result.get('success'):
+            return jsonify({
+                "success": False,
+                "message": result.get('errorDesc') or str(result.get('errorCtx', '配置失败')),
+            })
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"[save_solution_mix] exception: {e}")
+        return jsonify({"success": False, "message": f"配置异常: {str(e)}"}), 500
+
+
 @app.route('/api/lims/solution_code_check', methods=['GET'])
 def solution_code_check():
     """代理工作液编号检查请求"""
