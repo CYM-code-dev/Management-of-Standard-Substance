@@ -3798,6 +3798,20 @@
 
     // ========== 查看详情功能 ==========
 
+    // A-BCD：N-N（各自单独定容）路由——设类型/标题，加入 solItems 再开 #solConfigModal。
+    // B/C 单项与 N-N 多项共用，避免两处重复（type-hidden 单项路径 + topology-hidden NN 路径）。
+    function abcdOpenNNConfig(items, solType) {
+        document.getElementById('solType').value = solType;
+        const titleEl = document.getElementById('solConfigModalTitle');
+        if (titleEl) titleEl.textContent = solType === 'SOLUTION_TYPE_C' ? '应用液配置参数' : '储备液配置参数';
+        const _before = solItems.length;
+        items.forEach(it => solAddItem(it));
+        // 仅当真正加入了至少一项才打开（全部无浓度被拦时不打开）
+        if (solItems.length > _before) {
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('solConfigModal')).show();
+        }
+    }
+
     // 预取 D 类型（工作液）的源溶液信息到 window._dViewSourceInfo，供 bbcdPopulateConfigModal
     // 填充源数据（solutionCode/concUnit 等）。bbcdViewDetail / qqViewDetail / qqExportRecord 共用，
     // 任一处漏调都会导致导出源数据缺失或残留旧值（曾出现"待审核/快速查询→详情→导出"源数据错误的 bug）。
@@ -8964,17 +8978,12 @@
         document.getElementById('solResultAddBtn').addEventListener('click', () => {
             const selectedItems = [...solSelectedMap.values()];
             if (!selectedItems.length) return;
-            // 暂存待配制标准品，待用户选拓扑/类型后再路由
+            // 暂存待配制标准品，待用户选类型/拓扑后再路由
             window.abcdPendingItems = selectedItems;
-            if (selectedItems.length >= 2) {
-                // 2+ 项：先问定容方式 N-N（各自单独）/ N-1（混合 1 瓶）
-                window.abcdTopology = null;
-                bootstrap.Modal.getOrCreateInstance(document.getElementById('abcdTopologyPickerModal')).show();
-            } else {
-                // 1 项：单瓶，直接选类型
-                window.abcdTopology = 'NN';
-                bootstrap.Modal.getOrCreateInstance(document.getElementById('abcdTypePickerModal')).show();
-            }
+            window.abcdSelectedType = null;
+            window.abcdTopology = null;
+            // 始终先选标液类型；选 D 直接进（恒 N-1），选 B/C 且 ≥2 项再问定容方式
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('abcdTypePickerModal')).show();
         });
         document.getElementById('solConfigModal').addEventListener('hidden.bs.modal', () => {
             solItems = [];
@@ -9090,7 +9099,7 @@
             }
         });
 
-        // A-BCD 拓扑选择：N-N（各自单独）/ N-1（混合 1 瓶）→ 选完再弹类型选择
+        // A-BCD 拓扑选择：N-N（各自单独）/ N-1（混合 1 瓶）。仅 B/C 且 ≥2 项时弹出（类型已先选）。
         document.getElementById('abcdTopologyPickerModal').addEventListener('click', (e) => {
             const btn = e.target.closest('.abcd-topology-pick');
             if (!btn) return;
@@ -9098,13 +9107,23 @@
             bootstrap.Modal.getOrCreateInstance(document.getElementById('abcdTopologyPickerModal')).hide();
         });
         document.getElementById('abcdTopologyPickerModal').addEventListener('hidden.bs.modal', () => {
-            if (!window.abcdTopology) return; // 用户关闭未选
-            setTimeout(() => {
-                bootstrap.Modal.getOrCreateInstance(document.getElementById('abcdTypePickerModal')).show();
-            }, 350);
+            const topology = window.abcdTopology;
+            const solType = window.abcdSelectedType;
+            const items = window.abcdPendingItems || [];
+            window.abcdTopology = null;
+            window.abcdSelectedType = null;
+            window.abcdPendingItems = null;
+            if (!topology || !solType || !items.length) return; // 用户关闭未选
+            // N-1（混合 1 瓶）：走 bbcdConfigModal 混合通路
+            if (topology === 'N1') {
+                setTimeout(() => bbcdOpenMixFromStandards(items, solType), 350);
+                return;
+            }
+            // N-N（各自单独）
+            setTimeout(() => abcdOpenNNConfig(items, solType), 350);
         });
 
-        // A-BCD 类型选择：按拓扑分流。N-N+B/C → solConfigModal；N-1+B/C → bbcdConfigModal % 混合；D 已禁用
+        // A-BCD 类型选择：先选类型。D 直接进（恒 N-1）；B/C 且 ≥2 项再弹拓扑；否则按单项 N-N 路由
         document.getElementById('abcdTypePickerModal').addEventListener('click', (e) => {
             const btn = e.target.closest('.abcd-type-pick');
             if (!btn || btn.disabled) return;
@@ -9113,34 +9132,31 @@
         });
         document.getElementById('abcdTypePickerModal').addEventListener('hidden.bs.modal', () => {
             const solType = window.abcdSelectedType;
-            window.abcdSelectedType = null;
             const items = window.abcdPendingItems || [];
-            const topology = window.abcdTopology || 'NN';
-            window.abcdPendingItems = null;
-            window.abcdTopology = null;
-            if (!solType || !items.length) return;
-            // 工作液 D：恒为 N-1（混到 1 瓶），与拓扑选择无关；仅收液体标准
+            if (!solType || !items.length) { // 用户关闭未选
+                window.abcdSelectedType = null;
+                window.abcdPendingItems = null;
+                return;
+            }
+            // 工作液 D：恒为 N-1（混到 1 瓶），不问拓扑；仅收液体标准
             if (solType === 'SOLUTION_TYPE_D') {
+                window.abcdSelectedType = null;
+                window.abcdPendingItems = null;
                 setTimeout(() => bbcdOpenConfigFromA_D(items), 350);
                 return;
             }
-            // N-1（混合 1 瓶）：走 bbcdConfigModal 的 % 称量混合通路（bbcdBuildPayload 支持 % 源）
-            if (topology === 'N1' && items.length >= 2) {
-                setTimeout(() => bbcdOpenMixFromStandards(items, solType), 350);
+            // B/C 且 ≥2 项：保留 solType/items，弹拓扑选择
+            if (items.length >= 2) {
+                window.abcdTopology = null;
+                setTimeout(() => {
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('abcdTopologyPickerModal')).show();
+                }, 350);
                 return;
             }
-            // N-N（各自单独）：设类型、按 solType 设标题，加入 solItems 再开配置弹窗
-            document.getElementById('solType').value = solType;
-            const titleEl = document.getElementById('solConfigModalTitle');
-            if (titleEl) titleEl.textContent = solType === 'SOLUTION_TYPE_C' ? '应用液配置参数' : '储备液配置参数';
-            const _before = solItems.length;
-            items.forEach(it => solAddItem(it));
-            // 仅当真正加入了至少一项才打开（全部无浓度被拦时不打开）
-            if (solItems.length > _before) {
-                setTimeout(() => {
-                    bootstrap.Modal.getOrCreateInstance(document.getElementById('solConfigModal')).show();
-                }, 350);
-            }
+            // B/C 单项：直接 N-N
+            window.abcdSelectedType = null;
+            window.abcdPendingItems = null;
+            setTimeout(() => abcdOpenNNConfig(items, solType), 350);
         });
 
         // 配置弹窗关闭时恢复选中状态（如果未保存）
