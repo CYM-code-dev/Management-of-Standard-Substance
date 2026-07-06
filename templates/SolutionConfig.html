@@ -9427,8 +9427,8 @@
         tbody.innerHTML = pageItems.map(item => {
             const solType = qqDetectType(item);
             const auditHtml = item.auditUserName
-                ? '<span class="badge bg-success">已审核</span>'
-                : '<span class="badge bg-secondary">未审核</span>';
+                ? '<span class="badge" style="background-color:#198754;color:#fff;">已审核</span>'
+                : '<span class="badge" style="background-color:#ffc107;color:#212529;">未审核</span>';
             const realIdx = qqLastResults.indexOf(item);
             const detailIcon = `<i class="fas fa-eye solution-config-icon qq-detail-btn" data-idx="${realIdx}" title="查看详情" style="color:#14b8a6;"></i>`;
             const opIcons = qqAuditMode ? detailIcon
