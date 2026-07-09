@@ -5095,6 +5095,10 @@ def _niimbot_ensure_connected():
         resp = requests.get(f"{NIIMBOT_SERVER}/connected", timeout=3)
         if resp.ok and resp.json().get("connected"):
             return True, None
+    except requests.exceptions.ConnectionError:
+        # 打印服务进程不在 → 自动重启；失败则给出准确信息，避免误导为「扫描打印机失败」
+        if not start_niimbot_server():
+            return False, "打印服务未启动，自动重启失败，请手动运行 npm start"
     except Exception:
         pass
     # 扫描串口，过滤非打印机设备，逐个尝试连接
@@ -5176,7 +5180,7 @@ def start_niimbot_server():
     try:
         requests.get(f"{NIIMBOT_SERVER}/connected", timeout=2)
         print("  打印服务已在运行")
-        return
+        return True
     except Exception:
         pass
     try:
@@ -5194,12 +5198,14 @@ def start_niimbot_server():
             try:
                 requests.get(f"{NIIMBOT_SERVER}/connected", timeout=2)
                 print("  打印服务已自动启动")
-                return
+                return True
             except Exception:
                 continue
         print("  警告：打印服务启动超时，请手动运行 npm start")
+        return False
     except Exception as e:
         print(f"  警告：打印服务启动失败: {e}，请手动运行 npm start")
+        return False
 
 
 # ==================== 标液核查草稿（仅创建者可见，3 自然日过期） ====================
