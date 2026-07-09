@@ -826,6 +826,7 @@
       </div>
       <div class="modal-footer gap-2">
         <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">关闭</button>
+        <button class="btn btn-sm btn-outline-secondary" id="solPrintLabelBtn" disabled><i class="fas fa-print me-1"></i>打印标签</button>
         <button class="btn btn-sm btn-outline-secondary" id="solExportBtn" disabled><i class="fas fa-file-word me-1"></i>导出记录</button>
         <button class="btn btn-sm btn-primary" id="solSaveBtn" disabled><i class="fas fa-save me-1"></i>确认领用并保存</button>
       </div>
@@ -1896,6 +1897,7 @@
         solLastResults = [];
         document.getElementById('solSaveBtn').disabled = true;
         document.getElementById('solExportBtn').disabled = true;
+        document.getElementById('solPrintLabelBtn').disabled = true;
         solSetBtnSaved(false);
         solSetBtnExported(false);
         const abTab = document.getElementById('sol-ab-tab');
@@ -2041,6 +2043,7 @@
         solRenderItemsTable();
         document.getElementById('solSaveBtn').disabled = false;
         document.getElementById('solExportBtn').disabled = false;
+        document.getElementById('solPrintLabelBtn').disabled = false;
         solSetBtnSaved(false);
         solSetBtnExported(false);
         if (solItems.length === 1) {
@@ -2158,6 +2161,7 @@
                 if (!solItems.length) {
                     document.getElementById('solSaveBtn').disabled = true;
                     document.getElementById('solExportBtn').disabled = true;
+                    document.getElementById('solPrintLabelBtn').disabled = true;
                 }
             });
             const nameEl = tbody.querySelector(`.sol-row-name[data-idx="${idx}"]`);
@@ -8990,6 +8994,7 @@
             solRenderItemsTable();
             document.getElementById('solSaveBtn').disabled = true;
             document.getElementById('solExportBtn').disabled = true;
+            document.getElementById('solPrintLabelBtn').disabled = true;
             solSetBtnSaved(false);
             solSetBtnExported(false);
             // 复位类型与标题，避免上轮 C 的状态泄漏到 prefill 等直开路径
@@ -9011,6 +9016,7 @@
         });
         document.getElementById('solSaveBtn').addEventListener('click', solSave);
         document.getElementById('solExportBtn').addEventListener('click', solExport);
+        document.getElementById('solPrintLabelBtn').addEventListener('click', solPrintLabel);
 
         // 批量设置按钮
         document.getElementById('solBatchMediumBtn').addEventListener('click', () => {
@@ -9622,6 +9628,89 @@
             alert('打印失败: ' + e.message);
             btn.innerHTML = orig;
             btn.disabled = false;
+        }
+    }
+
+    async function solPrintLabel() {
+        const btn = document.getElementById('solPrintLabelBtn');
+        const orig = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
+        try {
+            const tbody = document.getElementById('solItemsTbody');
+            const configureDate = document.getElementById('solConfigureDate').value;
+
+            // 配置人：取当前登录用户
+            let creatorName = '';
+            try {
+                const sr = await fetch('/api/status'); const sd = await sr.json();
+                creatorName = (sd.display_name || sd.username || '').trim();
+            } catch(e) {}
+
+            const images = [];
+            for (let idx = 0; idx < solItems.length; idx++) {
+                const item = solItems[idx];
+                const row = (sel) => (tbody.querySelector(`${sel}[data-idx="${idx}"]`) || {});
+                const name = (row('.sol-row-name').value || '').trim();
+                const code = (row('.sol-row-code').value || '').trim();
+                const concVal = (row('.sol-row-conc').value || '').trim();
+                if (!name || !code) continue;                  // 标签至少需要名称+编号
+                const validityDate = row('.sol-row-validity').value || '';
+                const storageCondition = row('.sol-row-storage').value || '';
+                const medium = row('.sol-row-medium').value || '';
+                // 浓度字符串补单位：% 源（称量）计算结果为 μg/mL，非 % 源沿用源单位（见 solCalcRowConc 第 2217 行）
+                const unit = item.numUnitName || 'g';
+                const srcUnit = item.concentrationUnitName || (unit === 'g' ? '%' : 'μg/mL');
+                const resultUnit = srcUnit === '%' ? 'μg/mL' : srcUnit;
+                const concentration = concVal ? `${concVal} ${resultUnit}` : '';
+
+                const resp = await fetch('/api/lims/print_label', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        solution_name: name, solution_code: code, concentration,
+                        configure_date: configureDate, validity_date: validityDate,
+                        storage_condition: storageCondition, medium, creator_name: creatorName,
+                    }),
+                });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.message || '生成失败');
+                images.push({ code, preview: data.preview, image: data.image });
+            }
+            if (!images.length) { alert('未找到可打印的标签数据（每行需填写标液名称和自编号）'); return; }
+
+            // 弹窗展示标签图片（复用 bbcdPrintLabel 的预览弹窗逻辑，仅 modalId/imagesKey 不同）
+            const modalId = 'solLabelPreviewModal';
+            const imagesKey = 'solLabelImages';
+            let modal = document.getElementById(modalId); if (modal) modal.remove();
+            window['_' + imagesKey] = images;
+            const imgHTML = images.map((img, idx) =>
+                `<div class="mb-3"><div class="small text-muted mb-1">第 ${idx + 1} 个标签: ${img.code}</div>` +
+                `<img src="${img.preview}" style="border:1px solid #dee2e6;max-width:100%;" alt="标签预览"></div>`
+            ).join('');
+            document.body.insertAdjacentHTML('beforeend', `
+                <div class="modal fade" id="${modalId}" tabindex="-1">
+                  <div class="modal-dialog modal-lg"><div class="modal-content">
+                    <div class="modal-header"><h5 class="modal-title">标签预览</h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-body">${imgHTML}</div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-sm btn-primary" onclick="doActualPrint('${imagesKey}')"><i class="fas fa-print me-1"></i>确认打印</button>
+                      <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    </div>
+                  </div></div>
+                </div>`);
+            const previewModalEl = document.getElementById(modalId);
+            bootstrap.Modal.getOrCreateInstance(previewModalEl).show();
+            // 标签预览需浮在已打开的配置弹窗之上（镜像 bbcdPrintLabel 的 z-index 处理）
+            const baseZ = Math.max(1055, ...Array.from(document.querySelectorAll('.modal.show'))
+                .filter(m => m !== previewModalEl).map(m => parseInt(getComputedStyle(m).zIndex) || 1055));
+            const topZ = baseZ + 10;
+            previewModalEl.style.zIndex = String(topZ);
+            setTimeout(() => { const b = document.querySelectorAll('.modal-backdrop'); const lb = b[b.length-1]; if (lb) lb.style.zIndex = String(topZ - 1); }, 50);
+        } catch (e) {
+            alert('生成标签失败: ' + e.message);
+        } finally {
+            btn.disabled = false; btn.innerHTML = orig;
         }
     }
 
