@@ -2217,10 +2217,15 @@
         let conc = concUnit === '%' ? purityRaw / 100.0 * qty * 1000000 / volRounded : purityRaw * qty / volRounded;
         let concStr;
         if (concUnit === '%') {
-            concStr = String(Number(conc.toPrecision(12)));
+            // % 保留全精度，但保证小数点后至少 2 位（补 0）
+            let s = String(Number(conc.toPrecision(12)));
+            const dotIdx = s.indexOf('.');
+            if (dotIdx === -1) s += '.00';
+            else { const decLen = s.length - dotIdx - 1; if (decLen < 2) s += '0'.repeat(2 - decLen); }
+            concStr = s;
         } else {
             const decimals = conc < 0.10 ? 3 : 2;
-            concStr = conc.toFixed(decimals);
+            concStr = bbcdRoundEven(conc, decimals).toFixed(decimals);
         }
         const concRounded = parseFloat(concStr);
         concEl.value = concStr;
@@ -2846,20 +2851,20 @@
         if (!qty || !vol || qty <= 0 || vol <= 0) return '';
         const isPct = firstTr._src.isPctSource;
 
-        // 多组分源：取所有组分计算浓度的均值
+        // 多组分源：先各自修约（与工作液 .bbcd-d-conc 单元格口径一致），再对修约值取均值
         if (firstTr._src.isComponent && firstTr._src.componentCount > 1) {
             const compVals = [];
             for (const tr of rows) {
                 if (isPct) {
                     const n = bbcdPctConcNum(tr._src, qty, vol);
-                    if (!isNaN(n)) compVals.push(n);
+                    if (!isNaN(n)) compVals.push(bbcdRoundConc(n));
                 } else if (isFinite(tr._src.concValue)) {
-                    compVals.push(tr._src.concValue * qty / vol);
+                    compVals.push(bbcdRoundConc(tr._src.concValue * qty / vol));
                 }
             }
             if (compVals.length) {
                 const mean = compVals.reduce((a, b) => a + b, 0) / compVals.length;
-                return bbcdFmtConc(bbcdRoundConc(mean));
+                return bbcdFmtConc(mean);
             }
         }
 
@@ -2887,7 +2892,7 @@
             if (!qty || qty <= 0) return;
             if (tr._src.isPctSource) {
                 const n = bbcdPctConcNum(tr._src, qty, vol);
-                if (!isNaN(n)) { vals.push(n); ws.push(bbcdRowWeight(tr)); }
+                if (!isNaN(n)) { vals.push(bbcdRoundConc(n)); ws.push(bbcdRowWeight(tr)); }
                 return;
             }
             let concValue = tr._src.concValue;
@@ -2900,13 +2905,13 @@
                 }
             }
             if (isNaN(concValue)) return;
-            vals.push(concValue * qty / vol);
+            vals.push(bbcdRoundConc(concValue * qty / vol));
             ws.push(bbcdRowWeight(tr));
         });
         if (!vals.length) return '';
         const mean = bbcdWeightedMean(vals, ws);
         if (mean === null) return '';
-        return bbcdFmtConc(bbcdRoundConc(mean));
+        return bbcdFmtConc(mean);
     }
 
     function bbcdGetEffectiveSourceCount(srcList) {
@@ -5903,14 +5908,17 @@
             if (detailList.length > 1) {
                 // Multi-source: one row per detailList entry
                 detailList.forEach((dl, idx) => {
-                    let resultConc = '';
+                    let storedConc = '';
                     if (idx < concParts.length && concParts[idx].includes(':')) {
                         const ci = concParts[idx].lastIndexOf(':');
                         const cm = concParts[idx].substring(ci + 1).match(/^([\d.]+)/);
-                        resultConc = cm ? cm[1] : '';
+                        storedConc = cm ? cm[1] : '';
                     } else {
-                        resultConc = _extractConcVal(concStr);
+                        storedConc = _extractConcVal(concStr);
                     }
+                    // 浓度优先按 母体浓度×取量/定容体积 重算（与单独导出口径一致）；
+                    // LIMS 记录 concentration 字段可能为旧值，重算才与显示的取量/母体自洽
+                    const resultConc = _recomputeAncestorConc(dl.originalConcentration, dl.receivedQuantity, dl.volume, storedConc);
                     // Resolve originalNo: prefer recLookup full solution_code over LIMS raw data
                     let noStr = dl.originalNo || '';
                     const orderPart = noStr.split('\n')[0].trim() || dl.originalCode || r.configure_order;
@@ -5965,7 +5973,8 @@
                     receivedUint: r.received_unit || 'mL',
                     medium: r.medium || '',
                     volume: r.constant_volume || '',
-                    configurationConcentration: _extractConcVal(concStr),
+                    configurationConcentration: _recomputeAncestorConc(
+                        r.parent_concentration, r.received_quantity, r.constant_volume, _extractConcVal(concStr)),
                     configurationUnit: _extractConcUnit(concStr),
                     originalNo: noStr,
                     resultCode: r.solution_code || '',
@@ -6010,6 +6019,19 @@
         // Match the unit in "number(unit)" format (at end of each component)
         const um = concStr.match(/[\d.]+\(([^)]+)\)/);
         return um ? um[1] : '';
+    }
+
+    // 合并导出祖先行浓度：优先按 母体浓度×取量/定容体积 重算（与单独导出口径一致），
+    // 避免 LIMS 记录 concentration 字段为旧值时显示错误；缺值则回退到字段解析值。
+    function _recomputeAncestorConc(srcConcStr, qtyStr, volStr, fallback) {
+        const srcM = (srcConcStr || '').match(/([\d.]+)/);
+        const src = srcM ? parseFloat(srcM[1]) : NaN;
+        const qty = parseFloat(qtyStr);
+        const vol = parseFloat(volStr);
+        if (isFinite(src) && isFinite(qty) && isFinite(vol) && src > 0 && vol > 0) {
+            return bbcdFmtConc(src * qty / vol);
+        }
+        return fallback || '';
     }
 
     // 详情模式：切换当前记录的审核状态（审核 ↔ 取消审核）
@@ -9922,7 +9944,7 @@
                     const concs = detailList.map(d => parseFloat(d[field])).filter(v => isFinite(v) && v > 0);
                     if (concs.length === 0) continue;
                     const avg = concs.reduce((a, b) => a + b, 0) / concs.length;
-                    const concStr = avg < 0.10 ? avg.toFixed(3) : avg.toFixed(2);
+                    const concStr = bbcdFmtConc(avg);
                     const unit = detailList[0]?.groupUnit || 'μg/mL';
                     const labelCode = `${baseCode}-${concStr}-${today}${mx ? '-' + mx : ''}`;
                     const concentration = `${concStr}${unit}`;
@@ -9955,7 +9977,7 @@
                 let concStr = '';
                 if (concValues.length > 0) {
                     const avg = concValues.reduce((a, b) => a + b, 0) / concValues.length;
-                    concStr = (avg < 0.10 ? avg.toFixed(3) : avg.toFixed(2)) + unit;
+                    concStr = bbcdFmtConc(avg) + unit;
                 }
                 const printResp = await fetch('/api/lims/print_label', {
                     method: 'POST',
