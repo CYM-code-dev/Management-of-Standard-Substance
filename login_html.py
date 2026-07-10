@@ -89,15 +89,13 @@ def _round_conc(val, conc_unit):
 
 def _fmt_conc(val, conc_unit):
     if conc_unit == '%':
-        # % 保留全精度，但保证小数点后至少 2 位（补 0），与前端 solCalcRowConc % 分支一致
+        # % 保留全精度自然值（不补零），与前端 solCalcRowConc % 分支一致
         s = f"{val:.10f}" if isinstance(val, float) else str(val)
         if '.' in s:
             int_part, dec_part = s.split('.', 1)
             dec_part = dec_part.rstrip('0')
-            if len(dec_part) < 2:
-                dec_part = dec_part.ljust(2, '0')
-            return int_part + '.' + dec_part
-        return s + '.00'
+            return int_part + '.' + dec_part if dec_part else int_part
+        return s
     decimals = 3 if val < 0.10 else 2
     return f"{val:.{decimals}f}"
 

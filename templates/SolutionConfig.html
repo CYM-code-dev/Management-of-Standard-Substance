@@ -2217,12 +2217,8 @@
         let conc = concUnit === '%' ? purityRaw / 100.0 * qty * 1000000 / volRounded : purityRaw * qty / volRounded;
         let concStr;
         if (concUnit === '%') {
-            // % 保留全精度，但保证小数点后至少 2 位（补 0）
-            let s = String(Number(conc.toPrecision(12)));
-            const dotIdx = s.indexOf('.');
-            if (dotIdx === -1) s += '.00';
-            else { const decLen = s.length - dotIdx - 1; if (decLen < 2) s += '0'.repeat(2 - decLen); }
-            concStr = s;
+            // % 保留全精度，不补零
+            concStr = String(Number(conc.toPrecision(12)));
         } else {
             const decimals = conc < 0.10 ? 3 : 2;
             concStr = bbcdRoundEven(conc, decimals).toFixed(decimals);
@@ -5908,17 +5904,14 @@
             if (detailList.length > 1) {
                 // Multi-source: one row per detailList entry
                 detailList.forEach((dl, idx) => {
-                    let storedConc = '';
+                    let resultConc = '';
                     if (idx < concParts.length && concParts[idx].includes(':')) {
                         const ci = concParts[idx].lastIndexOf(':');
                         const cm = concParts[idx].substring(ci + 1).match(/^([\d.]+)/);
-                        storedConc = cm ? cm[1] : '';
+                        resultConc = cm ? cm[1] : '';
                     } else {
-                        storedConc = _extractConcVal(concStr);
+                        resultConc = _extractConcVal(concStr);
                     }
-                    // 浓度优先按 母体浓度×取量/定容体积 重算（与单独导出口径一致）；
-                    // LIMS 记录 concentration 字段可能为旧值，重算才与显示的取量/母体自洽
-                    const resultConc = _recomputeAncestorConc(dl.originalConcentration, dl.receivedQuantity, dl.volume, storedConc);
                     // Resolve originalNo: prefer recLookup full solution_code over LIMS raw data
                     let noStr = dl.originalNo || '';
                     const orderPart = noStr.split('\n')[0].trim() || dl.originalCode || r.configure_order;
@@ -5973,8 +5966,7 @@
                     receivedUint: r.received_unit || 'mL',
                     medium: r.medium || '',
                     volume: r.constant_volume || '',
-                    configurationConcentration: _recomputeAncestorConc(
-                        r.parent_concentration, r.received_quantity, r.constant_volume, _extractConcVal(concStr)),
+                    configurationConcentration: _extractConcVal(concStr),
                     configurationUnit: _extractConcUnit(concStr),
                     originalNo: noStr,
                     resultCode: r.solution_code || '',
@@ -6019,19 +6011,6 @@
         // Match the unit in "number(unit)" format (at end of each component)
         const um = concStr.match(/[\d.]+\(([^)]+)\)/);
         return um ? um[1] : '';
-    }
-
-    // 合并导出祖先行浓度：优先按 母体浓度×取量/定容体积 重算（与单独导出口径一致），
-    // 避免 LIMS 记录 concentration 字段为旧值时显示错误；缺值则回退到字段解析值。
-    function _recomputeAncestorConc(srcConcStr, qtyStr, volStr, fallback) {
-        const srcM = (srcConcStr || '').match(/([\d.]+)/);
-        const src = srcM ? parseFloat(srcM[1]) : NaN;
-        const qty = parseFloat(qtyStr);
-        const vol = parseFloat(volStr);
-        if (isFinite(src) && isFinite(qty) && isFinite(vol) && src > 0 && vol > 0) {
-            return bbcdFmtConc(src * qty / vol);
-        }
-        return fallback || '';
     }
 
     // 详情模式：切换当前记录的审核状态（审核 ↔ 取消审核）
