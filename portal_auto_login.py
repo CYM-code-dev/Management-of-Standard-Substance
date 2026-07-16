@@ -177,7 +177,7 @@ def login(session, cfg):
                 mac = mac or q.get("clientmac", "")
     u = gb2312_quote(cfg["username"])
     p = pa_aes_encode(cfg["password"])
-    code = pa_aes_encode("")  # 无图形验证码,与网页一致传 AES("")
+    code = ""  # 无图形验证码:抓包确认网页传空 code;传 AES("") 会被当作非法验证码 → code:1 请求失败
     q = ("route=webauth&action=user_login&auth_type=panabit"
          f"&ip={ip}&mac={mac}&code={code}&username={u}&password={p}&remember_me=1")
     r = session.post(f"http://{cfg['portal_host']}/api?{q}", timeout=10)
