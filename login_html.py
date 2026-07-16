@@ -2913,9 +2913,11 @@ def lims_delete_receive():
     if not pid:
         return jsonify({"success": False, "message": "无法获取用户PID，请重新登录"}), 401
     try:
-        # 如果传了 consumable_ids，先查询对应的领用记录ID
+        # 领用记录删除支持三种入参：ids(领用id) / source_ids(源溶液id，按viewConsumableReceive查领用) / consumable_ids(耗材id)
         consumable_ids = p.get('consumable_ids')
         receive_ids = p.get('ids')
+        source_ids = p.get('source_ids')
+        receive_id_list = []
         if consumable_ids and not receive_ids:
             if not isinstance(consumable_ids, list):
                 consumable_ids = [consumable_ids]
@@ -2936,33 +2938,67 @@ def lims_delete_receive():
                         rid = rec.get('id')
                         if rid:
                             found_ids.append(str(rid))
-            if not found_ids:
-                return jsonify({"success": True, "message": "无关联领用记录"})
             receive_ids = found_ids
-        if not receive_ids:
+        if receive_ids:
+            if isinstance(receive_ids, list):
+                receive_id_list = [str(i) for i in receive_ids]
+            else:
+                receive_id_list = [str(i).strip() for i in str(receive_ids).split(',') if str(i).strip()]
+        elif source_ids:
+            # 按源溶液（被领用的储备液/应用液）查领用：viewConsumableReceive?id=<源溶液id>&type=<源溶液类型>
+            # 用于删工作液(D)时补删 LIMS 漏删的、挂在储备液名下的领用记录
+            if isinstance(source_ids, list) and source_ids and isinstance(source_ids[0], dict):
+                sources = [(str(s.get('id', '')).strip(), s.get('type') or 'SOLUTION_TYPE_B') for s in source_ids if s.get('id')]
+            else:
+                stype = p.get('source_type') or 'SOLUTION_TYPE_B'
+                lst = source_ids if isinstance(source_ids, list) else [source_ids]
+                sources = [(str(sid).strip(), stype) for sid in lst if str(sid).strip()]
+            for sid, stype in sources:
+                vurl = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/viewConsumableReceive"
+                vresp = system.session.get(vurl, params={
+                    '_search': 'false', 'pageSize': 9999, 'pageNo': 1, 'sidx': '', 'sord': 'asc',
+                    'id': sid, 'type': stype,
+                    'pid': str(pid), 'pname': pname, 'loginId': str(pid),
+                }, headers={"Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544"})
+                if vresp.ok:
+                    try:
+                        for rec in (vresp.json().get('resultData') or []):
+                            rid = rec.get('id')
+                            if rid:
+                                receive_id_list.append(str(rid))
+                    except Exception:
+                        pass
+        if not receive_id_list:
             return jsonify({"success": True, "message": "无领用记录需要删除"})
-        if isinstance(receive_ids, list):
-            receive_ids = ','.join(str(i) for i in receive_ids)
-        url = f"{system.base_url}/detectionManager/manager/consumableReceive"
-        form_data = {
-            'ids': str(receive_ids),
-            'pid': str(pid),
-            'pname': pname,
-            'loginId': str(pid),
-            '_method': 'DELETE',
+        # 删领用走溶液配置模块的 delReceiveId（耗材领用通用接口 consumableReceive 会校验原操作人，配制产生的领用会被拒）
+        headers = {
+            "Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         }
-        resp = system.session.post(url, data=form_data)
-        if not resp.ok:
-            print(f"[deleteReceive] status={resp.status_code} body={resp.text[:500]}")
-        ct = resp.headers.get('Content-Type', '')
-        if 'html' in ct or resp.text.lstrip().startswith('<!') or resp.text.lstrip().startswith('<html'):
-            print(f"[deleteReceive] session过期，返回了HTML: {resp.text[:200]}")
-            return _expired_response("LIMS 会话已过期，请重新登录后再试")
-        result = resp.json()
-        if not result.get("success"):
-            err_ctx = result.get('errorCtx') or {}
-            err_msg = result.get('errorDesc') or (err_ctx.get('errorMsg') if isinstance(err_ctx, dict) else '') or '删除领用记录失败'
-            return jsonify({"success": False, "message": err_msg})
+        failed = []
+        for rid in receive_id_list:
+            url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/delReceiveId"
+            form_data = {
+                'ids': rid,
+                'pid': str(pid),
+                'pname': pname,
+                'loginId': str(pid),
+                '_method': 'DELETE',
+            }
+            resp = system.session.post(url, data=form_data, headers=headers)
+            if not resp.ok:
+                print(f"[deleteReceive] status={resp.status_code} body={resp.text[:500]}")
+            ct = resp.headers.get('Content-Type', '')
+            if 'html' in ct or resp.text.lstrip().startswith('<!') or resp.text.lstrip().startswith('<html'):
+                print(f"[deleteReceive] session过期，返回了HTML: {resp.text[:200]}")
+                return _expired_response("LIMS 会话已过期，请重新登录后再试")
+            result = resp.json()
+            if not result.get("success"):
+                err_ctx = result.get('errorCtx') or {}
+                err_msg = result.get('errorDesc') or (err_ctx.get('errorMsg') if isinstance(err_ctx, dict) else '') or '删除领用记录失败'
+                failed.append(f"{rid}: {err_msg}")
+        if failed:
+            return jsonify({"success": False, "message": "；".join(failed)})
         return jsonify({"success": True})
     except Exception as e:
         print(f"[deleteReceive] exception: {e}")
@@ -4496,6 +4532,20 @@ def lims_get_verification_info():
                         'conc_str': conc_from_code or '',
                     })
             point_codes = [pt['code'] for pt in points]
+
+            # 解析直接父级(储备液/应用液)的完整自编号，供"新旧储备液比对"核查方法显示
+            parent_codes = []
+            for src_order in _extract_direct_source_codes(rec.get('originalCode')):
+                try:
+                    src_id = _resolve_order_to_lims_id(system, src_order)
+                    if not src_id:
+                        continue
+                    prec = _fetch_solution_view(system, src_id, order_str=src_order)
+                    if prec and prec.get('solutionCode'):
+                        parent_codes.append(str(prec['solutionCode']).strip())
+                except Exception:
+                    pass
+
             return {
                 'id': rec.get('id'),
                 'configureOrder': rec.get('configureOrder', ''),
@@ -4505,6 +4555,7 @@ def lims_get_verification_info():
                 'concentrationPoints': points,
                 'validityDate': str(rec.get('validityDate', ''))[:10],
                 'customType': rec.get('customType', ''),
+                'parentSolutionCode': '\n'.join(parent_codes),
             }
 
         new_info = _build_solution_info(new_rec)

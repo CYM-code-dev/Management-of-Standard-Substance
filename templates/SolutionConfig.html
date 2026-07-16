@@ -1082,7 +1082,10 @@
           </div>
           <div class="col-auto">
             <label class="form-label mb-1 small fw-bold">核查方法</label>
-            <input type="text" id="verifyMethodName" class="form-control form-control-sm" value="新旧标准曲线比对" readonly>
+            <select id="verifyMethodName" class="form-select form-select-sm">
+              <option value="新旧标准曲线比对">新旧标准曲线比对</option>
+              <option value="新旧储备液比对">新旧储备液比对</option>
+            </select>
           </div>
         </div>
 
@@ -2561,6 +2564,14 @@
             }
         }
         return components.length > 1 ? components : null;
+    }
+
+    // 多组分源稀释后的均值浓度：先各自修约(c×取量/体积)、再对修约值求均值、再 bbcdFmtConc。
+    // 与自编号 bbcdComputeSingleConc 多组分分支同口径；单独导出/合并导出共用本函数，避免两边漂移(曾因各自算法不同差 0.01)。
+    function bbcdMeanDilutedConc(speciesValues, qty, volume) {
+        if (!speciesValues || !speciesValues.length || !(qty > 0) || !(volume > 0)) return '';
+        const rounded = speciesValues.map(v => bbcdRoundConc(v * qty / volume));
+        return bbcdFmtConc(rounded.reduce((s, v) => s + v, 0) / rounded.length);
     }
 
     // 从源名称解析"X种"混标的种数（如"5种阴离子混标"→5、"29种芳香族伯胺混标"→29），
@@ -5613,13 +5624,12 @@
 
             if (group.isMulti) {
                 const meanConc = bbcdRoundConc(group.rows.reduce((s, tr) => s + tr._src.concValue, 0) / group.rows.length);
-                const c = bbcdRoundConc(meanConc * qty / volume);
                 return {
                     originalName: firstSrc.solutionName,
                     originalConcentration: `${bbcdFmtConc(meanConc)}(${firstSrc.concUnit})`,
                     receivedQuantity: _detailMlQty || bbcdFmtQty(qty),
                     medium, volume: volStr,
-                    configurationConcentration: bbcdFmtConc(c),
+                    configurationConcentration: bbcdMeanDilutedConc(group.rows.map(tr => tr._src.concValue), qty, volume),
                     configurationUnit: firstSrc.concUnit,
                     originalNo: firstSrc.solutionCode ? `${firstSrc.configureOrder}\n${firstSrc.solutionCode}` : firstSrc.configureOrder,
                 };
@@ -5899,19 +5909,19 @@
             const dilutionIdx = -lo;
             const detailList = r._detail_list || [];
             const concStr = r.concentration || '';
-            const concParts = concStr.split(';').map(s => s.trim()).filter(Boolean);
 
             if (detailList.length > 1) {
                 // Multi-source: one row per detailList entry
-                detailList.forEach((dl, idx) => {
-                    let resultConc = '';
-                    if (idx < concParts.length && concParts[idx].includes(':')) {
-                        const ci = concParts[idx].lastIndexOf(':');
-                        const cm = concParts[idx].substring(ci + 1).match(/^([\d.]+)/);
-                        resultConc = cm ? cm[1] : '';
-                    } else {
-                        resultConc = _extractConcVal(concStr);
-                    }
+                detailList.forEach((dl) => {
+                    // 每源行结果浓度 = 先各自修约(c×q/v)再求均值(round-each-then-mean)，与单独导出/自编号统一口径；
+                    // 经 bbcdMeanDilutedConc 与单独导出共用同一函数，保证逐位一致。
+                    // 不能用记录级 concStr 按 idx 取物种值(错配 bug，曾把 3PAE 物种贴到 12PAE 源行)。
+                    const _sp = bbcdParseMultiConc(dl.concentrationCount || dl.originalConcentration || '');
+                    const _qty = bbcdRoundQty(parseFloat(dl.receivedQuantity));
+                    const _vol = bbcdRoundVol(parseFloat(dl.volume));
+                    let resultConc = (_sp && _sp.length && _qty > 0 && _vol > 0)
+                        ? bbcdMeanDilutedConc(_sp.map(c => c.value), _qty, _vol)
+                        : (_extractConcVal(dl.configurationConcentration || '') || _extractConcVal(concStr));
                     // Resolve originalNo: prefer recLookup full solution_code over LIMS raw data
                     let noStr = dl.originalNo || '';
                     const orderPart = noStr.split('\n')[0].trim() || dl.originalCode || r.configure_order;
@@ -6409,6 +6419,55 @@
         finally { bbcdLastResults = saved; }
     }
 
+    /**
+     * 删除溶液配置单并清理其关联领用记录（B/C/D 通用）。
+     * 流程：删配制单前先查详情收集领用ID（删后详情可能不可查）→ 删配制单 → 删领用记录。
+     * 返回 {success, message?}：success 表示配制单是否删除成功；message 非空时为领用清理提示。
+     */
+    async function deleteSolutionWithReceive(item, solType) {
+        // 工作液(D)：删配制单后，按它领用的源溶液(储备液)查领用补删——LIMS 删工作液会漏删1条挂在储备液名下的领用。
+        // B/C 领用机制不同（领用标品走 consumableReceive，且需先删领用再删配制单），这里不自动删领用。
+        let sources = [];
+        if (solType === 'SOLUTION_TYPE_D') {
+            try {
+                const detailResp = await fetch('/api/lims/get_solution_detail', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ id: item.id, configure_order: item.configureOrder })
+                });
+                const detailData = await detailResp.json();
+                if (detailData.success && detailData.data) {
+                    sources = (detailData.data.detailList || []).map(dl => {
+                        const code = String(dl.originalCode || '');
+                        let t = 'SOLUTION_TYPE_B';
+                        if (code.startsWith('C-')) t = 'SOLUTION_TYPE_C';
+                        return { id: String(dl.originalId || '').trim(), type: t };
+                    }).filter(s => s.id);
+                }
+            } catch (e) { console.warn('查询详情异常:', e); }
+        }
+        const resp = await fetch('/api/lims/delete_solution', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ id: item.id, type: solType })
+        });
+        const data = await resp.json();
+        if (!data.success) return { success: false, message: data.message || '未知错误' };
+        if (sources.length > 0) {
+            try {
+                const delRecvResp = await fetch('/api/lims/delete_receive', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ source_ids: sources })
+                });
+                const delRecvData = await delRecvResp.json();
+                if (!delRecvData.success) {
+                    return { success: true, message: '配制单已删除，但领用记录清理失败: ' + (delRecvData.message || '未知错误') };
+                }
+            } catch (e) {
+                return { success: true, message: '配制单已删除，但领用记录清理异常: ' + e.message };
+            }
+        }
+        return { success: true };
+    }
+
     async function dTabDeleteRecord(idx) {
         const item = dTabLastResults[idx];
         if (!item || !item.id) { alert('无法获取记录ID'); return; }
@@ -6416,12 +6475,9 @@
         const label = item.configureOrder || item.solutionName || item.id;
         if (!confirm(`确定要删除记录 [${label}] 吗？此操作不可恢复。`)) return;
         try {
-            const resp = await fetch('/api/lims/delete_solution', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ id: item.id, type: 'SOLUTION_TYPE_D' })
-            });
-            const data = await resp.json();
-            if (!data.success) { alert('删除失败: ' + (data.message || '未知错误')); return; }
+            const result = await deleteSolutionWithReceive(item, 'SOLUTION_TYPE_D');
+            if (!result.success) { alert('删除失败: ' + (result.message || '未知错误')); return; }
+            if (result.message) alert(result.message);
             dTabLastResults.splice(idx, 1);
             dTabFilteredResults = dTabLastResults.filter(it => {
                 const filterName = document.getElementById('dTabFilterName').value.trim();
@@ -6447,41 +6503,9 @@
         const label = item.configureOrder || item.solutionName || item.id;
         if (!confirm(`确定要删除记录 [${label}] 吗？此操作不可恢复。`)) return;
         try {
-            // B类储备液：先查询详情获取领用ID，再先删储备液，最后删领用
-            let receiveIds = [];
-            if (solType === 'SOLUTION_TYPE_B') {
-                try {
-                    const detailResp = await fetch('/api/lims/get_solution_detail', {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ id: item.id, configure_order: item.configureOrder })
-                    });
-                    const detailData = await detailResp.json();
-                    if (detailData.success && detailData.data) {
-                        receiveIds = (detailData.data.detailList || [])
-                            .map(dl => String(dl.originalId || '').trim())
-                            .filter(Boolean);
-                    }
-                } catch (e) { console.warn('查询详情异常:', e); }
-            }
-            const resp = await fetch('/api/lims/delete_solution', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ id: item.id, type: solType })
-            });
-            const data = await resp.json();
-            if (!data.success) { alert('删除失败: ' + (data.message || '未知错误')); return; }
-            // 储备液已删除，现在删除关联的领用记录
-            if (receiveIds.length > 0) {
-                try {
-                    const delRecvResp = await fetch('/api/lims/delete_receive', {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ ids: receiveIds })
-                    });
-                    const delRecvData = await delRecvResp.json();
-                    if (!delRecvData.success) {
-                        alert('删除领用记录失败: ' + (delRecvData.message || '未知错误'));
-                    }
-                } catch (e) { alert('删除领用记录异常: ' + e.message); }
-            }
+            const result = await deleteSolutionWithReceive(item, solType);
+            if (!result.success) { alert('删除失败: ' + (result.message || '未知错误')); return; }
+            if (result.message) alert(result.message);
             bbcdLastResults.splice(idx, 1);
             // splice 后所有 > idx 的索引下移 1，需同步调整 bbcdSelectedIds
             const newSelectedIds = new Set();
@@ -6659,17 +6683,24 @@
     function verifyUpdateCodes() {
         if (!_verifyData) return;
         const mode = document.getElementById('verifyMode').value;
+        const method = document.getElementById('verifyMethodName').value;
         const newSol = _verifyData.new_solution, oldSol = _verifyData.old_solution;
         const threshold = document.getElementById('verifyThreshold').value;
+        // 新旧储备液比对：单条编号栏显示上一级储备液(直接父级)自编号；否则展开工作液点位
+        const isStock = (method === '新旧储备液比对');
+        const singleCode = (sol) => isStock
+            ? (sol.parentSolutionCode || sol.solutionCode || '')
+            : _expandVerifyCodePoints(sol.solutionCode, sol.concentrationPoints || []);
+        const STOCK_DESC = '用新配制的储备液作标准曲线，测定原来配制的储备液点浓度，比较其浓度值相对偏差在5%以内';
         let methodDesc = '';
         if (mode === 'new_verifies_old') {
-            document.getElementById('verifyTargetCodeArea').innerHTML = '<span>'+bbcdEsc(_expandVerifyCodePoints(newSol.solutionCode, newSol.concentrationPoints || []))+'</span>';
+            document.getElementById('verifyTargetCodeArea').innerHTML = '<span>'+bbcdEsc(singleCode(newSol))+'</span>';
             _renderCodeCheckboxes('verifySourceCodeArea', oldSol.concentrationPoints || []);
-            methodDesc = '用新配制的标液作标准曲线，测定原来配制的标液点的浓度，比较其浓度值相对偏差在' + threshold + '%以内';
+            methodDesc = isStock ? STOCK_DESC : '用新配制的标液作标准曲线，测定原来配制的标液点的浓度，比较其浓度值相对偏差在' + threshold + '%以内';
         } else {
             _renderCodeCheckboxes('verifyTargetCodeArea', newSol.concentrationPoints || []);
-            document.getElementById('verifySourceCodeArea').innerHTML = '<span>'+bbcdEsc(_expandVerifyCodePoints(oldSol.solutionCode, oldSol.concentrationPoints || []))+'</span>';
-            methodDesc = '用原来配制的标液作标准曲线，测定新配制的标液点的浓度，比较其浓度值相对偏差在' + threshold + '%以内';
+            document.getElementById('verifySourceCodeArea').innerHTML = '<span>'+bbcdEsc(singleCode(oldSol))+'</span>';
+            methodDesc = isStock ? STOCK_DESC : '用原来配制的标液作标准曲线，测定新配制的标液点的浓度，比较其浓度值相对偏差在' + threshold + '%以内';
         }
         document.getElementById('verifyMethodDesc').value = methodDesc;
     }
@@ -7681,7 +7712,12 @@
             if (checks.length) return [...checks].map(c => c.dataset.code).join('\n');
             return area.textContent.trim();
         };
-        const payload = {'被核查对象编号':_getCodeText('verifyTargetCodeArea'),'核查对象编号':_getCodeText('verifySourceCodeArea'),'new_solution_code':(_verifyData?.new_solution?.solutionCode||''),'核查方法':'新旧标准曲线比对','核查时间':document.getElementById('verifyDate').value,'核查方法描述':document.getElementById('verifyMethodDesc').value,'核查结论':document.getElementById('verifyConclusion').value,'备注':document.getElementById('verifyNotes').value,'table0_data':table0Data,'table1_data':table1Data,'epatemp_contents':_verifyEpatempContents};
+        // 新旧储备液比对：导出记录的两个编号栏都用上一级储备液自编号（被核查对象=新液、核查对象=旧液），
+        // 不再写入选中的工作液点位编号；点位复选框仅用于选取核查结果表的测量点位。
+        const _isStockExp = document.getElementById('verifyMethodName').value === '新旧储备液比对';
+        const _targetCode = _isStockExp ? (_verifyData?.new_solution?.parentSolutionCode || _getCodeText('verifyTargetCodeArea')) : _getCodeText('verifyTargetCodeArea');
+        const _sourceCode = _isStockExp ? (_verifyData?.old_solution?.parentSolutionCode || _getCodeText('verifySourceCodeArea')) : _getCodeText('verifySourceCodeArea');
+        const payload = {'被核查对象编号':_targetCode,'核查对象编号':_sourceCode,'new_solution_code':(_verifyData?.new_solution?.solutionCode||''),'核查方法':document.getElementById('verifyMethodName').value,'核查时间':document.getElementById('verifyDate').value,'核查方法描述':document.getElementById('verifyMethodDesc').value,'核查结论':document.getElementById('verifyConclusion').value,'备注':document.getElementById('verifyNotes').value,'table0_data':table0Data,'table1_data':table1Data,'epatemp_contents':_verifyEpatempContents};
         const hasEpatemp = _verifyEpatempContents && _verifyEpatempContents.length > 0;
         try {
             const resp = await fetch('/api/lims/export_verification_docx',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -7744,6 +7780,7 @@
             measured: _verifyMeasured,
             matchCtx: _verifyMatchCtx,
             rows: rows, isMulti: isMulti, tabs: tabs, table0: table0, inputMode: inputMode,
+            presetProject: _selectedProjectName(),
             codes: { target: checkedCodes('verifyTargetCodeArea'), source: checkedCodes('verifySourceCodeArea') },
             form: {
                 verifyMode: document.getElementById('verifyMode').value,
@@ -7891,8 +7928,13 @@
         document.getElementById('verifyInputExcel').style.display = (im === 'excel') ? '' : 'none';
         const _pbar = document.getElementById('verifyPresetBar');
         if (_pbar) _pbar.style.display = (im === 'file') ? 'flex' : 'none';
-        // 9. 加载导出名称预设下拉（selectLast=false 不覆盖行值）
-        loadVerifyPresets(false);
+        // 9. 加载导出名称预设下拉（selectLast=false 不覆盖行值）；还原草稿保存时套用的预设
+        loadVerifyPresets(false).then(function () {
+            var sp = p.presetProject;
+            if (!sp) return;
+            var sel = document.getElementById('verifyPresetApplySelect');
+            if (sel && Array.prototype.some.call(sel.options, function (o) { return o.value === sp; })) sel.value = sp;
+        });
         // 10. 重建结果表
         verifyRestoreResults(p);
         // 11. 标注 .D 状态
@@ -8901,6 +8943,7 @@
         });
         document.getElementById('verifyMode').addEventListener('change', () => { verifyUpdateCodes(); verifyRecalcResults(); });
         document.getElementById('verifyThreshold').addEventListener('change', () => { verifyUpdateCodes(); verifyRecalcResults(); });
+        document.getElementById('verifyMethodName').addEventListener('change', () => { verifyUpdateCodes(); verifyRecalcResults(); });
         document.getElementById('verifySelectDFoldersBtn').addEventListener('click', verifySelectDFolders);
         document.getElementById('verifyParseEpatempBtn').addEventListener('click', verifyParseEpatemp);
         document.getElementById('verifyConfirmMatchBtn').addEventListener('click', verifyConfirmMatch);
@@ -10021,41 +10064,9 @@
         const label = item.configureOrder || item.solutionName || item.id;
         if (!confirm(`确定要删除记录 [${label}] 吗？此操作不可恢复。`)) return;
         try {
-            // B类储备液：先查询详情获取领用ID，再先删储备液，最后删领用
-            let receiveIds = [];
-            if (solType === 'SOLUTION_TYPE_B') {
-                try {
-                    const detailResp = await fetch('/api/lims/get_solution_detail', {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ id: item.id, configure_order: item.configureOrder })
-                    });
-                    const detailData = await detailResp.json();
-                    if (detailData.success && detailData.data) {
-                        receiveIds = (detailData.data.detailList || [])
-                            .map(dl => String(dl.originalId || '').trim())
-                            .filter(Boolean);
-                    }
-                } catch (e) { console.warn('查询详情异常:', e); }
-            }
-            const resp = await fetch('/api/lims/delete_solution', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ id: item.id, type: solType })
-            });
-            const data = await resp.json();
-            if (!data.success) { alert('删除失败: ' + (data.message || '未知错误')); return; }
-            // 储备液已删除，现在删除关联的领用记录
-            if (receiveIds.length > 0) {
-                try {
-                    const delRecvResp = await fetch('/api/lims/delete_receive', {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ ids: receiveIds })
-                    });
-                    const delRecvData = await delRecvResp.json();
-                    if (!delRecvData.success) {
-                        alert('删除领用记录失败: ' + (delRecvData.message || '未知错误'));
-                    }
-                } catch (e) { alert('删除领用记录异常: ' + e.message); }
-            }
+            const result = await deleteSolutionWithReceive(item, solType);
+            if (!result.success) { alert('删除失败: ' + (result.message || '未知错误')); return; }
+            if (result.message) alert(result.message);
             qqLastResults.splice(idx, 1);
             qqFilteredResults = qqAuditMode ? qqSortByConfigurator(qqLastResults) : [...qqLastResults];
             qqTotalRecords = qqFilteredResults.length;
