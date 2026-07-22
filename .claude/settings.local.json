@@ -175,7 +175,9 @@
       "Bash(git merge *)",
       "Bash(git -C \".claude/worktrees/agent-a2819d2cf349f2313\" status --short)",
       "Bash(git -C \".claude/worktrees/agent-ac25bffb565f10808\" status --short)",
-      "Bash(git worktree *)"
+      "Bash(git worktree *)",
+      "Bash(grep -iE \"\\\\.py$|\\\\.ini$|\\\\.json$|\\\\.env\")",
+      "mcp__codegraph__codegraph_status"
     ]
   },
   "enableAllProjectMcpServers": true,

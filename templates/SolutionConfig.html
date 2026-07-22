@@ -392,6 +392,9 @@
         .onoffswitch-checkbox:checked + .onoffswitch-switch::before {
             transform: translateX(26px);
         }
+        /* 工作液配置：点位多时折叠「移取体积/计算浓度」列组以减宽，便于核对 */
+        #bbcdConfigTable.bbcd-hide-qty .bbcd-qty-col,
+        #bbcdConfigTable.bbcd-hide-conc .bbcd-conc-col { display: none !important; }
     </style>
 </head>
 <body>
@@ -910,10 +913,18 @@
           <select id="wsPresetSelect" class="form-select form-select-sm bbcd-dilution-row ws-preset-el d-none">
             <option value="">—未选择—</option>
           </select>
-          <div class="d-flex align-items-center gap-1 bbcd-dilution-row ws-preset-el d-none" style="grid-column:span 2;">
-            <button type="button" class="btn btn-sm btn-outline-info px-2" id="wsApplyPresetBtn" title="套用预设"><i class="fas fa-magic"></i></button>
-            <button type="button" class="btn btn-sm btn-outline-success px-2" id="wsSavePresetBtn" title="存为预设"><i class="fas fa-save"></i></button>
-            <button type="button" class="btn btn-sm btn-outline-danger px-2" id="wsDelPresetBtn" title="删除预设"><i class="fas fa-trash"></i></button>
+          <div class="d-flex align-items-center gap-2 bbcd-dilution-row d-none" style="grid-column:span 2;">
+            <span class="d-flex align-items-center gap-1 ws-preset-el">
+              <button type="button" class="btn btn-sm btn-outline-info px-2" id="wsApplyPresetBtn" title="套用预设"><i class="fas fa-magic"></i></button>
+              <button type="button" class="btn btn-sm btn-outline-success px-2" id="wsSavePresetBtn" title="存为预设"><i class="fas fa-save"></i></button>
+              <button type="button" class="btn btn-sm btn-outline-danger px-2" id="wsDelPresetBtn" title="删除预设"><i class="fas fa-trash"></i></button>
+            </span>
+            <label class="form-check-label small d-flex align-items-center gap-1 mb-0 ms-auto" title="显示/隐藏 移取体积(mL) 各点位列">
+              <input type="checkbox" id="bbcdToggleQty" class="form-check-input m-0" checked onchange="bbcdToggleCols('qty', this.checked)">V
+            </label>
+            <label class="form-check-label small d-flex align-items-center gap-1 mb-0" title="显示/隐藏 计算浓度 各点位列">
+              <input type="checkbox" id="bbcdToggleConc" class="form-check-input m-0" checked onchange="bbcdToggleCols('conc', this.checked)">C
+            </label>
           </div>
         </div>
 
@@ -4482,8 +4493,21 @@
         bbcdCheckValidity();
     }
 
+    // 工作液配置 移取体积/计算浓度 列组显隐：点位多时折叠减宽，便于核对
+    function bbcdToggleCols(group, checked) {
+        document.getElementById('bbcdConfigTable')
+            .classList.toggle(group === 'qty' ? 'bbcd-hide-qty' : 'bbcd-hide-conc', !checked);
+    }
+    // 复位列组勾选/隐藏状态：渲染工作液表或关闭弹窗时恢复默认（均显示）
+    function bbcdResetColToggle() {
+        document.getElementById('bbcdConfigTable').classList.remove('bbcd-hide-qty', 'bbcd-hide-conc');
+        const tq = document.getElementById('bbcdToggleQty'); if (tq) tq.checked = true;
+        const tc = document.getElementById('bbcdToggleConc'); if (tc) tc.checked = true;
+    }
+
     // 渲染工作液配置表格
     function bbcdRenderWorkingSolutionTable(items) {
+        bbcdResetColToggle();
         const count = window.bbcdCurrentDilutionCount || 5;
         const tbody = document.querySelector('#bbcdConfigTable tbody');
         const thead = document.querySelector('#bbcdConfigTable thead');
@@ -4494,20 +4518,20 @@
                 <th rowspan="2">编号</th>
                 <th rowspan="2">源名称</th>
                 <th rowspan="2">源浓度</th>
-                <th colspan="${count}">
+                <th colspan="${count}" class="bbcd-qty-col">
                     <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
-                        <span>移取体积 (mL)</span>
+                        <span>移取体积 V(mL)</span>
                         <button type="button" onclick="bbcdBatchFillAllColumns()" class="btn btn-sm"
                                 style="padding:1px 5px;font-size:0.75rem;height:22px;line-height:1;background:transparent;border:none;color:#fff;" title="将所有点的输入框内容填充到对应列">↓</button>
                     </div>
                 </th>
-                <th colspan="${count}">计算浓度</th>
+                <th colspan="${count}" class="bbcd-conc-col">计算浓度C</th>
             </tr>
             <tr>`;
 
         // 添加稀释点子表头（带批填充控件）
         for (let i = 1; i <= count; i++) {
-            headerHTML += `<th>
+            headerHTML += `<th class="bbcd-qty-col">
                 <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
                     <span>点${i}</span>
                     <span>
@@ -4520,7 +4544,7 @@
             </th>`;
         }
         for (let i = 1; i <= count; i++) {
-            headerHTML += `<th>点${i}</th>`;
+            headerHTML += `<th class="bbcd-conc-col">点${i}</th>`;
         }
         headerHTML += `</tr>`;
         thead.innerHTML = headerHTML;
@@ -4542,10 +4566,10 @@
                 </div>
             </td>`;
         for (let i = 0; i < count; i++) {
-            volumeHTML += `<td><input type="number" class="form-control form-control-sm bbcd-dilution-vol" data-idx="${i}" step="0.01" min="0.01" value="10.00" placeholder="定容" style="-moz-appearance:textfield;"></td>`;
+            volumeHTML += `<td class="bbcd-qty-col"><input type="number" class="form-control form-control-sm bbcd-dilution-vol" data-idx="${i}" step="0.01" min="0.01" value="10.00" placeholder="定容" style="-moz-appearance:textfield;"></td>`;
         }
         for (let i = 0; i < count; i++) {
-            volumeHTML += `<td>—</td>`;
+            volumeHTML += `<td class="bbcd-conc-col">—</td>`;
         }
         volumeRow.innerHTML = volumeHTML;
         tbody.appendChild(volumeRow);
@@ -4594,13 +4618,13 @@
                     if (compIdx === 0) {
                         // 移取体积输入框：rowspan 跨所有组分行
                         for (let i = 0; i < count; i++) {
-                            rowHTML += `<td rowspan="${compCount}"><input type="number" class="form-control form-control-sm bbcd-d-qty" data-dilution="${i}" data-row="${idx}" step="0.001" min="0.001" placeholder="移取" style="min-width:70px;-moz-appearance:textfield;"></td>`;
+                            rowHTML += `<td rowspan="${compCount}" class="bbcd-qty-col"><input type="number" class="form-control form-control-sm bbcd-d-qty" data-dilution="${i}" data-row="${idx}" step="0.001" min="0.001" placeholder="移取" style="min-width:70px;-moz-appearance:textfield;"></td>`;
                         }
                     }
 
                     // 计算浓度显示：每个组分一行
                     for (let i = 0; i < count; i++) {
-                        rowHTML += `<td><input type="number" class="form-control form-control-sm bbcd-d-conc" data-dilution="${i}" data-comp="${compIdx}" step="0.01" placeholder="—" style="min-width:80px;-moz-appearance:textfield;"></td>`;
+                        rowHTML += `<td class="bbcd-conc-col"><input type="number" class="form-control form-control-sm bbcd-d-conc" data-dilution="${i}" data-comp="${compIdx}" step="0.01" placeholder="—" style="min-width:80px;-moz-appearance:textfield;"></td>`;
                     }
 
                     tr.innerHTML = rowHTML;
@@ -4634,11 +4658,11 @@
                     <td>${isNaN(tr._src.concValue) ? '—' : tr._src.concValue + ' ' + bbcdEsc(tr._src.concUnit)}</td>`;
 
                 for (let i = 0; i < count; i++) {
-                    rowHTML += `<td><input type="number" class="form-control form-control-sm bbcd-d-qty" data-dilution="${i}" data-row="${idx}" step="0.001" min="0.001" placeholder="移取" style="min-width:70px;-moz-appearance:textfield;"></td>`;
+                    rowHTML += `<td class="bbcd-qty-col"><input type="number" class="form-control form-control-sm bbcd-d-qty" data-dilution="${i}" data-row="${idx}" step="0.001" min="0.001" placeholder="移取" style="min-width:70px;-moz-appearance:textfield;"></td>`;
                 }
 
                 for (let i = 0; i < count; i++) {
-                    rowHTML += `<td><input type="number" class="form-control form-control-sm bbcd-d-conc" data-dilution="${i}" step="0.01" placeholder="—" style="min-width:80px;-moz-appearance:textfield;"></td>`;
+                    rowHTML += `<td class="bbcd-conc-col"><input type="number" class="form-control form-control-sm bbcd-d-conc" data-dilution="${i}" step="0.01" placeholder="—" style="min-width:80px;-moz-appearance:textfield;"></td>`;
                 }
 
                 tr.innerHTML = rowHTML;
@@ -9211,6 +9235,7 @@
 
         // 配置弹窗关闭时恢复选中状态（如果未保存）
         document.getElementById('bbcdConfigModal').addEventListener('hidden.bs.modal', () => {
+            bbcdResetColToggle();
             window.bbcdViewDetailMode = false;
             window.bbcdViewDetailRecord = null;
             window.bbcdDetailIds = null;

@@ -527,6 +527,34 @@ def get_system():
     return user_systems[sess_id]
 
 
+# ==================== 工作液溯源服务 API（供 mup-web 溯源填充调用）====================
+# OCR 服务账号登录 LIMS，模块级缓存 12h；不依赖 Flask 用户会话，可跨服务调用。
+_TRACE_SESS = {"res": None, "ts": 0}
+_TRACE_SESS_TTL = 43200  # 12h
+
+
+def _trace_service_session():
+    """返回 (system, err)：system 为 lims_auto_login 登录后的 LoginResult
+   （鸭类型兼容 RemoteSystem：.session/.base_url/.current_pid/.current_real_name）。"""
+    now = time.time()
+    if _TRACE_SESS["res"] and now - _TRACE_SESS["ts"] < _TRACE_SESS_TTL:
+        return _TRACE_SESS["res"], None
+    from lims_auto_login import auto_login
+    cfg = (load_config().get("dingtalk") or {}).get("ocr_account") or {}
+    user = str(cfg.get("username") or "").strip()
+    pwd = str(cfg.get("password") or "").strip()
+    if not (user and pwd):
+        return None, "未配置溯源服务账号(config.json: dingtalk.ocr_account)"
+    try:
+        res = auto_login(user, pwd)
+    except Exception as e:
+        return None, f"LIMS 登录异常: {e}"
+    if not res:
+        return None, "LIMS 登录失败(验证码/账密), 请稍后重试"
+    _TRACE_SESS["res"], _TRACE_SESS["ts"] = res, now
+    return res, None
+
+
 # ==================== 会话过期统一处理 ====================
 # 远程 LIMS 会话存活缓存（秒）：避免高频 /api/status 轮询打爆 LIMS
 _SESSION_CHECK_TTL = 20
@@ -1990,6 +2018,10 @@ def _trace_export_chain(system, trace_targets, target_date, target_person):
             'concentration_count': str(record.get('concentrationCount') or '').strip(),
             '_is_weighing_top': is_weighing_top,
             '_detail_list': detail_list,
+            'weighing_equipment': record.get('weighingEquipment'),
+            'weighing_equipment_json': str(record.get('weighingEquipmentJson') or ''),
+            'device_names': str(record.get('deviceNames') or '').strip(),
+            'diluteStatus': record.get('diluteStatus'),   # 逐级稀释开关(D 记录持久化字段); 供下游 mup 溯源填充判定 work_serial_dilute
         })
 
         if is_weighing_top:
@@ -3075,6 +3107,259 @@ def lims_trace_export_chain():
         import traceback
         traceback.print_exc()
         return jsonify({"success": True, "has_candidates": False, "matched_records": [], "top_ancestor": {}})
+
+
+def _parse_purity(raw):
+    """'99.5(%)' → (0.995, '%')；'0.982' → (0.982, '')；'' → (None, '')。纯度统一归一为分数。"""
+    s = _first_number(raw)
+    if not s:
+        return None, ''
+    try:
+        val = float(s)
+    except ValueError:
+        return None, ''
+    is_pct = '%' in str(raw)
+    return (val / 100.0, '%') if is_pct else (val, '')
+
+
+def _frac_from_raw(raw):
+    """扩展不确定度串 → 绝对分数：'0.5%' → 0.005；'0.005' → 0.005；'' → None。
+    ponytail: 假设 % 为质量分数扩展不确定度；真实台账格式待按 dump 数据核对。"""
+    s = _first_number(raw)
+    if not s:
+        return None
+    try:
+        n = float(s)
+    except ValueError:
+        return None
+    return n / 100.0 if '%' in str(raw) else n
+
+
+def _num_from_raw(raw):
+    """任意串 → float 或 None。"""
+    if raw is None or raw == '':
+        return None
+    s = _first_number(raw)
+    try:
+        return float(s) if s else None
+    except ValueError:
+        return None
+
+
+def _extract_balance_id(text):
+    """从称量设备文本提取天平编号(如 CK-SB295-CG)；无匹配返回 None。"""
+    m = re.search(r'CK-SB\d+-[A-Z]+', str(text or ''))
+    return m.group(0) if m else None
+
+
+# 多点工作液 detailList 源行里的逐级稀释目标浓度字段（dilutionOne..Twelve）
+_DILUTION_KEYS = ('dilutionOne', 'dilutionTwo', 'dilutionThree', 'dilutionFour', 'dilutionFive',
+                  'dilutionSix', 'dilutionSeven', 'dilutionEight', 'dilutionNine', 'dilutionTen',
+                  'dilutionEleven', 'dilutionTwelve')
+
+
+def _extract_crm_from_chain(matched):
+    """从溯源链提取 A 级标准物质(CRM)：controlledNo(CK-CG号)、名称、纯度。
+    lift 自 _trace_to_a（4565-4631）的 detailList 挖掘逻辑。返回 dict 或 None。"""
+    for r in matched:
+        if r.get('level') == 'D':
+            continue
+        if not str(r.get('original_code') or '').strip().startswith('A-'):
+            continue
+        a_name = str(r.get('parent_name') or '').strip()
+        a_controlled_no = ''
+        a_concentration = ''  # A 级纯度，如 "99.5(%)"（见 1473/2562 行 originalConcentration 约定）
+        for dl in (r.get('_detail_list') or []):
+            dl_name = str(dl.get('originalName', '')).strip()
+            dl_no = str(dl.get('originalNo', '')).strip()
+            lines = [l.strip() for l in dl_no.split('\n') if l.strip()]
+            potential_no = lines[-1] if lines else ''
+            if dl_name and a_name and dl_name == a_name:
+                a_controlled_no = potential_no
+                a_concentration = str(dl.get('originalConcentration', '') or '').strip()
+                break
+            if not a_controlled_no and potential_no:
+                a_controlled_no = potential_no
+                a_concentration = str(dl.get('originalConcentration', '') or '').strip()
+        if a_controlled_no or a_name:
+            purity_val, purity_unit = _parse_purity(a_concentration)
+            return {
+                'controlled_no': a_controlled_no,
+                'name': a_name,
+                'purity': purity_val,
+                'purity_raw': a_concentration,
+                'purity_unit': purity_unit,
+                'storage_condition': str(r.get('storage_condition') or '').strip(),
+            }
+    return None
+
+
+def _fetch_crm_ledger(system, controlled_no):
+    """按 controlledNo(CK-CG号) 查标准物质台账 consumableBill/pageObj，返回完整 voList[0] 或 None。
+    lift 自 /api/lims/storage_conditions（4667-4691），但返回整条记录以取 uncertainty/purity/batchNo。"""
+    cb_params = {
+        "_search": "false", "nd": str(int(time.time() * 1000)),
+        "pageSize": 30, "pageNo": 1, "sidx": "", "sord": "asc",
+        "type": "CONSUMABLE_DIR_TYPE_STANDARD_SUBSTANCE",
+        "receiveUserName": "", "receiveStartDate": "", "receiveEndDate": "",
+        "confirmUserName": "", "confirmStartDate": "", "confirmEndDate": "",
+        "invoiceNo": "", "groupId": "", "casNo": "", "orgName": "", "state": "normal",
+        "keyword": controlled_no,
+        "pid": system.current_pid or '', "pname": system.current_real_name or '',
+        "loginId": system.current_pid or '',
+    }
+    for _st in ("normal", "history", "overdue"):
+        cb_params["status"] = _st
+        try:
+            r = system.session.get(f"{system.base_url}/detectionManager/manager/consumableBill/pageObj",
+                                   params=cb_params)
+            if r.status_code != 200:
+                continue
+            vol = (r.json().get('resultData') or {}).get('voList') or []
+            if vol:
+                return vol[0]
+        except Exception:
+            continue
+    return None
+
+
+@app.route('/api/lims/trace_working_solution', methods=['GET'])
+def lims_trace_working_solution():
+    """工作液溯源 → 原始溯源数据（稀释链 B/C/D + A 级 CRM 不确定度模块），供 mup-web 溯源填充调用。
+    服务账号 OCR 登录 LIMS，不依赖 Flask 用户会话。返回 {success, data:{code,stock_source,chain,crm,...}}。"""
+    code = (request.args.get('code') or '').strip()
+    if not code:
+        return jsonify({"success": False, "message": "请输入工作液编号(如 D-9203)"}), 400
+
+    system, err = _trace_service_session()
+    if err:
+        return jsonify({"success": False, "message": err}), 502
+
+    try:
+        # (None, code) → 由 _trace_export_chain 内部 _fetch_record 解析编号；''/'' 不限日期与配置人，自由追溯
+        matched, _top = _trace_export_chain(system, [(None, code)], '', '')
+        if not matched:
+            return jsonify({"success": True, "data": {
+                "code": code, "stock_source": None, "chain": [], "crm": None,
+                "multi_source": False, "info_chain": ""}})
+
+        # A 级 CRM 提取 + 台账不确定度查询（标准溶液 urel(C) 模块）
+        crm = _extract_crm_from_chain(matched)
+        if crm and crm.get('controlled_no'):
+            ledger = _fetch_crm_ledger(system, crm['controlled_no'])
+            if ledger:
+                u_raw = str(ledger.get('uncertainty') or '').strip()
+                crm['uncertainty_raw'] = u_raw
+                crm['u_value'] = _frac_from_raw(u_raw)
+                lp = str(ledger.get('purity') or '').strip()  # 台账 purity 优先于链上推断
+                if lp:
+                    pv, pu = _parse_purity(lp)
+                    if pv is not None:
+                        crm['purity'], crm['purity_unit'], crm['purity_raw'] = pv, pu, lp
+                crm['k_raw'] = ledger.get('k') or ledger.get('coverageFactor') or ledger.get('包含因子')
+                crm['k_value'] = _num_from_raw(crm['k_raw'])
+                crm['batchNo'] = str(ledger.get('batchNo') or '').strip()
+
+        # 天平设备编号（称量型 B 记录的配置设备 deviceNames；仅 solid 储备液有）
+        balance = None
+        for r in matched:
+            if r.get('_is_weighing_top'):
+                dev = str(r.get('device_names') or '').strip()
+                we = r.get('weighing_equipment') or {}
+                we_json = r.get('weighing_equipment_json') or ''
+                raw_name = str(we.get('name') or '').strip() if isinstance(we, dict) else str(we or '').strip()
+                txt = dev or ((raw_name + ' ' + we_json).strip())
+                balance = {'id': _extract_balance_id(txt), 'raw': txt[:200]}
+                break
+
+        # D 型多点工作液：detailList 源行补移取体积；定容体积按 移取量*父浓度/本行首点浓度 反推（记录级常缺）
+        for r in matched:
+            if r.get('level') != 'D':
+                continue
+            if not str(r.get('received_quantity') or '').strip():
+                oc = str(r.get('original_code') or '')
+                parent_order = next((p.strip() for p in re.split(r'[,，]', oc) if p.strip()), '')
+                for dl in (r.get('_detail_list') or []):
+                    if parent_order and str(dl.get('originalCode', '')).strip() == parent_order:
+                        rq = str(dl.get('receivedQuantity', '') or '').strip()
+                        if rq:
+                            r['received_quantity'] = rq
+                        ru = str(dl.get('receivedUint', '') or '').strip()
+                        if ru:
+                            r['received_unit'] = ru
+                        break
+            if str(r.get('constant_volume') or '') in ('', '0', '0.0'):
+                _rq = _num_from_raw(r.get('received_quantity'))
+                _pc = _num_from_raw(r.get('parent_concentration'))
+                _rc = _num_from_raw(r.get('concentration'))
+                if _rq and _pc and _rc:
+                    r['constant_volume'] = f"{_rq * _pc / _rc:.2f}"
+
+        # 多点工作液稀释系列：detailList 按 groupName 分行存 移取体积/定容体积，源行(originalCode)存目标浓度，
+        # 三者均以 dilutionOne..Twelve 为各点值。直接读取，无需反推。
+        dilution_series = None
+        for r in matched:
+            if r.get('level') != 'D':
+                continue
+            pip_vols, flask_vols, targets = [], [], []
+            for _dl in (r.get('_detail_list') or []):
+                _gn = str(_dl.get('groupName', '')).strip()
+                _vals = []
+                for _k in _DILUTION_KEYS:
+                    _v = _num_from_raw(_dl.get(_k))
+                    if _v is not None:
+                        _vals.append(_v)
+                if not _vals:
+                    continue
+                if _gn == '移取体积':
+                    pip_vols = _vals
+                elif _gn == '定容体积':
+                    flask_vols = _vals
+                elif _dl.get('originalCode'):
+                    targets = _vals
+            if len(targets) >= 2:
+                stock_conc = _num_from_raw(r.get('parent_concentration'))
+                rows, _prev = [], stock_conc
+                for _i, _t in enumerate(targets):
+                    rows.append({
+                        'mother_conc': _prev,
+                        'target_conc': _t,
+                        'pip_vol': pip_vols[_i] if _i < len(pip_vols) else None,
+                        'flask_vol': flask_vols[_i] if _i < len(flask_vols) else None,
+                    })
+                    _prev = _t   # 逐级稀释：下行母液 = 本行目标
+                dilution_series = {'stock_conc': stock_conc, 'rows': rows}
+            break
+
+        top = matched[0]
+        stock_source = 'solid' if (top.get('_is_weighing_top') or (top.get('received_unit') or '').strip() == 'g') \
+            else 'liquid_dilute'
+
+        chain_out = []
+        for r in matched:        # 剥除内部大字段 _detail_list
+            rr = dict(r)
+            rr.pop('_detail_list', None)
+            chain_out.append(rr)
+
+        multi_source = any(r.get('source_details') for r in matched)
+        info_chain = " → ".join(f"{r.get('level', '')}({r.get('configure_order', '')})"
+                                for r in matched if r.get('configure_order'))
+
+        return jsonify({"success": True, "data": {
+            "code": code,
+            "stock_source": stock_source,
+            "chain": chain_out,
+            "crm": crm,
+            "balance": balance,
+            "dilution_series": dilution_series,
+            "multi_source": multi_source,
+            "info_chain": info_chain,
+        }})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        _TRACE_SESS["res"] = None  # 疑似会话过期，清缓存重登
+        return jsonify({"success": False, "message": f"溯源失败: {e}"}), 500
 
 
 def _fill_rf10_09_item(doc, item_payload):
