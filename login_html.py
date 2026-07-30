@@ -2722,6 +2722,7 @@ def save_working_solution():
             return _expired_response()
         if not resp.ok:
             print(f"[save_working_solution] status={resp.status_code} body={resp.text[:500]}")
+            print(f"[save_working_solution] payload={json.dumps(payload, ensure_ascii=False)[:8000]}")
             return jsonify({"success": False, "message": f"LIMS 请求失败，状态码: {resp.status_code}"}), 502
         result = resp.json()
         if not result.get('success'):
@@ -2963,13 +2964,18 @@ def lims_delete_receive():
                     '_search': 'false', 'pageSize': 9999, 'pageNo': 1,
                     'sidx': '', 'sord': 'asc',
                     'pid': str(pid), 'pname': pname, 'loginId': str(pid),
-                })
+                }, headers={"Referer": f"{system.base_url}/web/consumablesReceiveListMgt.html?menuId=289"})
                 if resp.ok:
                     data = resp.json()
+                    found = []
                     for rec in (data.get('resultData') or []):
                         rid = rec.get('id')
                         if rid:
+                            found.append(str(rid))
                             found_ids.append(str(rid))
+                    print(f"[deleteReceive] consumableReceive/record/{cid} → found {len(found)} receive(s): {found}")
+                else:
+                    print(f"[deleteReceive] consumableReceive/record/{cid} failed status={resp.status_code}")
             receive_ids = found_ids
         if receive_ids:
             if isinstance(receive_ids, list):
@@ -3002,24 +3008,36 @@ def lims_delete_receive():
                         pass
         if not receive_id_list:
             return jsonify({"success": True, "message": "无领用记录需要删除"})
-        # 删领用走溶液配置模块的 delReceiveId（耗材领用通用接口 consumableReceive 会校验原操作人，配制产生的领用会被拒）
-        headers = {
-            "Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        }
+        # consumable_ids 模式：领用是通过 consumableReceive 创建的，走 consumableReceive 删
+        # source_ids 模式：领用是通过溶液配置创建的，走 delReceiveId 删
+        # _use_consumable_endpoint：前端明确要求走 consumableReceive 直接删（已持有领用ID）
+        use_consumable_endpoint = bool(consumable_ids and not source_ids) or bool(p.get('_use_consumable_endpoint'))
         failed = []
         for rid in receive_id_list:
-            url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/delReceiveId"
-            form_data = {
-                'ids': rid,
-                'pid': str(pid),
-                'pname': pname,
-                'loginId': str(pid),
-                '_method': 'DELETE',
+            if use_consumable_endpoint:
+                url = f"{system.base_url}/detectionManager/manager/consumableReceive"
+                form_data = {
+                    'ids': rid,
+                    'pid': str(pid),
+                    'pname': pname,
+                    'loginId': str(pid),
+                    '_method': 'DELETE',
+                }
+            else:
+                url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/delReceiveId"
+                form_data = {
+                    'ids': rid,
+                    'pid': str(pid),
+                    'pname': pname,
+                    'loginId': str(pid),
+                    '_method': 'DELETE',
+                }
+            headers = {
+                "Referer": f"{system.base_url}/web/{ ('consumablesReceiveListMgt.html?menuId=289' if use_consumable_endpoint else 'solutionConfigure.html?menuId=544') }",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
             }
             resp = system.session.post(url, data=form_data, headers=headers)
-            if not resp.ok:
-                print(f"[deleteReceive] status={resp.status_code} body={resp.text[:500]}")
+            print(f"[deleteReceive] {'consumableReceive' if use_consumable_endpoint else 'delReceiveId'} POST {url} ids={rid} → status={resp.status_code} body={resp.text[:200]}")
             ct = resp.headers.get('Content-Type', '')
             if 'html' in ct or resp.text.lstrip().startswith('<!') or resp.text.lstrip().startswith('<html'):
                 print(f"[deleteReceive] session过期，返回了HTML: {resp.text[:200]}")

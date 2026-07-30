@@ -3611,7 +3611,7 @@
             id: item.id,
             configureOrder: 'A-' + (item.id || item.no || ''),
             solutionName: item.solutionName || item.name || '',
-            solutionCode: item.solutionCode || item.no || '',
+            solutionCode: item.customNum || item.no || item.solutionCode || '',
             originalCode: item.originalCode || '',
             controlledNo: item.controlledNo || '',
             concValue: isNaN(valueRaw) ? (isPct ? 99.5 : 0) : valueRaw,
@@ -3645,8 +3645,8 @@
             </td>` : '';
         const stockTitle = (!isPct && src.constantVolume > 0) ? ` title="剩余 ${src.constantVolume.toFixed(2)} mL"` : '';
         const maxAttr = (!isPct && src.constantVolume > 0) ? ` max="${src.constantVolume}"` : '';
-        const qtyStep = isPct ? '0.0001' : '0.01';
-        const qtyMin = isPct ? '0.0001' : '0.01';
+        const qtyStep = isPct ? '0.0001' : '0.001';
+        const qtyMin = isPct ? '0.0001' : '0.001';
         const resultUnit = isPct ? (src.pctConcUnit || 'μg/mL') : src.concUnit;
         tr.innerHTML = `
             <td><span class="bbcd-c-order">${bbcdEsc(src.configureOrder)}</span></td>
@@ -4593,6 +4593,7 @@
                         aSourceCount: Number(it.aSourceCount || 1),
                         sourceCodes: Array.isArray(it.sourceCodes) ? it.sourceCodes : [],
                         aSourceCodes: Array.isArray(it.aSourceCodes) ? it.aSourceCodes : [],
+                        numUnitName: it.numUnitName || 'mL',
                         concValue: comp.value,
                         concUnit: comp.unit,
                         componentName: comp.name,
@@ -4644,6 +4645,7 @@
                     aSourceCount: Number(it.aSourceCount || 1),
                     sourceCodes: Array.isArray(it.sourceCodes) ? it.sourceCodes : [],
                     aSourceCodes: Array.isArray(it.aSourceCodes) ? it.aSourceCodes : [],
+                    numUnitName: it.numUnitName || 'mL',
                     concValue: parsed.value,
                     concUnit: parsed.unit,
                     concentrationRaw: it.concentration || '',
@@ -5249,7 +5251,7 @@
         const saveDetailList = [];
         let dataSeq = 1;
 
-        // 1. 移取体积行（每个源溶液一行，多组分共享）
+        // 1. 移取体积行（每源一组，与 LIMS 前端 saveSolutionConfigure 的 D 格式对齐）
         sourceGroups.forEach(group => {
             const firstTr = group.rows[0];
             const src = firstTr._src;
@@ -5257,24 +5259,26 @@
             const takeRec = src._takeDetailRecord || null;
             const row = {
                 id: takeRec ? takeRec.id : null, createDatetime: takeRec ? takeRec.createDatetime : nowStr, serialVersionUID: null,
-                configureId: takeRec ? takeRec.configureId : null, originalId: takeRec ? takeRec.originalId : null,
-                originalCode: takeRec ? takeRec.originalCode : null, originalName: takeRec ? takeRec.originalName : null,
-                originalConcentration: takeRec ? takeRec.originalConcentration : null, concentrationCount: takeRec ? takeRec.concentrationCount : null, originalUnit: takeRec ? takeRec.originalUnit : null,
+                configureId: takeRec ? takeRec.configureId : null,
+                originalId: null, originalCode: null, originalName: null,
+                originalConcentration: null, concentrationCount: null, originalUnit: null,
                 groupName: isSingleSource ? '移取体积' : `${src.configureOrder}移取体积`,
                 groupUnit: 'mL',
+                dilutionOne: null, dilutionTwo: null, dilutionThree: null, dilutionFour: null, dilutionFive: null,
                 dilutionSix: null, dilutionSeven: null, dilutionEight: null,
                 dilutionNine: null, dilutionTen: null, dilutionEleven: null, dilutionTwelve: null,
                 remark: null, dataSeq: takeRec ? takeRec.dataSeq : dataSeq++,
-                receivedQuantity: 0, receivedUint: null, medium: null,
+                receivedUint: null, medium: null,
                 consumableReceive: null, configurationProcess: null,
                 configurationRecordId: null, creatorName: takeRec ? takeRec.creatorName : null, creatorId: takeRec ? takeRec.creatorId : null,
                 modifierName: null, modifyDatetime: nowStr,
             };
-            if (!takeRec) dataSeq++;
             for (let i = 0; i < count; i++) {
                 const fieldName = bbcdGetDilutionFieldName(i);
                 if (fieldName) row[fieldName] = qtyInputs[i]?.value || '';
             }
+            // LIMS 后端统一用 _X_ID 标识行
+            row._X_ID = takeRec ? (takeRec._X_ID || `row_${20 + saveDetailList.length}`) : `row_${20 + saveDetailList.length}`;
             saveDetailList.push(row);
         });
 
@@ -5282,27 +5286,28 @@
         const volRec = (sourceGroups.length > 0 && sourceGroups[0].rows[0]._src._volDetailRecord) || null;
         const volumeRow = {
             id: volRec ? volRec.id : null, createDatetime: volRec ? volRec.createDatetime : nowStr, serialVersionUID: null,
-            configureId: volRec ? volRec.configureId : null, originalId: volRec ? volRec.originalId : null,
-            originalCode: volRec ? volRec.originalCode : null, originalName: volRec ? volRec.originalName : null,
-            originalConcentration: volRec ? volRec.originalConcentration : null, concentrationCount: volRec ? volRec.concentrationCount : null, originalUnit: volRec ? volRec.originalUnit : null,
+            configureId: volRec ? volRec.configureId : null,
+            originalId: null, originalCode: null, originalName: null,
+            originalConcentration: null, concentrationCount: null, originalUnit: null,
             groupName: '定容体积',
             groupUnit: 'mL',
+            dilutionOne: null, dilutionTwo: null, dilutionThree: null, dilutionFour: null, dilutionFive: null,
             dilutionSix: null, dilutionSeven: null, dilutionEight: null,
             dilutionNine: null, dilutionTen: null, dilutionEleven: null, dilutionTwelve: null,
             remark: null, dataSeq: volRec ? volRec.dataSeq : dataSeq++,
-            receivedQuantity: 0, receivedUint: null, medium: null,
+            receivedUint: null, medium: null,
             consumableReceive: null, configurationProcess: null,
             configurationRecordId: null, creatorName: volRec ? volRec.creatorName : null, creatorId: volRec ? volRec.creatorId : null,
             modifierName: null, modifyDatetime: nowStr,
         };
-        if (!volRec) dataSeq++;
         for (let i = 0; i < count; i++) {
             const fieldName = bbcdGetDilutionFieldName(i);
             if (fieldName) volumeRow[fieldName] = dilutionVols[i].toFixed(2);
         }
+        volumeRow._X_ID = volRec ? (volRec._X_ID || `row_${20 + saveDetailList.length}`) : `row_${20 + saveDetailList.length}`;
         saveDetailList.push(volumeRow);
 
-        // 3. 浓度行（每个组分一行）
+        // 3. 浓度行（每组分一行，与 LIMS 前端对齐：originalId = receive_id, originalCode = L-xxx）
         const concentrationParts = [];
         const concentrationCountParts = [];
         const receivedQuantityParts = [];
@@ -5311,7 +5316,8 @@
             const firstTr = group.rows[0];
             const firstSrc = firstTr._src;
             const qtyInputs = firstTr.querySelectorAll('.bbcd-d-qty');
-            // 领用量（原液实际消耗量）：逐级=第一点移取体积；非逐级=各点移取体积之和
+            const recvInfo = (window._bbcdReceiveResults || []).find(r => r.configureOrder === firstSrc.configureOrder);
+
             let receiveQtyStr;
             if (isGradual) {
                 receiveQtyStr = qtyInputs[0]?.value || '1';
@@ -5329,32 +5335,32 @@
                 const concRec = src._detailRecord || null;
                 const row = {
                     id: concRec ? concRec.id : null, createDatetime: concRec ? concRec.createDatetime : nowStr, serialVersionUID: null,
-                    configureId: concRec ? concRec.configureId : null, originalId: src.id,
-                    originalCode: src.configureOrder,
-                    originalName: src.solutionName,
-                    originalConcentration: String(src.concValue),
-                    concentrationCount: `${groupName}:${src.concValue}(${src.concUnit})`,
-                    originalUnit: src.concUnit,
+                    configureId: concRec ? concRec.configureId : null,
+                    originalId: recvInfo ? recvInfo.receive_id : (concRec ? concRec.originalId : src.id),
+                    originalCode: recvInfo ? `L-${recvInfo.receive_id}` : (concRec ? concRec.originalCode : src.configureOrder),
+                    originalName: concRec ? concRec.originalName : src.solutionName,
+                    originalConcentration: concRec ? concRec.originalConcentration : (src.concentrationRaw || String(src.concValue)),
+                    concentrationCount: concRec ? concRec.concentrationCount : `${groupName}:${src.concValue}(${src.concUnit})`,
+                    originalUnit: concRec ? concRec.originalUnit : src.concUnit,
                     groupName: groupName,
-                    groupUnit: src.concUnit,
+                    groupUnit: concRec ? concRec.groupUnit : src.concUnit,
+                    dilutionOne: null, dilutionTwo: null, dilutionThree: null, dilutionFour: null, dilutionFive: null,
                     dilutionSix: null, dilutionSeven: null, dilutionEight: null,
                     dilutionNine: null, dilutionTen: null, dilutionEleven: null, dilutionTwelve: null,
                     remark: null, dataSeq: concRec ? concRec.dataSeq : dataSeq++,
-                    receivedQuantity: receiveQtyStr,
-                    receivedUint: 'mL',
-                    medium: document.getElementById('bbcdMediumD')?.value.trim() || null,
+                    receivedUint: null, medium: null,
                     consumableReceive: concRec ? concRec.consumableReceive : null, configurationProcess: null,
-                    configurationRecordId: null, creatorName: concRec ? concRec.creatorName : null, creatorId: concRec ? concRec.creatorId : null,
+                    configurationRecordId: null, dataid: src.id,
+                    creatorName: concRec ? concRec.creatorName : null, creatorId: concRec ? concRec.creatorId : null,
                     modifierName: null, modifyDatetime: nowStr,
                 };
-                if (!concRec) dataSeq++;
                 for (let i = 0; i < count; i++) {
                     const fieldName = bbcdGetDilutionFieldName(i);
                     if (fieldName) row[fieldName] = concCells[i]?.value.trim() || '';
                 }
+                row._X_ID = concRec ? (concRec._X_ID || `row_${20 + saveDetailList.length}`) : `row_${20 + saveDetailList.length}`;
                 saveDetailList.push(row);
 
-                // 收集浓度字符串
                 const concValues = [];
                 const concCountValues = [];
                 for (let i = 0; i < count; i++) {
@@ -5420,8 +5426,8 @@
             customType: document.getElementById('bbcdCustomType').value.trim() || null,
             auditUserName: _viewRec2 ? _viewRec2.auditUserName : null,
             auditTime: _viewRec2 ? _viewRec2.auditTime : null,
-            diluteConcentrationControl: _viewRec2 ? _viewRec2.diluteConcentrationControl : null,
-            pageType: 'SOLUTION_TYPE_D',
+            diluteConcentrationControl: _viewRec2 ? _viewRec2.diluteConcentrationControl : '[]',
+            pageType: _viewRec2 ? _viewRec2.pageType : 'SOLUTION_TYPE_A',
             saveDetailList: JSON.stringify(saveDetailList),
             originalValidityDate: originalValidityDate,
             configurationTemplateId: _viewRec2 ? _viewRec2.configurationTemplateId : null,
@@ -5432,8 +5438,6 @@
             configurationProcess: null, nextAuditUserName: null,
             disposeUserName: null, disposeTime: null, disposeWay: null,
             configurationSolutionTemplateId: null, configurationRecordId: null,
-            modifierName: null,
-            modifyDatetime: nowStr,
             receivedUint: _viewRec2 ? (_viewRec2.receivedUint || '') : 'mL',
             receivedQuantity: _viewRec2 ? (_viewRec2.receivedQuantity || 0) : receivedQuantityParts.join(';'),
         };
@@ -5640,9 +5644,9 @@
             const firstSrc = firstTr._src;
             const qtyInput = firstTr.querySelector('.bbcd-c-qty')?.value;
             const qty = bbcdRoundQty(parseFloat(qtyInput));
-            // 详情/导出模式 + 非 % 源(mL)：领用量保留至多 3 位，与"储备液配置参数窗口"一致；
-            // 实时配制仍走 bbcdFmtQty（<0.1→3、≥0.1→2）。浓度计算继续用 qty，不受影响。
-            const _detailMlQty = (window.bbcdViewDetailMode && !firstSrc.isPctSource && isFinite(parseFloat(qtyInput)))
+            // 详情/导出模式 或 A-BCD 混合(N-1) + 非 % 源(mL)：领用量保留至多 3 位，与"储备液配置参数窗口"一致；
+            // 其他实时配制仍走 bbcdFmtQty（<0.1→3、≥0.1→2）。浓度计算继续用 qty，不受影响。
+            const _detailMlQty = ((window.bbcdViewDetailMode || window.bbcdIsABCDMixFlow) && !firstSrc.isPctSource && isFinite(parseFloat(qtyInput)))
                 ? parseFloat(qtyInput).toFixed(Math.min(3, Math.max(2, (String(qtyInput).split('.')[1] || '').length)))
                 : null;
 
@@ -6198,6 +6202,15 @@
             const solType = document.getElementById('bbcdSolType').value;
             const isWorkingSolution = (solType === 'SOLUTION_TYPE_D');
 
+            // D 新建：先领用源标液（消耗库存），类似 A-B 的 solSave 流程
+            if (isWorkingSolution && !isUpdateMode) {
+                const recResults = await bbcdDoReceive();
+                if (!recResults) { btn.innerHTML = orig; btn.disabled = false; return; }
+                window._bbcdReceiveResults = recResults;
+            } else {
+                window._bbcdReceiveResults = null;
+            }
+
             const payload = isWorkingSolution
                 ? bbcdBuildWorkingSolutionPayload()
                 : bbcdBuildPayload();
@@ -6310,6 +6323,75 @@
         }
     }
 
+
+    // D 新建：领用源标液（消耗库存）。成功返回 [{configureOrder, receive_id, sourceId}], 失败返回 null。
+    async function bbcdDoReceive() {
+        const tbody = document.querySelector('#bbcdConfigTable tbody');
+        const allRows = [...tbody.querySelectorAll('tr')];
+        const dataRows = allRows.slice(1).filter(tr => tr._src);
+        if (!dataRows.length) { alert('无源溶液数据'); return null; }
+
+        const isGradual = document.getElementById('bbcdGradualDilution')?.checked || false;
+        const count = window.bbcdCurrentDilutionCount || 5;
+        const configureDate = document.getElementById('bbcdConfigureDate').value;
+        const receiveDate = configureDate + ' ' + new Date().toTimeString().slice(0, 8);
+
+        // 按源溶液分组（与 bbcdBuildWorkingSolutionPayload 一致）
+        const sourceGroups = [];
+        dataRows.forEach(tr => {
+            const src = tr._src;
+            if (!src) return;
+            if (src.isComponent) {
+                if (src.componentIdx === 0) sourceGroups.push({ rows: [tr] });
+                else sourceGroups[sourceGroups.length - 1].rows.push(tr);
+            } else {
+                sourceGroups.push({ rows: [tr] });
+            }
+        });
+
+        const results = [];
+        for (const group of sourceGroups) {
+            const firstTr = group.rows[0];
+            const src = firstTr._src;
+            const qtyInputs = firstTr.querySelectorAll('.bbcd-d-qty');
+
+            // 领用量：逐级=第一点，非逐级=各点之和
+            let qty;
+            if (isGradual) {
+                qty = parseFloat(qtyInputs[0]?.value) || 0;
+            } else {
+                qty = 0;
+                for (let i = 0; i < count; i++) qty += parseFloat(qtyInputs[i]?.value) || 0;
+            }
+            if (qty <= 0) { alert(`请填写 ${src.solutionName} 的移取体积`); return null; }
+
+            try {
+                const recResp = await fetch('/api/lims/receive', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        consumable_id: String(src.id),
+                        quantity: qty,
+                        unit: src.numUnitName || 'mL',
+                        receive_date: receiveDate
+                    })
+                });
+                const recData = await recResp.json();
+                if (!recData.success) {
+                    alert(`领用失败 ${src.solutionName}: ${recData.message || '未知错误'}`);
+                    return null;
+                }
+                results.push({
+                    configureOrder: src.configureOrder,
+                    receive_id: recData.receive_id,
+                    sourceId: src.id
+                });
+            } catch (e) {
+                alert(`领用异常 ${src.solutionName}: ${e.message}`);
+                return null;
+            }
+        }
+        return results;
+    }
 
     // ===== 液D Tab: 从已配工作液 D 列表查询 =====
     let dTabLastResults = [];
@@ -6451,7 +6533,7 @@
     async function deleteSolutionWithReceive(item, solType) {
         // 工作液(D)：删配制单后，按它领用的源溶液(储备液)查领用补删——LIMS 删工作液会漏删1条挂在储备液名下的领用。
         // B/C 领用机制不同（领用标品走 consumableReceive，且需先删领用再删配制单），这里不自动删领用。
-        let sources = [];
+        let receiveIds = [];
         if (solType === 'SOLUTION_TYPE_D') {
             try {
                 const detailResp = await fetch('/api/lims/get_solution_detail', {
@@ -6460,12 +6542,15 @@
                 });
                 const detailData = await detailResp.json();
                 if (detailData.success && detailData.data) {
-                    sources = (detailData.data.detailList || []).map(dl => {
-                        const code = String(dl.originalCode || '');
-                        let t = 'SOLUTION_TYPE_B';
-                        if (code.startsWith('C-')) t = 'SOLUTION_TYPE_C';
-                        return { id: String(dl.originalId || '').trim(), type: t };
-                    }).filter(s => s.id);
+                    // 浓度行 originalCode="L-xxx" → originalId/consumableReceive 是领用记录ID
+                    const seen = new Set();
+                    (detailData.data.detailList || []).forEach(dl => {
+                        const rid = String(dl.consumableReceive || dl.originalId || '').trim();
+                        if (rid && !seen.has(rid)) {
+                            seen.add(rid);
+                            receiveIds.push(rid);
+                        }
+                    });
                 }
             } catch (e) { console.warn('查询详情异常:', e); }
         }
@@ -6475,15 +6560,16 @@
         });
         const data = await resp.json();
         if (!data.success) return { success: false, message: data.message || '未知错误' };
-        if (sources.length > 0) {
+        if (receiveIds.length > 0) {
             try {
-                const delRecvResp = await fetch('/api/lims/delete_receive', {
+                // 领用记录ID直接删（走 consumableReceive，不走 delReceiveId）
+                const delResp = await fetch('/api/lims/delete_receive', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ source_ids: sources })
+                    body: JSON.stringify({ ids: receiveIds, _use_consumable_endpoint: true })
                 });
-                const delRecvData = await delRecvResp.json();
-                if (!delRecvData.success) {
-                    return { success: true, message: '配制单已删除，但领用记录清理失败: ' + (delRecvData.message || '未知错误') };
+                const delData = await delResp.json();
+                if (!delData.success) {
+                    return { success: true, message: '配制单已删除，但领用记录清理失败: ' + (delData.message || '未知错误') };
                 }
             } catch (e) {
                 return { success: true, message: '配制单已删除，但领用记录清理异常: ' + e.message };
@@ -8848,8 +8934,8 @@
                 // % 源（称量 g）保留输入框原值，不按 mL 规则修约（0.0101→0.010 会丢精度）
                 const src = t.closest('tr')._src;
                 if (!src || !src.isPctSource) {
-                    if (window.bbcdViewDetailMode) {
-                        // 详情模式：mL 领用量保留输入精度（最多 3 位），与"储备液配置参数窗口"一致
+                    if (window.bbcdViewDetailMode || window.bbcdIsABCDMixFlow) {
+                        // 详情模式 / A-BCD 混合(N-1)：mL 领用量保留输入精度（最多 3 位），与"储备液配置参数窗口"一致
                         const inputDec = (t.value.split('.')[1] || '').length;
                         t.value = v.toFixed(Math.min(3, Math.max(2, inputDec)));
                     } else {
