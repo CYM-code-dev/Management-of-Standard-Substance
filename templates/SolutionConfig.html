@@ -6365,6 +6365,30 @@
             }
             if (qty <= 0) { alert(`请填写 ${src.solutionName} 的移取体积`); return null; }
 
+            // B/C 配置液作源：跳过 consumableReceive 预领用（回归修复）。
+            // A-Dbug 提交 f4c4667 给所有 D 源加了 consumableReceive 预领用；但配置液源的
+            // consumableReceive ids=<配置液id> 扣的是与 constantVolume 解耦的另一笔库存，汞母液被抽空时
+            // 报 005「领用数量不能大于剩余数量」。恢复 f4c4667 前的行为：配置液库存由 saveSolutionConfigure
+            // 按 detail.originalId=源id 自动扣减并回填 consumableReceive（D-9392 模板：originalId=源id、
+            // consumableReceive 由 LIMS 回填为真领用id，创建/删除均正常）。仅 A 标物（configureOrder 以
+            // A- 开头）才是真正耗材，仍需 consumableReceive 领用扣 A 库存。
+            // 配套：删除侧 deleteSolutionWithReceive 也只对 originalCode 以 L- 开头（A 源）的行删领用记录。
+            const isFromA = String(src.configureOrder || '').startsWith('A-');
+            if (!isFromA) {
+                console.info('[bbcdDoReceive] 跳过 consumableReceive（B/C 配置液源，由 saveSolutionConfigure 扣 constantVolume）',
+                    { configureOrder: src.configureOrder, id: src.id, qty });
+                continue;  // 不 push results → bbcdBuildWorkingSolutionPayload 走 originalId=src.id 回退
+            }
+
+            // ponytail: 领用失败时把“实际发了什么”带出来，配合后端 [lims_receive] 日志定位
+            const pointVals = Array.from(qtyInputs).map(el => parseFloat(el?.value));
+            const recvCtx = {
+                solutionName: src.solutionName, solutionCode: src.solutionCode,
+                consumable_id: String(src.id), configureOrder: src.configureOrder,
+                isGradual, count, pointVals, sentQty: qty,
+                constantVolume: src.constantVolume, totalConstantVolume: src.totalConstantVolume,
+                unit: src.numUnitName || 'mL'
+            };
             try {
                 const recResp = await fetch('/api/lims/receive', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -6377,7 +6401,9 @@
                 });
                 const recData = await recResp.json();
                 if (!recData.success) {
-                    alert(`领用失败 ${src.solutionName}: ${recData.message || '未知错误'}`);
+                    console.warn('[bbcdDoReceive] 领用失败上下文', recvCtx, recData);
+                    alert(`领用失败 ${src.solutionName}：${recData.message || '未知错误'}\n\n` +
+                        `（发送 num=${qty} mL → ids=${recvCtx.consumable_id}；逐级=${isGradual}，各点移取=${JSON.stringify(pointVals)}；源显示剩余 ${src.constantVolume}/${src.totalConstantVolume} mL）`);
                     return null;
                 }
                 results.push({
@@ -6542,9 +6568,12 @@
                 });
                 const detailData = await detailResp.json();
                 if (detailData.success && detailData.data) {
-                    // 浓度行 originalCode="L-xxx" → originalId/consumableReceive 是领用记录ID
+                    // 仅 A 标物源的浓度行 originalCode="L-xxx"（其 originalId/consumableReceive 是真领用id）需删领用。
+                    // B/C 配置液源 originalCode="B-/C-xxx"，其 originalId=源溶液id（非领用id），删配制单(delById)
+                    // 时 LIMS 会自动回库并清理它建的领用——不能拿源id去 consumableReceive 删，否则报错/异常。
                     const seen = new Set();
                     (detailData.data.detailList || []).forEach(dl => {
+                        if (!String(dl.originalCode || '').startsWith('L-')) return;
                         const rid = String(dl.consumableReceive || dl.originalId || '').trim();
                         if (rid && !seen.has(rid)) {
                             seen.add(rid);
