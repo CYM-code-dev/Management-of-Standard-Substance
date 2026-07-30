@@ -443,13 +443,13 @@
             <div class="card border-0 shadow-sm mb-3">
               <div class="card-body py-2">
                 <div class="row g-2 align-items-end">
-                  <div class="col-md-2">
-                    <label class="form-label mb-1 small fw-bold">实验室编号</label>
-                    <input type="text" id="solSearchLabNo" class="form-control form-control-sm" placeholder="实验室编号">
-                  </div>
                   <div class="col-md-3">
                     <label class="form-label mb-1 small fw-bold">名称</label>
                     <input type="text" id="solSearchName" class="form-control form-control-sm" placeholder="名称关键词">
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label mb-1 small fw-bold">实验室编号</label>
+                    <input type="text" id="solSearchLabNo" class="form-control form-control-sm" placeholder="实验室编号">
                   </div>
                   <div class="col-md-2">
                     <label class="form-label mb-1 small fw-bold">CAS No.</label>
@@ -5391,6 +5391,10 @@
 
         const _viewRec2 = window.bbcdViewDetailMode && window.bbcdViewDetailRecord;
         const _isUpdate = !!_viewRec2;
+        // pageType 随【源】类型：标物(A-)作源→A、储备/应用液(B-/C-)作源→B/C。
+        // 实测原系统 B→D 的 saveSolutionConfigure pageType=SOLUTION_TYPE_B；原代码写死 A 会让记录畸形
+        // （连原系统 delById 都删不掉）。A→D 仍是 A，不回归。
+        const _srcPrefix = String(sourceGroups[0]?.rows[0]?._src?.configureOrder || '').split('-')[0] || 'A';
         return {
             id: _viewRec2 ? _viewRec2.id : null,
             createDatetime: _viewRec2 ? _viewRec2.createDatetime : nowStr,
@@ -5427,7 +5431,7 @@
             auditUserName: _viewRec2 ? _viewRec2.auditUserName : null,
             auditTime: _viewRec2 ? _viewRec2.auditTime : null,
             diluteConcentrationControl: _viewRec2 ? _viewRec2.diluteConcentrationControl : '[]',
-            pageType: _viewRec2 ? _viewRec2.pageType : 'SOLUTION_TYPE_A',
+            pageType: _viewRec2 ? _viewRec2.pageType : ('SOLUTION_TYPE_' + _srcPrefix),
             saveDetailList: JSON.stringify(saveDetailList),
             originalValidityDate: originalValidityDate,
             configurationTemplateId: _viewRec2 ? _viewRec2.configurationTemplateId : null,
@@ -6552,13 +6556,13 @@
     }
 
     /**
-     * 删除溶液配置单并清理其关联领用记录（B/C/D 通用）。
-     * 流程：删配制单前先查详情收集领用ID（删后详情可能不可查）→ 删配制单 → 删领用记录。
-     * 返回 {success, message?}：success 表示配制单是否删除成功；message 非空时为领用清理提示。
+     * 删除溶液配置单并按源类型清理领用（B/C/D 通用）。
+     * - A 标物源(originalCode="L-")：delById 后用 consumableReceive 端点补删其独立领用（LIMS 不自动清）。
+     * - B/C/D 配置液源(originalCode="B-/C-/D-")：领用由 saveSolutionConfigure 回填，delById 时 LIMS 自动回库清领用 → 直接 delById。
+     *   前提：创建时 pageType 正确随源类型（见 bbcdBuildWorkingSolutionPayload），否则记录畸形、连原系统都删不掉。
+     * 返回 {success, message?}：success=配制单是否删除成功；message=领用清理提示。
      */
     async function deleteSolutionWithReceive(item, solType) {
-        // 工作液(D)：删配制单后，按它领用的源溶液(储备液)查领用补删——LIMS 删工作液会漏删1条挂在储备液名下的领用。
-        // B/C 领用机制不同（领用标品走 consumableReceive，且需先删领用再删配制单），这里不自动删领用。
         let receiveIds = [];
         if (solType === 'SOLUTION_TYPE_D') {
             try {
@@ -6568,17 +6572,11 @@
                 });
                 const detailData = await detailResp.json();
                 if (detailData.success && detailData.data) {
-                    // 仅 A 标物源的浓度行 originalCode="L-xxx"（其 originalId/consumableReceive 是真领用id）需删领用。
-                    // B/C 配置液源 originalCode="B-/C-xxx"，其 originalId=源溶液id（非领用id），删配制单(delById)
-                    // 时 LIMS 会自动回库并清理它建的领用——不能拿源id去 consumableReceive 删，否则报错/异常。
                     const seen = new Set();
                     (detailData.data.detailList || []).forEach(dl => {
-                        if (!String(dl.originalCode || '').startsWith('L-')) return;
+                        if (!String(dl.originalCode || '').startsWith('L-')) return;   // 仅 A 源需补删领用
                         const rid = String(dl.consumableReceive || dl.originalId || '').trim();
-                        if (rid && !seen.has(rid)) {
-                            seen.add(rid);
-                            receiveIds.push(rid);
-                        }
+                        if (rid && !seen.has(rid)) { seen.add(rid); receiveIds.push(rid); }
                     });
                 }
             } catch (e) { console.warn('查询详情异常:', e); }
@@ -6591,7 +6589,6 @@
         if (!data.success) return { success: false, message: data.message || '未知错误' };
         if (receiveIds.length > 0) {
             try {
-                // 领用记录ID直接删（走 consumableReceive，不走 delReceiveId）
                 const delResp = await fetch('/api/lims/delete_receive', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ ids: receiveIds, _use_consumable_endpoint: true })
