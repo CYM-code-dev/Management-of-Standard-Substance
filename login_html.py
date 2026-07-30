@@ -1432,10 +1432,17 @@ def lims_receive():
     url = f"{system.base_url}/detectionManager/manager/consumableReceive/receive"
     try:
         resp = system.session.post(url, data=form_data, headers=headers)
-        resp.raise_for_status()
-        result = resp.json()
-        if not result.get("success"):
-            return jsonify({"success": False, "message": result.get('errorDesc') or str(result.get('errorCtx', '领用失败'))})
+        # 不直接 raise_for_status：LIMS 报错时往往仍返回 JSON（含 errorDesc），
+        # 直接 raise 只剩 "500 Server Error" 而丢掉真正原因。先解析再判断。
+        try:
+            result = resp.json()
+        except ValueError:
+            print(f"[lims_receive] ids={consumable_id} num={formatted_qty} -> HTTP {resp.status_code} 非JSON: {resp.text[:300]}")
+            return jsonify({"success": False, "message": f"领用失败：LIMS 返回非 JSON（HTTP {resp.status_code}）: {resp.text[:160]}"}), 502
+        if resp.status_code >= 400 or not result.get("success"):
+            reason = result.get('errorDesc') or str(result.get('errorCtx') or '') or f'HTTP {resp.status_code}'
+            print(f"[lims_receive] ids={consumable_id} num={formatted_qty} -> HTTP {resp.status_code} reason={reason} body={resp.text[:300]}")
+            return jsonify({"success": False, "message": f"领用失败: {reason}"})
         time.sleep(1)
         rec_url = f"{system.base_url}/detectionManager/manager/consumableReceive/record/{consumable_id}"
         rec_params = {"_search": "false", "nd": str(int(time.time()*1000)), "pageSize": 9999, "pageNo": 1,
@@ -1449,6 +1456,7 @@ def lims_receive():
                 receive_id = str(records[0].get("id", consumable_id))
         return jsonify({"success": True, "receive_id": receive_id})
     except Exception as e:
+        print(f"[lims_receive] 异常 ids={consumable_id}: {e}")
         return jsonify({"success": False, "message": f"领用异常: {str(e)}"}), 500
 
 

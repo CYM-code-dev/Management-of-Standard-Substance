@@ -177,7 +177,9 @@
       "Bash(git -C \".claude/worktrees/agent-ac25bffb565f10808\" status --short)",
       "Bash(git worktree *)",
       "Bash(grep -iE \"\\\\.py$|\\\\.ini$|\\\\.json$|\\\\.env\")",
-      "mcp__codegraph__codegraph_status"
+      "mcp__codegraph__codegraph_status",
+      "Bash(git log *)",
+      "Bash(awk 'NR>=4500 && NR<=4578 && /^\\(async \\)?function |^    function /{print NR\": \"$0}' templates/SolutionConfig.html)"
     ]
   },
   "enableAllProjectMcpServers": true,
