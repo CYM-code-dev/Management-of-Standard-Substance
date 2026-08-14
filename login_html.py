@@ -328,6 +328,8 @@ class RemoteSystem:
         self.current_user = None
         self.current_pid = None
         self.current_real_name = None
+        self.current_org_id = None
+        self.current_org_name = None
         self.captcha_session = None
         self.keep_alive_flag = False
         self.keep_alive_thread = None
@@ -408,10 +410,8 @@ class RemoteSystem:
                 data = resp.json()
                 if data.get("success"):
                     user_info = data.get("resultData", {}).get("userInfo", {})
-                    pid = user_info.get("id")
+                    self._apply_user_info(user_info)
                     real_name = user_info.get("realName")
-                    if pid:
-                        self.current_pid = str(pid)
                     if real_name:
                         return real_name
             resp2 = self.session.get(f"{self.base_url}/detectionManager/core/users/info")
@@ -419,21 +419,32 @@ class RemoteSystem:
                 data2 = resp2.json()
                 if data2.get("success"):
                     user_info = data2.get("resultData", {}).get("userInfo", {})
-                    pid = user_info.get("id")
+                    self._apply_user_info(user_info)
                     real_name = user_info.get("realName")
-                    if pid:
-                        self.current_pid = str(pid)
                     if real_name:
                         return real_name
         except Exception as e:
             print(f"获取用户信息异常: {e}")
         return None
 
+    def _apply_user_info(self, user_info):
+        """从 userInfo 提取 pid / 部门(orgId→originId, orgName→originName)。"""
+        pid = user_info.get("id")
+        if pid:
+            self.current_pid = str(pid)
+        org_id = user_info.get("orgId")
+        if org_id is not None:
+            self.current_org_id = org_id
+        org_name = user_info.get("orgName")
+        if org_name:
+            self.current_org_name = org_name
+
     def _save_session(self):
         sess_file = f"session_{self.current_user}.json"
         cookies_list = [{"name": c.name, "value": c.value, "domain": c.domain, "path": c.path} for c in self.session.cookies]
         info = {
             "username": self.current_user, "pid": self.current_pid, "real_name": self.current_real_name,
+            "org_id": self.current_org_id, "org_name": self.current_org_name,
             "login_time": time.strftime("%Y-%m-%d %H:%M:%S"),
             "cookies": cookies_list, "headers": dict(self.session.headers)
         }
@@ -460,6 +471,8 @@ class RemoteSystem:
             self.current_user = info["username"]
             self.current_pid = info.get("pid")
             self.current_real_name = info.get("real_name", info["username"])
+            self.current_org_id = info.get("org_id")
+            self.current_org_name = info.get("org_name")
             return True
         except:
             return False
@@ -673,6 +686,8 @@ def login():
         session['username'] = username
         session['display_name'] = display_name
         session['pid'] = system.current_pid
+        session['org_id'] = system.current_org_id
+        session['org_name'] = system.current_org_name
         if is_json: return jsonify({"success": True, "message": "登录成功", "display_name": display_name})
         else: return redirect(request.form.get('next', '/'))
     else:
@@ -687,14 +702,16 @@ def status():
             session.pop('logged_in', None)
             system.logout()
             return jsonify({"logged_in": False, "code": "SESSION_EXPIRED"})
-        return jsonify({"logged_in": True, "username": username, "display_name": session.get('display_name'), "pid": session.get('pid')})
+        return jsonify({"logged_in": True, "username": username, "display_name": session.get('display_name'), "pid": session.get('pid'), "org_id": session.get('org_id'), "org_name": session.get('org_name')})
     system = get_system()
     if system.current_user and system.verify_session():
         session['logged_in'] = True
         session['username'] = system.current_user
         session['display_name'] = system.current_real_name or system.current_user
         session['pid'] = system.current_pid
-        return jsonify({"logged_in": True, "username": system.current_user, "display_name": session['display_name'], "pid": session.get('pid')})
+        session['org_id'] = system.current_org_id
+        session['org_name'] = system.current_org_name
+        return jsonify({"logged_in": True, "username": system.current_user, "display_name": session['display_name'], "pid": session.get('pid'), "org_id": session.get('org_id'), "org_name": session.get('org_name')})
     return jsonify({"logged_in": False})
 
 
@@ -2717,7 +2734,16 @@ def save_working_solution():
         system.current_user = username
         system.load_session()
 
-    # pid/pname/loginId 应该已经在前端添加了，这里不需要再添加
+    # 后端统一注入身份与使用部门：前端 pid 因 /api/status 只返回 pid（无 user_id/id）会 fallback 到 377，
+    # 故以 session 为准；originId/originName 来自登录 userInfo.orgId/orgName（→溶液记录 originId/originName）
+    pid = session.get('pid') or system.current_pid or ''
+    if not pid:
+        return jsonify({"success": False, "message": "无法获取用户PID，请重新登录"}), 401
+    payload['pid'] = pid
+    payload['pname'] = session.get('display_name') or system.current_real_name or username
+    payload['loginId'] = pid
+    payload['originId'] = session.get('org_id') or system.current_org_id
+    payload['originName'] = session.get('org_name') or system.current_org_name
     url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/saveSolutionConfigure"
     headers = {
         "Referer": f"{system.base_url}/web/solutionConfigure.html?menuId=544",
@@ -2781,6 +2807,8 @@ def lims_update_solution():
     payload['pid'] = pid
     payload['pname'] = pname
     payload['loginId'] = pid
+    payload['originId'] = session.get('org_id') or system.current_org_id
+    payload['originName'] = session.get('org_name') or system.current_org_name
     try:
         url = f"{system.base_url}/detectionManager/manager/dtSolutionConfigure/updateObj1"
         headers = {

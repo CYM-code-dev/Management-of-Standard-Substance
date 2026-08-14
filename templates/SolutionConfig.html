@@ -5348,7 +5348,7 @@
                     dilutionSix: null, dilutionSeven: null, dilutionEight: null,
                     dilutionNine: null, dilutionTen: null, dilutionEleven: null, dilutionTwelve: null,
                     remark: null, dataSeq: concRec ? concRec.dataSeq : dataSeq++,
-                    receivedUint: null, medium: null,
+                    receivedQuantity: receiveQtyStr, receivedUint: 'mL', medium: null,
                     consumableReceive: concRec ? concRec.consumableReceive : null, configurationProcess: null,
                     configurationRecordId: null, dataid: src.id,
                     creatorName: concRec ? concRec.creatorName : null, creatorId: concRec ? concRec.creatorId : null,
@@ -5442,7 +5442,7 @@
             configurationProcess: null, nextAuditUserName: null,
             disposeUserName: null, disposeTime: null, disposeWay: null,
             configurationSolutionTemplateId: null, configurationRecordId: null,
-            receivedUint: _viewRec2 ? (_viewRec2.receivedUint || '') : 'mL',
+            receivedUint: _viewRec2 ? (_viewRec2.receivedUint || 'mL') : 'mL',
             receivedQuantity: _viewRec2 ? (_viewRec2.receivedQuantity || 0) : receivedQuantityParts.join(';'),
         };
     }

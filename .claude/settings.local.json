@@ -179,7 +179,9 @@
       "Bash(grep -iE \"\\\\.py$|\\\\.ini$|\\\\.json$|\\\\.env\")",
       "mcp__codegraph__codegraph_status",
       "Bash(git log *)",
-      "Bash(awk 'NR>=4500 && NR<=4578 && /^\\(async \\)?function |^    function /{print NR\": \"$0}' templates/SolutionConfig.html)"
+      "Bash(awk 'NR>=4500 && NR<=4578 && /^\\(async \\)?function |^    function /{print NR\": \"$0}' templates/SolutionConfig.html)",
+      "Bash(echo \"---EXIT:$?---\")",
+      "Bash(.venv/Scripts/python -c \"import os; p=r'\\\\\\\\\\\\\\\\files.cirs-testing.com\\\\轻工实验室-内部\\\\轻工公盘\\\\有机\\\\3-有机耗品\\\\有机标准品-20250910.xlsx'; print\\('dirname=',os.path.dirname\\(p\\)\\); print\\('exists_dirname=',os.path.exists\\(os.path.dirname\\(p\\)\\)\\); print\\('exists_file=',os.path.exists\\(p\\)\\)\")"
     ]
   },
   "enableAllProjectMcpServers": true,
