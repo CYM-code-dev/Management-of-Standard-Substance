@@ -124,24 +124,31 @@ def save_config(excel_path, cert_path):
         json.dump(config, f, indent=2, ensure_ascii=False)
 
 
-def get_user_paths(display_name):
-    """返回 (excelPath, certPath)，优先用户配置，回退默认值"""
+def get_user_paths(display_name, org_name=''):
+    """返回 (excelPath, certPath)。解析顺序：人员 > 部门 > 全局默认"""
     config = load_config()
     user = config.get('users', {}).get(display_name, {})
+    dept = config.get('departments', {}).get(org_name or '', {})
     defaults = config.get('defaults', {})
     return (
-        user.get('excelPath') or defaults.get('excelPath', ''),
-        user.get('certPath') or defaults.get('certPath', '')
+        user.get('excelPath') or dept.get('excelPath') or defaults.get('excelPath', ''),
+        user.get('certPath') or dept.get('certPath') or defaults.get('certPath', '')
     )
 
 
-def set_user_paths(username, excel_path, cert_path):
-    """设置用户专属路径，两个路径都为空时删除该用户条目"""
+def set_user_paths(username, excel_path, cert_path, numbering=None, print_ip=''):
+    """设置人员专属配置（路径/打印IP留空=继承部门或默认；numbering 为 None=不覆盖部门编号规则）。
+    均未设置时删除该人员条目"""
     config = load_config()
     if 'users' not in config:
         config['users'] = {}
-    if excel_path or cert_path:
-        config['users'][username] = {'excelPath': excel_path, 'certPath': cert_path}
+    if excel_path or cert_path or numbering or print_ip:
+        entry = {'excelPath': excel_path, 'certPath': cert_path}
+        if numbering:
+            entry['numbering'] = numbering
+        if print_ip:
+            entry['printIp'] = print_ip
+        config['users'][username] = entry
     else:
         config['users'].pop(username, None)
     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
@@ -872,7 +879,7 @@ def query():
 @app.route('/api/config', methods=['GET', 'POST'])
 def handle_config():
     if request.method == 'GET':
-        excel_path, cert_path = get_user_paths(session.get('display_name', ''))
+        excel_path, cert_path = get_user_paths(session.get('display_name', ''), session.get('org_name'))
         return jsonify({"excelPath": excel_path, "certPath": cert_path})
     data = request.get_json()
     excel_path = data.get('excelPath', '').strip()
@@ -908,9 +915,13 @@ def admin_set_paths():
     username = data.get('username', '').strip()
     excel_path = data.get('excelPath', '').strip()
     cert_path = data.get('certPath', '').strip()
+    print_ip = (data.get('printIp') or '').strip().removeprefix('http://').removeprefix('https://').rstrip('/')
+    numbering, err = _parse_numbering_payload(data)
+    if err:
+        return jsonify({"success": False, "message": err}), 400
     if not username:
         return jsonify({"success": False, "message": "用户名不能为空"}), 400
-    set_user_paths(username, excel_path, cert_path)
+    set_user_paths(username, excel_path, cert_path, numbering, print_ip)
     return jsonify({"success": True})
 
 
@@ -927,42 +938,94 @@ def admin_delete_paths(username):
     return jsonify({"success": True})
 
 
-# ==================== 管理员：打印服务 IP（部门路由） ====================
-@app.route('/api/admin/print_routes', methods=['GET'])
-def admin_get_print_routes():
+# ==================== 编号规则管理（各模板 Excel 的前缀映射） ====================
+def _parse_numbering_payload(data):
+    """从请求体解析 {room,cold4,cold18}。三项全空返回 None（=继承，不覆盖）。
+    返回 (numbering, err)：err 非 None 表示校验失败"""
+    prefixes = {cat: (data.get(cat) or '').strip().upper() for cat in ('room', 'cold4', 'cold18')}
+    if not any(prefixes.values()):
+        return None, None
+    for p in prefixes.values():
+        if p and not re.fullmatch(r'[A-Z]', p):
+            return None, "前缀须为单个字母或留空"
+    letters = [p for p in prefixes.values() if p]
+    if len(letters) != len(set(letters)):
+        return None, "前缀字母不能重复"
+    return prefixes, None
+
+
+@app.route('/api/numbering_rules', methods=['GET'])
+def get_numbering_rules_api():
+    """所有登录用户可读：前端生成建议编号要用。effective = 当前用户生效规则（人员>部门>模板）"""
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    return jsonify({
+        "success": True,
+        "rules": get_numbering_rules(),
+        "effective": get_numbering_override(session.get('display_name', ''), session.get('org_name')),
+    })
+
+
+# ==================== 管理员：部门设置（路径 + 编号规则 + 打印服务 IP） ====================
+@app.route('/api/admin/departments', methods=['GET'])
+def admin_get_departments():
     if not session.get('logged_in'):
         return jsonify({"success": False, "message": "未登录"}), 401
     if (session.get('display_name') or '').strip() != _ADMIN_DISPLAY_NAME:
         return jsonify({"success": False, "message": "无权限"}), 403
-    return jsonify({"success": True, "routes": load_config().get('print_routes', {})})
+    config = load_config()
+    departments = config.get('departments', {})
+    print_routes = config.get('print_routes', {})
+    merged = {}
+    for dept in set(departments) | set(print_routes):
+        merged[dept] = {**(departments.get(dept) or {}), 'printIp': print_routes.get(dept, '')}
+    return jsonify({"success": True, "departments": merged})
 
 
-@app.route('/api/admin/print_routes', methods=['POST'])
-def admin_set_print_routes():
+@app.route('/api/admin/departments', methods=['POST'])
+def admin_set_departments():
     if not session.get('logged_in'):
         return jsonify({"success": False, "message": "未登录"}), 401
     if (session.get('display_name') or '').strip() != _ADMIN_DISPLAY_NAME:
         return jsonify({"success": False, "message": "无权限"}), 403
     data = request.get_json() or {}
     dept = (data.get('dept') or '').strip()
-    ip = (data.get('ip') or '').strip().removeprefix('http://').removeprefix('https://').rstrip('/')
-    if not dept or not ip:
-        return jsonify({"success": False, "message": "部门和 IP 不能为空"}), 400
+    excel_path = (data.get('excelPath') or '').strip()
+    cert_path = (data.get('certPath') or '').strip()
+    print_ip = (data.get('printIp') or '').strip().removeprefix('http://').removeprefix('https://').rstrip('/')
+    numbering, err = _parse_numbering_payload(data)
+    if err:
+        return jsonify({"success": False, "message": err}), 400
+    if not dept:
+        return jsonify({"success": False, "message": "部门名不能为空"}), 400
     config = load_config()
-    config.setdefault('print_routes', {})[dept] = ip
+    departments = config.setdefault('departments', {})
+    if not (excel_path or cert_path or numbering):
+        departments.pop(dept, None)  # 路径与前缀全空 = 删除部门条目（打印 IP 独立处理）
+    else:
+        entry = {'excelPath': excel_path, 'certPath': cert_path}
+        if numbering:
+            entry['numbering'] = numbering
+        departments[dept] = entry
+    routes = config.setdefault('print_routes', {})
+    if print_ip:
+        routes[dept] = print_ip
+    else:
+        routes.pop(dept, None)  # 编辑表单会预填，留空即清除该部门打印路由
     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
     _niimbot_print_routes_from_config()
     return jsonify({"success": True})
 
 
-@app.route('/api/admin/print_routes/<path:dept>', methods=['DELETE'])
-def admin_delete_print_routes(dept):
+@app.route('/api/admin/departments/<path:dept>', methods=['DELETE'])
+def admin_delete_departments(dept):
     if not session.get('logged_in'):
         return jsonify({"success": False, "message": "未登录"}), 401
     if (session.get('display_name') or '').strip() != _ADMIN_DISPLAY_NAME:
         return jsonify({"success": False, "message": "无权限"}), 403
     config = load_config()
+    config.get('departments', {}).pop(dept, None)
     config.get('print_routes', {}).pop(dept, None)
     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
@@ -1087,7 +1150,7 @@ def serve_manual_excel(filename):
 
 @app.route('/organic_excel/<path:filename>')
 def serve_excel(filename):
-    excel_path, _ = get_user_paths(session.get('display_name', ''))
+    excel_path, _ = get_user_paths(session.get('display_name', ''), session.get('org_name'))
     excel_dir = os.path.dirname(excel_path)
     if not excel_dir:
         return jsonify({"success": False, "message": "未配置 Excel 路径"}), 400
@@ -1095,7 +1158,7 @@ def serve_excel(filename):
 
 @app.route('/certificates/<path:filename>')
 def serve_cert(filename):
-    _, cert_dir = get_user_paths(session.get('display_name', ''))
+    _, cert_dir = get_user_paths(session.get('display_name', ''), session.get('org_name'))
     if not cert_dir:
         return jsonify({"success": False, "message": "未配置证书路径"}), 400
     return send_from_directory(cert_dir, filename)
@@ -1112,15 +1175,54 @@ def detect_sheet_name(wb):
     # 都没有则返回第一个 sheet
     return wb.sheetnames[0] if wb.sheetnames else None
 
-def get_prefix_type(original_id):
+# 各模板（sheet 名）的编号前缀规则：存储类别 → 前缀字母，空前缀 = 纯数字编号
+_DEFAULT_NUMBERING_RULES = {
+    'FCM标准品': {'room': 'A', 'cold4': 'B', 'cold18': 'C'},
+    '有机标准物质': {'room': '', 'cold4': 'D', 'cold18': 'E'},
+}
+
+def get_numbering_rules():
+    """config.json 的 numbering_rules 与默认值逐 sheet 合并（缺键补默认，不回写）"""
+    custom = load_config().get('numbering_rules', {})
+    merged = {}
+    for sheet, defaults in _DEFAULT_NUMBERING_RULES.items():
+        merged[sheet] = {**defaults, **(custom.get(sheet) or {})}
+    for sheet, rule in custom.items():
+        if sheet not in merged:
+            merged[sheet] = {**_DEFAULT_NUMBERING_RULES['有机标准物质'], **(rule or {})}
+    return merged
+
+
+def get_numbering_override(display_name='', org_name=''):
+    """人员/部门显式设置的编号规则；未设置返回 None（由模板/默认兜底）"""
+    config = load_config()
+    user = config.get('users', {}).get(display_name or '', {})
+    dept = config.get('departments', {}).get(org_name or '', {})
+    for src in (user, dept):
+        numbering = src.get('numbering')
+        if numbering and any((numbering.get(cat) or '').strip() for cat in ('room', 'cold4', 'cold18')):
+            return {cat: (numbering.get(cat) or '').strip().upper() for cat in ('room', 'cold4', 'cold18')}
+    return None
+
+
+def get_effective_numbering_rule(display_name='', org_name='', sheet_name=None):
+    """当前用户的生效编号规则。解析顺序：人员 > 部门 > sheet 名模板 > 内置默认"""
+    override = get_numbering_override(display_name, org_name)
+    if override:
+        return override
+    rules = get_numbering_rules()
+    if sheet_name and sheet_name in rules:
+        return rules[sheet_name]
+    return _DEFAULT_NUMBERING_RULES['有机标准物质']
+
+def get_prefix_type(original_id, rule=None):
     if not original_id: return 'number'
+    rule = rule or _DEFAULT_NUMBERING_RULES['有机标准物质']
     first = original_id[0].upper()
-    if first == 'A': return 'A'     # FCM 室温
-    if first == 'B': return 'B'     # FCM 4℃
-    if first == 'C': return 'C'     # FCM -18℃
-    if first == 'D': return 'D'     # 有机 D
-    if first == 'E': return 'E'     # 有机 E
-    return 'number'
+    if first.isdigit(): return 'number'
+    for cat in ('room', 'cold4', 'cold18'):
+        if rule.get(cat) and first == rule[cat].upper(): return cat
+    return first  # 配置外的前缀字母，自成一组（排在配置组之后）
 
 def extract_number(original_id):
     if not original_id: return 0
@@ -1283,13 +1385,17 @@ def read_excel_expiry_rows(path):
     return rows
 
 
-def find_insert_position(records, new_id):
-    new_type = get_prefix_type(new_id)
+def find_insert_position(records, new_id, rule=None):
+    rule = rule or _DEFAULT_NUMBERING_RULES['有机标准物质']
+    new_type = get_prefix_type(new_id, rule)
     new_num = extract_number(new_id)
-    groups = ['number', 'A', 'B', 'C', 'D', 'E']
+    groups = ['number', 'room', 'cold4', 'cold18']
     typed = {g: [] for g in groups}
     for r in records:
-        typed[get_prefix_type(r['original_id'])].append(r)
+        typed.setdefault(get_prefix_type(r['original_id'], rule), []).append(r)
+    # 配置外的前缀字母（历史遗留）各成一组，按字母序排在配置组之后；
+    # 旧代码会把这类行混进 number 组，现独立成组更合理
+    groups += sorted(k for k in typed if k not in groups)
     base = 2
     for g in groups:
         group = typed[g]
@@ -1334,7 +1440,7 @@ def add_to_excel():
         data = request.get_json()
         record = data.get('record')
         if not record: return jsonify({"success": False, "message": "无数据"}), 400
-        excel_path, _ = get_user_paths(session.get('display_name', ''))
+        excel_path, _ = get_user_paths(session.get('display_name', ''), session.get('org_name'))
         excel_path = excel_path.strip()
         if not excel_path: return jsonify({"success": False, "message": "未配置 Excel 路径"}), 400
         ext = os.path.splitext(excel_path)[1].lower()
@@ -1352,6 +1458,7 @@ def add_to_excel():
         if ext == '.xlsx':
             wb = openpyxl.load_workbook(excel_path)
             sheet_name = detect_sheet_name(wb) or '有机标准物质'
+            numbering_rule = get_effective_numbering_rule(session.get('display_name', ''), session.get('org_name'), sheet_name)
             if sheet_name not in wb.sheetnames:
                 ws = wb.create_sheet(sheet_name)
                 for col, h in enumerate(headers, 1):
@@ -1364,7 +1471,7 @@ def add_to_excel():
             if check_duplicate_labno(records, new_lab_no):
                 wb.close()
                 return jsonify({"success": False, "message": f"实验室编号 {new_lab_no} 已存在"}), 400
-            insert_row = find_insert_position(records, new_original_id)
+            insert_row = find_insert_position(records, new_original_id, numbering_rule)
             ws.insert_rows(insert_row)
             for col, val in enumerate(new_row_data, 1):
                 ws.cell(row=insert_row, column=col, value=val)
@@ -1402,13 +1509,14 @@ def add_to_excel():
                     break
             if not sheet_name and rb.sheet_names():
                 sheet_name = rb.sheet_names()[0]
+            numbering_rule = get_effective_numbering_rule(session.get('display_name', ''), session.get('org_name'), sheet_name)
             if sheet_name in rb.sheet_names():
                 sheet_rb = rb.sheet_by_name(sheet_name)
                 ws = wb.get_sheet(sheet_name)
                 records = parse_existing_records_xls(sheet_rb)
                 if check_duplicate_labno(records, new_lab_no):
                     return jsonify({"success": False, "message": f"实验室编号 {new_lab_no} 已存在"}), 400
-                insert_row_idx = find_insert_position(records, new_original_id) - 1
+                insert_row_idx = find_insert_position(records, new_original_id, numbering_rule) - 1
                 for r in range(sheet_rb.nrows - 1, insert_row_idx - 1, -1):
                     for c in range(sheet_rb.ncols):
                         val = sheet_rb.cell_value(r, c)
@@ -4466,7 +4574,7 @@ def update_excel_usage():
     if not new_usage:
         return jsonify({"success": False, "message": "使用情况不能为空"}), 400
 
-    excel_path, _ = get_user_paths(session.get('display_name', ''))
+    excel_path, _ = get_user_paths(session.get('display_name', ''), session.get('org_name'))
     excel_path = excel_path.strip()
     if not excel_path:
         return jsonify({"success": False, "message": "未配置 Excel 路径"}), 400
@@ -4602,7 +4710,7 @@ def update_excel_record():
             ('storageDate', '入库日期'), ('usage', '使用情况'), ('remarks', '备注'),
         ]
 
-        excel_path, _ = get_user_paths(session.get('display_name', ''))
+        excel_path, _ = get_user_paths(session.get('display_name', ''), session.get('org_name'))
         excel_path = excel_path.strip()
         if not excel_path:
             return jsonify({"success": False, "message": "未配置 Excel 路径"}), 400
@@ -5616,8 +5724,8 @@ def do_print():
 import subprocess
 
 NIIMBOT_LOCAL = "http://localhost:5001"
-# 部门 → 打印机所在电脑 IP：存 config.json 的 print_routes（管理员在「用户路径管理」窗口维护），
-# 端口固定 5001（print-server 部署包标准）。未映射部门走本机。
+# 部门 → 打印机所在电脑 IP：存 config.json 的 print_routes（管理员在「设置管理-部门设置」维护；
+# 人员可在个人设置里配 printIp 覆盖本部门）。端口固定 5001（print-server 部署包标准）。未映射部门走本机。
 NIIMBOT_ROUTES = {}
 
 
@@ -5636,7 +5744,12 @@ _niimbot_print_routes_from_config()
 
 
 def _niimbot_server():
-    """按当前登录人部门(org_name)路由打印服务；本机开发或未映射部门走 localhost。"""
+    """打印服务路由：人员 printIp > 部门 print_routes[org_name] > 本机。"""
+    display = session.get('display_name')
+    if display:
+        user_ip = (load_config().get('users', {}).get(display, {}).get('printIp') or '').strip()
+        if user_ip:
+            return f"http://{user_ip}:5001"
     return NIIMBOT_ROUTES.get(session.get('org_name'), NIIMBOT_LOCAL)
 
 
