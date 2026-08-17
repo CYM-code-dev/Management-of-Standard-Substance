@@ -502,7 +502,8 @@
 <div class="modal fade" id="settingsModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header bg-info text-white"><h5 class="modal-title"><i class="fas fa-cog me-2"></i>系统设置</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label fw-bold">Excel文件UNC路径</label><input type="text" class="form-control" id="settingExcelUrl" placeholder="\\\\server\\share\\folder\\有机标准品.xls"></div><div class="mb-3"><label class="form-label fw-bold">证书文件夹UNC路径</label><input type="text" class="form-control" id="settingCertBaseUrl" placeholder="\\\\server\\share\\证书文件夹"></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button type="button" class="btn btn-primary" id="saveSettingsBtn">保存并加载</button></div></div></div></div>
 
 <!-- 用户路径管理模态框 (管理员) -->
-<div class="modal fade" id="adminPathsModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header bg-warning text-dark"><h5 class="modal-title"><i class="fas fa-users-cog me-2"></i>用户路径管理</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="alert alert-info small"><strong>说明：</strong>为指定人员（真实姓名）配置独立的 Excel/证书路径。留空表示使用全局默认路径。</div><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>真实姓名</th><th>Excel 路径</th><th>证书路径</th><th style="width:130px">操作</th></tr></thead><tbody id="adminPathsBody"></tbody></table></div><hr><h6>添加 / 编辑用户路径</h6><div class="mb-2"><label class="form-label">真实姓名</label><input type="text" class="form-control" id="adminPathUsername" placeholder="输入真实姓名，如：沈佳芮"></div><div class="mb-2"><label class="form-label">Excel 文件 UNC 路径</label><input type="text" class="form-control" id="adminPathExcel" placeholder="留空使用默认"></div><div class="mb-2"><label class="form-label">证书文件夹 UNC 路径</label><input type="text" class="form-control" id="adminPathCert" placeholder="留空使用默认"></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button><button type="button" class="btn btn-primary" id="adminPathSaveBtn">保存</button></div></div></div></div>
+<style>#adminPathsModal td{padding-top:.55rem;padding-bottom:.55rem}#adminPathsModal td .btn-sm{margin-top:2px;margin-bottom:2px}#adminPathsModal .row.g-2{margin-top:.75rem}#adminPathsModal .modal-footer .btn{margin:0 .25rem}</style>
+<div class="modal fade" id="adminPathsModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header bg-warning text-dark"><h5 class="modal-title"><i class="fas fa-users-cog me-2"></i>用户路径管理</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><ul class="nav nav-tabs mb-3" role="tablist"><li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#adminPathUserTab" type="button" role="tab"><i class="fas fa-users me-1"></i>用户路径</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#adminPathPrintTab" type="button" role="tab"><i class="fas fa-print me-1"></i>打印服务 IP</button></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="adminPathUserTab" role="tabpanel"><div class="alert alert-info small"><strong>说明：</strong>为指定人员（真实姓名）配置独立的 Excel/证书路径。留空表示使用全局默认路径。</div><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>真实姓名</th><th>Excel 路径</th><th>证书路径</th><th style="width:130px">操作</th></tr></thead><tbody id="adminPathsBody"></tbody></table></div><hr><h6>添加 / 编辑用户路径</h6><div class="mb-2"><label class="form-label">真实姓名</label><input type="text" class="form-control" id="adminPathUsername" placeholder="输入真实姓名，如：沈佳芮"></div><div class="mb-2"><label class="form-label">Excel 文件 UNC 路径</label><input type="text" class="form-control" id="adminPathExcel" placeholder="留空使用默认"></div><div class="mb-2"><label class="form-label">证书文件夹 UNC 路径</label><input type="text" class="form-control" id="adminPathCert" placeholder="留空使用默认"></div></div><div class="tab-pane fade" id="adminPathPrintTab" role="tabpanel"><h6><i class="fas fa-print me-1"></i>打印服务 IP（按部门）</h6><div class="alert alert-info small">为各部门配置标签打印服务所在电脑的固定 IP（需先用 print-server 文件夹在那台电脑部署）。未配置的部门走本机打印。</div><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>部门</th><th>打印服务 IP</th><th style="width:130px">操作</th></tr></thead><tbody id="adminPrintRoutesBody"></tbody></table></div><div class="row g-2"><div class="col-5"><input type="text" class="form-control" id="adminPrintDept" list="adminPrintDeptList" placeholder="部门，如：日化实验室"><datalist id="adminPrintDeptList"><option value="日化实验室"></option><option value="食品接触材料实验室"></option><option value="消费品实验室"></option></datalist></div><div class="col-4"><input type="text" class="form-control" id="adminPrintIp" placeholder="IP，如 10.1.93.197"></div><div class="col-3"><button type="button" class="btn btn-primary w-100" id="adminPrintRouteSaveBtn">保存</button></div></div></div></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button><button type="button" class="btn btn-primary" id="adminPathSaveBtn">保存</button></div></div></div></div>
 
 <!-- 删除确认模态框 -->
 <div class="modal fade" id="deleteModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header bg-danger"><h5 class="modal-title">确认删除</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">确定要删除 <strong id="deleteItemName"></strong> 吗？</div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-danger" id="confirmDeleteBtn">确认删除</button></div></div></div></div>
@@ -1386,6 +1387,55 @@ function filterData() {
         document.getElementById('adminPathCert').value = paths.certPath || '';
     }
 
+    // ---------- 打印服务 IP（部门路由） ----------
+    let _adminPrintRoutesData = {};
+    async function loadAdminPrintRoutes() {
+        const resp = await fetch('/api/admin/print_routes');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        _adminPrintRoutesData = data.routes || {};
+        const tbody = document.getElementById('adminPrintRoutesBody');
+        tbody.innerHTML = '';
+        for (const [dept, ip] of Object.entries(_adminPrintRoutesData)) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + dept + '</td><td class="small">' + ip + '</td>' +
+                '<td><button class="btn btn-sm btn-outline-primary me-1" onclick="editPrintRoute(\'' + dept + '\')">编辑</button>' +
+                '<button class="btn btn-sm btn-outline-danger" onclick="deletePrintRoute(\'' + dept + '\')">删除</button></td>';
+            tbody.appendChild(tr);
+        }
+    }
+
+    async function saveAdminPrintRoute() {
+        const dept = document.getElementById('adminPrintDept').value.trim();
+        const ip = document.getElementById('adminPrintIp').value.trim();
+        if (!dept || !ip) { alert('请输入部门和 IP'); return; }
+        const resp = await fetch('/api/admin/print_routes', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({dept, ip})
+        });
+        const result = await resp.json();
+        if (result.success) {
+            await loadAdminPrintRoutes();
+            document.getElementById('adminPrintDept').value = '';
+            document.getElementById('adminPrintIp').value = '';
+            alert('保存成功，立即生效');
+        } else alert('保存失败：' + (result.message || '未知错误'));
+    }
+
+    async function deletePrintRoute(dept) {
+        if (!confirm('确定删除 ' + dept + ' 的打印服务配置？（该部门将走本机打印）')) return;
+        const resp = await fetch('/api/admin/print_routes/' + encodeURIComponent(dept), {method: 'DELETE'});
+        const result = await resp.json();
+        if (result.success) await loadAdminPrintRoutes();
+        else alert('删除失败：' + (result.message || '未知错误'));
+    }
+
+    function editPrintRoute(dept) {
+        document.getElementById('adminPrintDept').value = dept;
+        document.getElementById('adminPrintIp').value = _adminPrintRoutesData[dept] || '';
+    }
+
     // ---------- 初始化 ----------
     document.addEventListener('DOMContentLoaded', async () => {
         bindLoginEvents();
@@ -1409,9 +1459,11 @@ function filterData() {
         // 管理员路径管理
         document.getElementById('adminPathsBtn').addEventListener('click', async () => {
             await loadAdminPaths();
+            await loadAdminPrintRoutes();
             new bootstrap.Modal(document.getElementById('adminPathsModal')).show();
         });
         document.getElementById('adminPathSaveBtn').addEventListener('click', saveAdminPath);
+        document.getElementById('adminPrintRouteSaveBtn').addEventListener('click', saveAdminPrintRoute);
         document.getElementById('searchNameCas').addEventListener('keypress', e => { if(e.key === 'Enter') filterData(); });
         document.getElementById('searchGroup').addEventListener('keypress', e => { if(e.key === 'Enter') filterData(); });
         document.getElementById('queryLabNoBtn').addEventListener('click', () => queryAndFill(1));

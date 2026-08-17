@@ -927,6 +927,49 @@ def admin_delete_paths(username):
     return jsonify({"success": True})
 
 
+# ==================== 管理员：打印服务 IP（部门路由） ====================
+@app.route('/api/admin/print_routes', methods=['GET'])
+def admin_get_print_routes():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    if (session.get('display_name') or '').strip() != _ADMIN_DISPLAY_NAME:
+        return jsonify({"success": False, "message": "无权限"}), 403
+    return jsonify({"success": True, "routes": load_config().get('print_routes', {})})
+
+
+@app.route('/api/admin/print_routes', methods=['POST'])
+def admin_set_print_routes():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    if (session.get('display_name') or '').strip() != _ADMIN_DISPLAY_NAME:
+        return jsonify({"success": False, "message": "无权限"}), 403
+    data = request.get_json() or {}
+    dept = (data.get('dept') or '').strip()
+    ip = (data.get('ip') or '').strip().removeprefix('http://').removeprefix('https://').rstrip('/')
+    if not dept or not ip:
+        return jsonify({"success": False, "message": "部门和 IP 不能为空"}), 400
+    config = load_config()
+    config.setdefault('print_routes', {})[dept] = ip
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+    _niimbot_print_routes_from_config()
+    return jsonify({"success": True})
+
+
+@app.route('/api/admin/print_routes/<path:dept>', methods=['DELETE'])
+def admin_delete_print_routes(dept):
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    if (session.get('display_name') or '').strip() != _ADMIN_DISPLAY_NAME:
+        return jsonify({"success": False, "message": "无权限"}), 403
+    config = load_config()
+    config.get('print_routes', {}).pop(dept, None)
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+    _niimbot_print_routes_from_config()
+    return jsonify({"success": True})
+
+
 # ==================== 标液期间核查：导出名称预设 ====================
 @app.route('/api/lims/export_presets', methods=['GET'])
 def lims_get_export_presets():
@@ -5485,21 +5528,24 @@ def lims_print_label():
         return jsonify({"success": False, "message": f"生成标签失败: {str(e)}"}), 500
 
 
-def _niimbot_ensure_connected():
+def _niimbot_ensure_connected(server):
     """确保打印机已连接，未连接则自动扫描连接。返回 (成功, 错误信息)。"""
     try:
-        resp = requests.get(f"{NIIMBOT_SERVER}/connected", timeout=3)
+        resp = requests.get(f"{server}/connected", timeout=3)
         if resp.ok and resp.json().get("connected"):
             return True, None
     except requests.exceptions.ConnectionError:
-        # 打印服务进程不在 → 自动重启；失败则给出准确信息，避免误导为「扫描打印机失败」
-        if not start_niimbot_server():
-            return False, "打印服务未启动，自动重启失败，请手动运行 npm start"
+        # 打印服务进程不在：仅本机可自动重启；远端(实验室电脑)只能提示
+        if server == NIIMBOT_LOCAL:
+            if not start_niimbot_server():
+                return False, "打印服务未启动，自动重启失败，请手动运行 npm start"
+        else:
+            return False, f"实验室打印服务未启动（{server}），请到该电脑运行 niimblue-cli server -p 5001 --cors"
     except Exception:
         pass
     # 扫描串口，过滤非打印机设备，逐个尝试连接
     try:
-        resp = requests.post(f"{NIIMBOT_SERVER}/scan", json={"transport": "serial"}, timeout=5)
+        resp = requests.post(f"{server}/scan", json={"transport": "serial"}, timeout=5)
         devices = resp.json().get("devices", [])
         # 跳过已知非打印机设备（CH340 是常见串口转接芯片）
         skip_names = ('ch340', 'cp210', 'ft232', 'pl2303')
@@ -5507,17 +5553,17 @@ def _niimbot_ensure_connected():
         for dev in candidates:
             addr = dev["address"]
             try:
-                conn = requests.post(f"{NIIMBOT_SERVER}/connect", json={"transport": "serial", "address": addr}, timeout=5)
+                conn = requests.post(f"{server}/connect", json={"transport": "serial", "address": addr}, timeout=5)
                 if conn.ok and conn.json().get("message") == "Connected":
                     # 验证打印机是否真正响应
                     try:
-                        info = requests.get(f"{NIIMBOT_SERVER}/info", timeout=3)
+                        info = requests.get(f"{server}/info", timeout=3)
                         if info.ok and info.json().get("printerInfo"):
                             return True, None
                     except Exception:
                         pass
                     try:
-                        requests.post(f"{NIIMBOT_SERVER}/disconnect", timeout=3)
+                        requests.post(f"{server}/disconnect", timeout=3)
                     except Exception:
                         pass
             except Exception:
@@ -5541,11 +5587,12 @@ def do_print():
         if "," in image_base64:
             image_base64 = image_base64.split(",", 1)[1]
 
-        ok, err = _niimbot_ensure_connected()
+        server = _niimbot_server()
+        ok, err = _niimbot_ensure_connected(server)
         if not ok:
             return jsonify({"success": False, "message": err}), 503
 
-        resp = requests.post(f"{NIIMBOT_SERVER}/print", json={
+        resp = requests.post(f"{server}/print", json={
             "printTask": "B1",
             "printDirection": "top",
             "density": 3,
@@ -5568,13 +5615,35 @@ def do_print():
 
 import subprocess
 
-NIIMBOT_SERVER = "http://localhost:5001"
+NIIMBOT_LOCAL = "http://localhost:5001"
+# 部门 → 打印机所在电脑 IP：存 config.json 的 print_routes（管理员在「用户路径管理」窗口维护），
+# 端口固定 5001（print-server 部署包标准）。未映射部门走本机。
+NIIMBOT_ROUTES = {}
+
+
+def _niimbot_print_routes_from_config():
+    """从 config.json 载入 print_routes（部门→IP），拼成完整 URL 刷新 NIIMBOT_ROUTES。"""
+    try:
+        routes = load_config().get('print_routes') or {}
+        if isinstance(routes, dict):
+            NIIMBOT_ROUTES.clear()
+            NIIMBOT_ROUTES.update({k: f"http://{str(v).strip()}:5001" for k, v in routes.items() if str(v).strip()})
+    except Exception as e:
+        print(f"[print_routes] 载入失败: {e}")
+
+
+_niimbot_print_routes_from_config()
+
+
+def _niimbot_server():
+    """按当前登录人部门(org_name)路由打印服务；本机开发或未映射部门走 localhost。"""
+    return NIIMBOT_ROUTES.get(session.get('org_name'), NIIMBOT_LOCAL)
 
 
 def start_niimbot_server():
-    """自动启动 niimblue-cli 打印服务（后台运行）。"""
+    """自动启动本机 niimblue-cli 打印服务（后台运行）。远端实验室打印服务无法代启。"""
     try:
-        requests.get(f"{NIIMBOT_SERVER}/connected", timeout=2)
+        requests.get(f"{NIIMBOT_LOCAL}/connected", timeout=2)
         print("  打印服务已在运行")
         return True
     except Exception:
@@ -5592,7 +5661,7 @@ def start_niimbot_server():
         for _ in range(10):
             time.sleep(1)
             try:
-                requests.get(f"{NIIMBOT_SERVER}/connected", timeout=2)
+                requests.get(f"{NIIMBOT_LOCAL}/connected", timeout=2)
                 print("  打印服务已自动启动")
                 return True
             except Exception:

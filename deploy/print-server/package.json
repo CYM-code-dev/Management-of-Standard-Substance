@@ -1,0 +1,11 @@
+{
+  "name": "niimbot-print-server",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "niimblue-cli server -p 5001 --cors -h 0.0.0.0"
+  },
+  "dependencies": {
+    "@mmote/niimblue-node": "0.0.12"
+  }
+}
