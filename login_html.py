@@ -880,7 +880,9 @@ def query():
 def handle_config():
     if request.method == 'GET':
         excel_path, cert_path = get_user_paths(session.get('display_name', ''), session.get('org_name'))
-        return jsonify({"excelPath": excel_path, "certPath": cert_path})
+        dept_cfg = load_config().get('departments', {}).get(session.get('org_name') or '', {})
+        storage_location = dept_cfg.get('storageLocation') or '4-1-华业4-1'
+        return jsonify({"excelPath": excel_path, "certPath": cert_path, "storageLocation": storage_location})
     data = request.get_json()
     excel_path = data.get('excelPath', '').strip()
     cert_path = data.get('certPath', '').strip()
@@ -993,6 +995,7 @@ def admin_set_departments():
     excel_path = (data.get('excelPath') or '').strip()
     cert_path = (data.get('certPath') or '').strip()
     print_ip = (data.get('printIp') or '').strip().removeprefix('http://').removeprefix('https://').rstrip('/')
+    storage_loc = (data.get('storageLocation') or '').strip()
     numbering, err = _parse_numbering_payload(data)
     if err:
         return jsonify({"success": False, "message": err}), 400
@@ -1000,12 +1003,14 @@ def admin_set_departments():
         return jsonify({"success": False, "message": "部门名不能为空"}), 400
     config = load_config()
     departments = config.setdefault('departments', {})
-    if not (excel_path or cert_path or numbering):
+    if not (excel_path or cert_path or numbering or storage_loc):
         departments.pop(dept, None)  # 路径与前缀全空 = 删除部门条目（打印 IP 独立处理）
     else:
         entry = {'excelPath': excel_path, 'certPath': cert_path}
         if numbering:
             entry['numbering'] = numbering
+        if storage_loc:
+            entry['storageLocation'] = storage_loc
         departments[dept] = entry
     routes = config.setdefault('print_routes', {})
     if print_ip:
@@ -2650,6 +2655,7 @@ def lims_get_source_info():
                 "solutionName": result.get('solutionName', ''),
                 "concentration": result.get('concentration', ''),
                 "concentrationUnit": result.get('concentrationUnit', ''),
+                "validityDate": result.get('validityDate', ''),
             }
         })
     except Exception as e:

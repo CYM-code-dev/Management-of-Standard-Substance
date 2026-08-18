@@ -409,7 +409,7 @@
         <button class="btn btn-outline-secondary" id="dTabDraftBtn"><i class="fas fa-folder-open me-1"></i>草稿箱</button>
         <button class="btn btn-outline-primary" id="quickQueryBtn"><i class="fas fa-bolt me-1"></i>快速查询</button>
         <button class="btn btn-outline-purple" id="pendingAuditBtn"><i class="fas fa-hourglass-half me-1"></i>待审核</button>
-        <a href="/organic-std" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>有机标准品</a>
+        <a href="/organic-std" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>标准品管理</a>
     </div>
 </div>
 <div class="container-fluid pb-3 px-3">
@@ -1717,6 +1717,7 @@
     }
 
         let certUncPath = '';
+        let solStorageLocation = '4-1-华业4-1'; // 标准品存放位置：按部门设置（/api/config 解析），未配置兜底
     let certBaseUrl = '/certificates/';
 
         function extractYear(labNo) { const match = labNo.match(/(\d{4})/); return match ? match[1] : null; }
@@ -2497,7 +2498,7 @@
             use_quantity: qty,
             solution_type: document.getElementById('solType').value,
             page_type: 'SOLUTION_TYPE_A',
-            storage_location: item.storagePositionName || '4-1-华业4-1',
+            storage_location: item.storagePositionName || solStorageLocation,
             storage_condition: rowStorage,
             temperature: document.getElementById('solTemp').value.trim() || null,
             humidity: document.getElementById('solHumid').value.trim() || null,
@@ -2906,6 +2907,9 @@
                 qtyInput = prev?.querySelector('.bbcd-c-qty');
             }
             if (!qtyInput) return;
+            // N-1 手改计算浓度：以手改值参与均值（不再按公式重算）
+            const _ov = bbcdConcInputVal(tr);
+            if (_ov != null) { vals.push(bbcdRoundConc(_ov)); ws.push(bbcdRowWeight(tr)); return; }
             const qty = parseFloat(qtyInput.value);
             if (!qty || qty <= 0) return;
             if (tr._src.isPctSource) {
@@ -2930,6 +2934,14 @@
         const mean = bbcdWeightedMean(vals, ws);
         if (mean === null) return '';
         return bbcdFmtConc(mean);
+    }
+
+    // N-1（A-BCD 混合）计算浓度输入框：手动改过且为有效正数时返回该数值，否则 null（各处走公式重算）
+    function bbcdConcInputVal(tr) {
+        const el = tr?.querySelector?.('.bbcd-c-conc-input');
+        if (!el || !el._userEdited) return null;
+        const v = parseFloat(el.value);
+        return (isFinite(v) && v > 0) ? v : null;
     }
 
     function bbcdGetEffectiveSourceCount(srcList) {
@@ -3397,6 +3409,7 @@
                         if (fresh) {
                             it.constantVolume = fresh.constantVolume;
                             it.totalConstantVolume = fresh.totalConstantVolume;
+                            it.validityDate = fresh.validityDate;
                         }
                     });
                 }
@@ -3654,7 +3667,7 @@
             <td><span class="bbcd-c-srcConc"${stockTitle}>${isNaN(src.concValue) ? '—' : src.concValue + ' ' + bbcdEsc(src.concUnit)}</span></td>
             <td><input type="number" class="form-control form-control-sm bbcd-c-qty" step="${qtyStep}" min="${qtyMin}"${maxAttr} style="-moz-appearance:textfield;"></td>
             ${sharedCells}
-            <td><span class="bbcd-c-conc">—</span><span class="bbcd-c-unit ms-1 text-muted small">${bbcdEsc(resultUnit)}</span></td>`;
+            <td class="text-nowrap"><input type="number" class="form-control form-control-sm d-inline-block bbcd-c-conc-input" style="width:92px" step="0.0001" min="0" placeholder="—" title="默认按公式计算，可直接修改"><span class="bbcd-c-unit ms-1 text-muted small">${bbcdEsc(resultUnit)}</span></td>`;
         document.querySelector('#bbcdConfigTable tbody').appendChild(tr);
         return tr;
     }
@@ -4244,10 +4257,10 @@
         const sourceItems = Object.entries(codeGroups).flatMap(([, rows]) => {
             const order = String(rows[0].originalCode || '').trim();
             const origId = String(rows[0].originalId || '').trim();
-            const matchItem = bbcdLastResults.find(it => it.configureOrder === order);
-            if (matchItem) return [matchItem];
             // Look up source info by order first, then by originalId
             const srcInfo = window._dViewSourceInfo?.[order] || window._dViewSourceInfo?.[origId] || {};
+            const matchItem = bbcdLastResults.find(it => it.configureOrder === order);
+            if (matchItem) return [{ ...matchItem, validityDate: srcInfo.validityDate || matchItem.validityDate || '' }];
             if (rows.length === 1) {
                 const concVal = (rows[0].originalConcentration || '').trim();
                 const concUnit = (rows[0].originalUnit || '').trim();
@@ -4262,7 +4275,7 @@
                     originalCode: rows[0].originalCode || '',
                     controlledNo: rec.controlledNo || '',
                     aSourceCount: 1, sourceCodes: [], aSourceCodes: [],
-                    validityDate: rec.validityDate || '',
+                    validityDate: srcInfo.validityDate || rec.validityDate || '',
                 }];
             }
             // Multi-component: build concentration string for bbcdParseMultiConc
@@ -4283,7 +4296,7 @@
                 originalCode: rows[0].originalCode || '',
                 controlledNo: rec.controlledNo || '',
                 aSourceCount: 1, sourceCodes: [], aSourceCodes: [],
-                validityDate: rec.validityDate || '',
+                validityDate: srcInfo.validityDate || rec.validityDate || '',
             }];
         });
 
@@ -4695,8 +4708,21 @@
         const volEl = document.getElementById('bbcdVolume');
         if (!volEl) return;
         const vol = parseFloat(volEl.value);
-        const cell = tr.querySelector('.bbcd-c-conc');
+        const cell = tr.querySelector('.bbcd-c-conc') || tr.querySelector('.bbcd-c-conc-input');
         if (!cell) return;
+
+        // N-1 计算浓度输入框：手改过则不覆盖；未改时按公式填数值（单位在旁侧 span）
+        if (cell.tagName === 'INPUT') {
+            if (bbcdConcInputVal(tr) != null) return;
+            if (src.isPctSource) {
+                cell.value = bbcdPctConcStr(src, qty, vol) || '';
+            } else if (!qty || !vol || qty <= 0 || vol <= 0 || isNaN(src.concValue)) {
+                cell.value = '';
+            } else {
+                cell.value = bbcdFmtConc(bbcdRoundConc(src.concValue * qty / vol));
+            }
+            return;
+        }
 
         // % 源（A型称量）：浓度 = 纯度(%)/100 × 称量(g) × 1e6 / 定容体积(mL)；g 不做 mL 库存校验
         if (src.isPctSource) {
@@ -4846,6 +4872,9 @@
             const concs = rows.map(tr => {
                 const qtyEl = tr.querySelector('.bbcd-c-qty');
                 if (!qtyEl) return null;
+                // N-1 手改计算浓度：有效期档位按手改值判断
+                const _ov = bbcdConcInputVal(tr);
+                if (_ov != null) return _ov;
                 const qty = parseFloat(qtyEl.value);
                 if (!qty || !vol || qty <= 0 || vol <= 0 || isNaN(tr._src.concValue)) return null;
                 return tr._src.concValue * qty / vol;
@@ -5017,9 +5046,10 @@
                 if (!qty || qty <= 0 || overStock) {
                     qtyEl.classList.add('is-invalid'); ok = false;
                 } else { qtyEl.classList.remove('is-invalid'); }
-                // 计算浓度必须有值
-                const concEl = tr.querySelector('.bbcd-c-conc');
-                if (!concEl || !concEl.textContent.trim() || concEl.textContent.trim() === '—') ok = false;
+                // 计算浓度必须有值（N-1 为输入框，其余为 span）
+                const concEl = tr.querySelector('.bbcd-c-conc, .bbcd-c-conc-input');
+                const concTxt = concEl ? (concEl.tagName === 'INPUT' ? concEl.value : concEl.textContent).trim() : '';
+                if (!concTxt || concTxt === '—') ok = false;
             });
             // 验证表格中的溶剂/介质
             const mediumEl = document.getElementById('bbcdMedium');
@@ -5083,7 +5113,10 @@
                     const src = tr._src;
                     // % 源（称量）按 纯度×称量/体积 重算；单位取结果单位 pctConcUnit（μg/mL）
                     const concUnit = src.isPctSource ? (src.pctConcUnit || 'μg/mL') : src.concUnit;
-                    const concStr = src.isPctSource
+                    // N-1 手改计算浓度优先
+                    const _ov = bbcdConcInputVal(tr);
+                    const concStr = _ov != null ? bbcdFmtConc(_ov)
+                        : src.isPctSource
                         ? bbcdPctConcStr(src, qty, volume)
                         : bbcdFmtConc(bbcdRoundConc(src.concValue * qty / volume));
                     configConcParts.push(`${src.componentName}:${concStr}`);
@@ -5122,7 +5155,10 @@
                 const src = firstSrc;
                 // % 源（称量）按 纯度×称量/体积 重算；单位取结果单位 pctConcUnit（μg/mL），非 % 源用 concUnit
                 const concUnit = src.isPctSource ? (src.pctConcUnit || 'μg/mL') : src.concUnit;
-                const concStr = src.isPctSource
+                // N-1 手改计算浓度优先
+                const _ov1 = bbcdConcInputVal(firstTr);
+                const concStr = _ov1 != null ? bbcdFmtConc(_ov1)
+                    : src.isPctSource
                     ? bbcdPctConcStr(src, qty, volume)
                     : bbcdFmtConc(bbcdRoundConc(src.concValue * qty / volume));
                 concParts.push(`${src.solutionName}:${concStr}(${concUnit})`);
@@ -5171,7 +5207,7 @@
             configureDate: document.getElementById('bbcdConfigureDate').value,
             validityDate: document.getElementById('bbcdValidityDate').value,
             storageCondition: document.getElementById('bbcdStorage').value || null,
-            storageLocation: _viewRec ? _viewRec.storageLocation : '4-1-华业4-1',
+            storageLocation: _viewRec ? _viewRec.storageLocation : solStorageLocation,
             concentration: concParts.join(';'),
             concentrationCount: concParts.join(';'),
             concentrationUnitName: _viewRec ? _viewRec.concentrationUnitName : null, uncertainty: null, configureOrder: _viewRec ? _viewRec.configureOrder : null,
@@ -5410,7 +5446,7 @@
             configureDate: document.getElementById('bbcdConfigureDate').value,
             validityDate: document.getElementById('bbcdValidityDate').value,
             storageCondition: document.getElementById('bbcdStorage').value || null,
-            storageLocation: _viewRec2 ? _viewRec2.storageLocation : '4-1-华业4-1',
+            storageLocation: _viewRec2 ? _viewRec2.storageLocation : solStorageLocation,
             concentration: concentrationParts.join(';'),
             concentrationCount: concentrationCountParts.join(';'),
             concentrationUnitName: _viewRec2 ? _viewRec2.concentrationUnitName : null,
@@ -6159,7 +6195,7 @@
                 volume_ml: parseFloat(document.getElementById('bbcdVolume').value),
                 solution_type: document.getElementById('bbcdSolType').value,
                 storage_condition: document.getElementById('bbcdStorage').value || null,
-                storage_location: '4-1-华业4-1',
+                storage_location: solStorageLocation,
                 temperature: document.getElementById('bbcdTemp').value.trim() || null,
                 humidity: document.getElementById('bbcdHumid').value.trim() || null,
                 device_names: document.getElementById('bbcdDevice')?.value.trim() || null,
@@ -8846,6 +8882,11 @@
                 if (e.target.id === 'bbcdVolume') {
                     bbcdRecalcAll();
                     bbcdUpdateCode(!!window.bbcdViewDetailMode);
+                } else if (e.target.classList.contains('bbcd-c-conc-input')) {
+                    // N-1 计算浓度手动修改：标记后不按公式覆盖，并联动自编号
+                    e.target._userEdited = true;
+                    bbcdUpdateCode();
+                    bbcdCheckValidity();
                 } else if (e.target.classList.contains('bbcd-c-qty')) {
                     // 重新计算当前行及其后续多组分行
                     const currentTr = e.target.closest('tr');
@@ -9411,7 +9452,7 @@
 
     // Load cert path config
     document.addEventListener('DOMContentLoaded', () => {
-        fetch('/api/config').then(r => r.json()).then(cfg => { certUncPath = cfg.certPath || ''; }).catch(() => {});
+        fetch('/api/config').then(r => r.json()).then(cfg => { certUncPath = cfg.certPath || ''; solStorageLocation = cfg.storageLocation || '4-1-华业4-1'; }).catch(() => {});
         solLoadLocalStandardsData();
     });
 
@@ -9968,10 +10009,10 @@
                     images.push({ code: labelCode, conc: concentration, preview: data.preview, image: data.image });
                 }
             } else {
-                // B/C 类型：取所有浓度均值
-                const concEls = [...document.querySelectorAll('#bbcdConfigTable tbody .bbcd-c-conc')];
+                // B/C 类型：取所有浓度均值（N-1 为输入框，其余为 span）
+                const concEls = [...document.querySelectorAll('#bbcdConfigTable tbody .bbcd-c-conc, #bbcdConfigTable tbody .bbcd-c-conc-input')];
                 const unitEls = [...document.querySelectorAll('#bbcdConfigTable tbody .bbcd-c-unit')];
-                const concValues = concEls.map(el => parseFloat(el.textContent.trim())).filter(v => isFinite(v) && v > 0);
+                const concValues = concEls.map(el => parseFloat((el.tagName === 'INPUT' ? el.value : el.textContent).trim())).filter(v => isFinite(v) && v > 0);
                 const unitStr = unitEls.length ? unitEls[0].textContent.trim() : '';
                 let concentration = '';
                 if (concValues.length > 0) {

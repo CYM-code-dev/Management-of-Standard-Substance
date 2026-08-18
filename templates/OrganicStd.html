@@ -503,7 +503,7 @@
 
 <!-- 设置管理模态框 (管理员) -->
 <style>#adminPathsModal td{padding-top:.55rem;padding-bottom:.55rem}#adminPathsModal td .btn-sm{margin-top:2px;margin-bottom:2px}#adminPathsModal .row.g-2{margin-top:.75rem}#adminPathsModal .modal-footer .btn{margin:0 .25rem}</style>
-<div class="modal fade" id="adminPathsModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header bg-warning text-dark"><h5 class="modal-title"><i class="fas fa-users-cog me-2"></i>设置管理</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><ul class="nav nav-tabs mb-3" role="tablist"><li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#adminPathUserTab" type="button" role="tab"><i class="fas fa-user me-1"></i>个人设置</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#adminPathDeptTab" type="button" role="tab"><i class="fas fa-sitemap me-1"></i>部门设置</button></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="adminPathUserTab" role="tabpanel"><div class="alert alert-info small"><strong>说明：</strong>为指定人员（真实姓名）配置个人设置。留空 = 使用该人员登录账号所在部门的设置（再回落全局默认）；解析顺序：人员 &gt; 部门 &gt; 全局默认。</div><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>真实姓名</th><th>Excel 路径</th><th>证书路径</th><th>前缀(常/4/-18)</th><th>打印 IP</th><th style="width:130px">操作</th></tr></thead><tbody id="adminPathsBody"></tbody></table></div><hr><a class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" href="#adminUserForm" role="button" aria-expanded="false" aria-controls="adminUserForm"><i class="fas fa-chevron-down me-1"></i>添加 / 编辑个人设置</a><div class="collapse mt-3" id="adminUserForm"><div class="mb-2"><label class="form-label">真实姓名</label><input type="text" class="form-control" id="adminPathUsername" placeholder="输入真实姓名，如：沈佳芮"></div><div class="mb-2"><label class="form-label">Excel 文件 UNC 路径</label><input type="text" class="form-control" id="adminPathExcel" placeholder="留空使用部门/默认"></div><div class="mb-2"><label class="form-label">证书文件夹 UNC 路径</label><input type="text" class="form-control" id="adminPathCert" placeholder="留空使用部门/默认"></div><div class="mb-2"><label class="form-label">打印服务 IP（可选）</label><input type="text" class="form-control" id="adminPathIp" placeholder="留空使用部门设置"></div><div class="mb-2"><label class="form-label">编号前缀（可选，覆盖部门规则；三项均留空 = 继承）</label><div class="row g-2"><div class="col-4"><input type="text" class="form-control" id="adminPathRoom" maxlength="1" placeholder="常温"></div><div class="col-4"><input type="text" class="form-control" id="adminPathCold4" maxlength="1" placeholder="4℃"></div><div class="col-4"><input type="text" class="form-control" id="adminPathCold18" maxlength="1" placeholder="-18℃"></div></div></div><div class="text-end mt-2"><button type="button" class="btn btn-primary" id="adminUserSaveBtn">保存个人设置</button></div></div></div><div class="tab-pane fade" id="adminPathDeptTab" role="tabpanel"><h6><i class="fas fa-sitemap me-1"></i>部门设置（路径 + 编号规则 + 打印服务）</h6><div class="alert alert-info small">按部门统一配置 Excel/证书路径、编号前缀与标签打印服务 IP。部门名须与人员登录部门（LIMS 组织名）一致才生效；人员设置优先于部门。前缀三项均留空 = 不设置编号规则；编辑时打印 IP 留空 = 清除该部门路由（未配置部门走本机打印，需先用 print-server 文件夹在目标电脑部署）。</div><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>部门</th><th>Excel 路径</th><th>证书路径</th><th>前缀(常/4/-18)</th><th>打印 IP</th><th style="width:130px">操作</th></tr></thead><tbody id="adminDeptsBody"></tbody></table></div><hr><a class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" href="#adminDeptForm" role="button" aria-expanded="false" aria-controls="adminDeptForm"><i class="fas fa-chevron-down me-1"></i>添加 / 编辑部门设置</a><div class="collapse mt-3" id="adminDeptForm"><div class="mb-2"><label class="form-label">部门名（须与登录部门一致）</label><input type="text" class="form-control" id="adminDeptName" list="adminPrintDeptList" placeholder="如：消费品实验室"><datalist id="adminPrintDeptList"><option value="日化实验室"></option><option value="食品接触材料实验室"></option><option value="消费品实验室"></option></datalist></div><div class="mb-2"><label class="form-label">Excel 文件 UNC 路径</label><input type="text" class="form-control" id="adminDeptExcel" placeholder="留空使用默认"></div><div class="mb-2"><label class="form-label">证书文件夹 UNC 路径</label><input type="text" class="form-control" id="adminDeptCert" placeholder="留空使用默认"></div><div class="mb-2"><label class="form-label">打印服务 IP（可选）</label><input type="text" class="form-control" id="adminDeptIp" placeholder="IP，如 10.1.93.197"></div><div class="mb-2"><label class="form-label">编号前缀（常温 / 4℃ / -18℃）</label><div class="row g-2"><div class="col-4"><input type="text" class="form-control" id="adminDeptRoom" maxlength="1" placeholder="常温"></div><div class="col-4"><input type="text" class="form-control" id="adminDeptCold4" maxlength="1" placeholder="4℃"></div><div class="col-4"><input type="text" class="form-control" id="adminDeptCold18" maxlength="1" placeholder="-18℃"></div></div></div><div class="text-end mt-2"><button type="button" class="btn btn-primary" id="adminDeptSaveBtn">保存部门设置</button></div></div></div></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button></div></div></div></div>
+<div class="modal fade" id="adminPathsModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header bg-warning text-dark"><h5 class="modal-title"><i class="fas fa-users-cog me-2"></i>设置管理</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><ul class="nav nav-tabs mb-3" role="tablist"><li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#adminPathUserTab" type="button" role="tab"><i class="fas fa-user me-1"></i>个人设置</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#adminPathDeptTab" type="button" role="tab"><i class="fas fa-sitemap me-1"></i>部门设置</button></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="adminPathUserTab" role="tabpanel"><div class="alert alert-info small"><strong>说明：</strong>为指定人员（真实姓名）配置个人设置。留空 = 使用该人员登录账号所在部门的设置；解析顺序：人员 &gt; 部门 &gt; 全局默认。</div><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>真实姓名</th><th>Excel 路径</th><th>证书路径</th><th>前缀(常/4/-18)</th><th>打印 IP</th><th style="width:130px">操作</th></tr></thead><tbody id="adminPathsBody"></tbody></table></div><hr><a class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" href="#adminUserForm" role="button" aria-expanded="false" aria-controls="adminUserForm"><i class="fas fa-chevron-down me-1"></i>添加 / 编辑个人设置</a><div class="collapse mt-3" id="adminUserForm"><div class="mb-2"><label class="form-label">真实姓名</label><input type="text" class="form-control" id="adminPathUsername" placeholder="输入真实姓名，如：沈佳芮"></div><div class="mb-2"><label class="form-label">Excel 文件 UNC 路径</label><input type="text" class="form-control" id="adminPathExcel" placeholder="留空使用部门/默认"></div><div class="mb-2"><label class="form-label">证书文件夹 UNC 路径</label><input type="text" class="form-control" id="adminPathCert" placeholder="留空使用部门/默认"></div><div class="mb-2"><label class="form-label">打印服务 IP（可选）</label><input type="text" class="form-control" id="adminPathIp" placeholder="留空使用部门设置"></div><div class="mb-2"><label class="form-label">编号前缀（可选，覆盖部门规则；三项均留空 = 继承）</label><div class="row g-2"><div class="col-4"><input type="text" class="form-control" id="adminPathRoom" maxlength="1" placeholder="常温"></div><div class="col-4"><input type="text" class="form-control" id="adminPathCold4" maxlength="1" placeholder="4℃"></div><div class="col-4"><input type="text" class="form-control" id="adminPathCold18" maxlength="1" placeholder="-18℃"></div></div></div><div class="text-end mt-2"><button type="button" class="btn btn-primary" id="adminUserSaveBtn">保存个人设置</button></div></div></div><div class="tab-pane fade" id="adminPathDeptTab" role="tabpanel"><h6><i class="fas fa-sitemap me-1"></i>部门设置（路径 + 编号规则 + 打印服务 + 存放位置）</h6><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>部门</th><th>Excel 路径</th><th>证书路径</th><th>前缀(常/4/-18)</th><th>打印 IP</th><th>存放位置</th><th style="width:130px">操作</th></tr></thead><tbody id="adminDeptsBody"></tbody></table></div><hr><a class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" href="#adminDeptForm" role="button" aria-expanded="false" aria-controls="adminDeptForm"><i class="fas fa-chevron-down me-1"></i>添加 / 编辑部门设置</a><div class="collapse mt-3" id="adminDeptForm"><div class="mb-2"><label class="form-label">部门名（须与登录部门一致）</label><input type="text" class="form-control" id="adminDeptName" list="adminPrintDeptList" placeholder="如：消费品实验室"><datalist id="adminPrintDeptList"><option value="日化实验室"></option><option value="食品接触材料实验室"></option><option value="消费品实验室"></option></datalist></div><div class="mb-2"><label class="form-label">Excel 文件 UNC 路径</label><input type="text" class="form-control" id="adminDeptExcel" placeholder="留空使用默认"></div><div class="mb-2"><label class="form-label">证书文件夹 UNC 路径</label><input type="text" class="form-control" id="adminDeptCert" placeholder="留空使用默认"></div><div class="mb-2"><label class="form-label">打印服务 IP（可选）</label><input type="text" class="form-control" id="adminDeptIp" placeholder="IP，如 10.1.93.197"></div><div class="mb-2"><label class="form-label">标准品存放位置</label><select class="form-select" id="adminDeptStorage"></select></div><div class="mb-2"><label class="form-label">编号前缀（常温 / 4℃ / -18℃）</label><div class="row g-2"><div class="col-4"><input type="text" class="form-control" id="adminDeptRoom" maxlength="1" placeholder="常温"></div><div class="col-4"><input type="text" class="form-control" id="adminDeptCold4" maxlength="1" placeholder="4℃"></div><div class="col-4"><input type="text" class="form-control" id="adminDeptCold18" maxlength="1" placeholder="-18℃"></div></div></div><div class="text-end mt-2"><button type="button" class="btn btn-primary" id="adminDeptSaveBtn">保存部门设置</button></div></div></div></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button></div></div></div></div>
 
 <!-- 删除确认模态框 -->
 <div class="modal fade" id="deleteModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header bg-danger"><h5 class="modal-title">确认删除</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">确定要删除 <strong id="deleteItemName"></strong> 吗？</div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-danger" id="confirmDeleteBtn">确认删除</button></div></div></div></div>
@@ -1363,14 +1363,33 @@ function filterData() {
         if (!rule) return '<em class="text-muted">—</em>';
         return [rule.room || '·', rule.cold4 || '·', rule.cold18 || '·'].join('/');
     }
-    function readPrefixInputs(ids) {
-        const vals = ids.map(id => document.getElementById(id).value.trim().toUpperCase());
+    function readPrefixInputs(inputs) {
+        const vals = inputs.map(el => el.value.trim().toUpperCase());
         if (vals.some(v => v && !/^[A-Z]$/.test(v))) { alert('前缀须为单个字母或留空'); return null; }
         const filled = vals.filter(Boolean);
         if (new Set(filled).size !== filled.length) { alert('前缀字母不能重复'); return null; }
         return vals;
     }
     function clearInputs(ids) { ids.forEach(id => document.getElementById(id).value = ''); }
+    // ---------- 行内编辑共享 ----------
+    function inlineText(value, cls, extra) {
+        return '<input type="text" class="form-control form-control-sm ' + (cls || '') + '"' + (extra || '') + ' value="' + (value || '') + '">';
+    }
+    function inlinePrefixTd(num) {
+        num = num || {};
+        const titles = {room: '常温', cold4: '4℃', cold18: '-18℃'};
+        return '<td><div class="d-flex gap-1">' + ['room', 'cold4', 'cold18'].map(k =>
+            '<input type="text" class="form-control form-control-sm f-pfx" maxlength="1" title="' + titles[k] + '" style="width:42px" value="' + (num[k] || '') + '">').join('') + '</div></td>';
+    }
+    const STORAGE_OPTS = ['2-4-华业2-4', '3-3-华业3-3', '3-4-华业3-4', '4-1-华业4-1', '5-5-1-华业5-5', 'F-G-富阳-功效', 'T-D-天和高科-毒理'];
+    function storageSelectHtml(sel, cls) {
+        return '<select class="form-select form-select-sm ' + (cls || '') + '"><option value="">默认（4-1-华业4-1）</option>' +
+            STORAGE_OPTS.map(o => '<option' + (o === sel ? ' selected' : '') + '>' + o + '</option>').join('') + '</select>';
+    }
+    function inlineSaveCancelTd(saveFn, cancelFn) {
+        return '<td><button class="btn btn-sm btn-outline-success me-1" onclick="' + saveFn + '(this)">保存</button>' +
+            '<button class="btn btn-sm btn-outline-secondary" onclick="' + cancelFn + '()">取消</button></td>';
+    }
     async function loadAdminPaths() {
         const resp = await fetch('/api/admin/paths');
         if (!resp.ok) { alert('无权限或未登录'); return; }
@@ -1385,7 +1404,7 @@ function filterData() {
                 '<td class="small">' + (paths.certPath || '<em class="text-muted">默认</em>') + '</td>' +
                 '<td class="small">' + fmtNumberingCell(paths.numbering) + '</td>' +
                 '<td class="small">' + (paths.printIp || '<em class="text-muted">继承</em>') + '</td>' +
-                '<td><button class="btn btn-sm btn-outline-primary me-1" onclick="editUserPath(\'' + username + '\')">编辑</button>' +
+                '<td><button class="btn btn-sm btn-outline-primary me-1" onclick="editUserPath(\'' + username + '\', this)">编辑</button>' +
                 '<button class="btn btn-sm btn-outline-danger" onclick="deleteUserPath(\'' + username + '\')">删除</button></td>';
             tbody.appendChild(tr);
         }
@@ -1396,7 +1415,7 @@ function filterData() {
         const excelPath = document.getElementById('adminPathExcel').value.trim();
         const certPath = document.getElementById('adminPathCert').value.trim();
         if (!username) { alert('请输入真实姓名'); return; }
-        const pf = readPrefixInputs(['adminPathRoom', 'adminPathCold4', 'adminPathCold18']);
+        const pf = readPrefixInputs(['adminPathRoom', 'adminPathCold4', 'adminPathCold18'].map(id => document.getElementById(id)));
         if (!pf) return;
         const resp = await fetch('/api/admin/paths', {
             method: 'POST',
@@ -1423,17 +1442,34 @@ function filterData() {
         else alert('删除失败：' + (result.message || '未知错误'));
     }
 
-    function editUserPath(username) {
+    function editUserPath(username, btn) {
         const paths = (_adminPathsData.users || {})[username] || {};
-        document.getElementById('adminPathUsername').value = username;
-        document.getElementById('adminPathExcel').value = paths.excelPath || '';
-        document.getElementById('adminPathCert').value = paths.certPath || '';
-        document.getElementById('adminPathIp').value = paths.printIp || '';
-        const numbering = paths.numbering || {};
-        document.getElementById('adminPathRoom').value = numbering.room || '';
-        document.getElementById('adminPathCold4').value = numbering.cold4 || '';
-        document.getElementById('adminPathCold18').value = numbering.cold18 || '';
-        bootstrap.Collapse.getOrCreateInstance(document.getElementById('adminUserForm')).show();
+        btn.closest('tr').innerHTML = '<td>' + inlineText(username, 'f-name', ' readonly') + '</td>' +
+            '<td>' + inlineText(paths.excelPath, 'f-excel') + '</td>' +
+            '<td>' + inlineText(paths.certPath, 'f-cert') + '</td>' +
+            inlinePrefixTd(paths.numbering) +
+            '<td>' + inlineText(paths.printIp, 'f-ip') + '</td>' +
+            inlineSaveCancelTd('saveUserRow', 'loadAdminPaths');
+    }
+
+    async function saveUserRow(btn) {
+        const tr = btn.closest('tr');
+        const pf = readPrefixInputs([...tr.querySelectorAll('.f-pfx')]);
+        if (!pf) return;
+        const resp = await fetch('/api/admin/paths', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                username: tr.querySelector('.f-name').value.trim(),
+                excelPath: tr.querySelector('.f-excel').value.trim(),
+                certPath: tr.querySelector('.f-cert').value.trim(),
+                printIp: tr.querySelector('.f-ip').value.trim(),
+                room: pf[0], cold4: pf[1], cold18: pf[2]
+            })
+        });
+        const result = await resp.json();
+        if (result.success) { await loadAdminPaths(); await loadNumberingRules(); }
+        else alert('保存失败：' + (result.message || '未知错误'));
     }
 
     // ---------- 部门设置（路径 + 编号规则） ----------
@@ -1452,7 +1488,8 @@ function filterData() {
                 '<td class="small">' + (entry.certPath || '<em class="text-muted">默认</em>') + '</td>' +
                 '<td class="small">' + fmtNumberingCell(entry.numbering) + '</td>' +
                 '<td class="small">' + (entry.printIp || '<em class="text-muted">本机</em>') + '</td>' +
-                '<td><button class="btn btn-sm btn-outline-primary me-1" onclick="editAdminDept(\'' + dept + '\')">编辑</button>' +
+                '<td class="small">' + (entry.storageLocation || '<em class="text-muted">4-1-华业4-1</em>') + '</td>' +
+                '<td><button class="btn btn-sm btn-outline-primary me-1" onclick="editAdminDept(\'' + dept + '\', this)">编辑</button>' +
                 '<button class="btn btn-sm btn-outline-danger" onclick="deleteAdminDept(\'' + dept + '\')">删除</button></td>';
             tbody.appendChild(tr);
         }
@@ -1461,7 +1498,7 @@ function filterData() {
     async function saveAdminDept() {
         const dept = document.getElementById('adminDeptName').value.trim();
         if (!dept) { alert('请输入部门名'); return; }
-        const pf = readPrefixInputs(['adminDeptRoom', 'adminDeptCold4', 'adminDeptCold18']);
+        const pf = readPrefixInputs(['adminDeptRoom', 'adminDeptCold4', 'adminDeptCold18'].map(id => document.getElementById(id)));
         if (!pf) return;
         const resp = await fetch('/api/admin/departments', {
             method: 'POST',
@@ -1471,6 +1508,7 @@ function filterData() {
                 excelPath: document.getElementById('adminDeptExcel').value.trim(),
                 certPath: document.getElementById('adminDeptCert').value.trim(),
                 printIp: document.getElementById('adminDeptIp').value.trim(),
+                storageLocation: document.getElementById('adminDeptStorage').value.trim(),
                 room: pf[0], cold4: pf[1], cold18: pf[2]
             })
         });
@@ -1478,7 +1516,7 @@ function filterData() {
         if (result.success) {
             await loadAdminDepts();
             await loadNumberingRules();
-            clearInputs(['adminDeptName', 'adminDeptExcel', 'adminDeptCert', 'adminDeptIp', 'adminDeptRoom', 'adminDeptCold4', 'adminDeptCold18']);
+            clearInputs(['adminDeptName', 'adminDeptExcel', 'adminDeptCert', 'adminDeptIp', 'adminDeptStorage', 'adminDeptRoom', 'adminDeptCold4', 'adminDeptCold18']);
             bootstrap.Collapse.getOrCreateInstance(document.getElementById('adminDeptForm')).hide();
             alert('保存成功，立即生效');
         } else alert('保存失败：' + (result.message || '未知错误'));
@@ -1494,21 +1532,41 @@ function filterData() {
         } else alert('删除失败：' + (result.message || '未知错误'));
     }
 
-    function editAdminDept(dept) {
+    function editAdminDept(dept, btn) {
         const entry = _adminDeptsData[dept] || {};
-        document.getElementById('adminDeptName').value = dept;
-        document.getElementById('adminDeptExcel').value = entry.excelPath || '';
-        document.getElementById('adminDeptCert').value = entry.certPath || '';
-        document.getElementById('adminDeptIp').value = entry.printIp || '';
-        const numbering = entry.numbering || {};
-        document.getElementById('adminDeptRoom').value = numbering.room || '';
-        document.getElementById('adminDeptCold4').value = numbering.cold4 || '';
-        document.getElementById('adminDeptCold18').value = numbering.cold18 || '';
-        bootstrap.Collapse.getOrCreateInstance(document.getElementById('adminDeptForm')).show();
+        btn.closest('tr').innerHTML = '<td>' + inlineText(dept, 'f-name', ' readonly') + '</td>' +
+            '<td>' + inlineText(entry.excelPath, 'f-excel') + '</td>' +
+            '<td>' + inlineText(entry.certPath, 'f-cert') + '</td>' +
+            inlinePrefixTd(entry.numbering) +
+            '<td>' + inlineText(entry.printIp, 'f-ip') + '</td>' +
+            '<td>' + storageSelectHtml(entry.storageLocation, 'f-storage') + '</td>' +
+            inlineSaveCancelTd('saveAdminDeptRow', 'loadAdminDepts');
+    }
+
+    async function saveAdminDeptRow(btn) {
+        const tr = btn.closest('tr');
+        const pf = readPrefixInputs([...tr.querySelectorAll('.f-pfx')]);
+        if (!pf) return;
+        const resp = await fetch('/api/admin/departments', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                dept: tr.querySelector('.f-name').value.trim(),
+                excelPath: tr.querySelector('.f-excel').value.trim(),
+                certPath: tr.querySelector('.f-cert').value.trim(),
+                printIp: tr.querySelector('.f-ip').value.trim(),
+                storageLocation: tr.querySelector('.f-storage').value.trim(),
+                room: pf[0], cold4: pf[1], cold18: pf[2]
+            })
+        });
+        const result = await resp.json();
+        if (result.success) { await loadAdminDepts(); await loadNumberingRules(); }
+        else alert('保存失败：' + (result.message || '未知错误'));
     }
 
     // ---------- 初始化 ----------
     document.addEventListener('DOMContentLoaded', async () => {
+        document.getElementById('adminDeptStorage').innerHTML = storageSelectHtml('');
         bindLoginEvents();
         await checkLoginStatus();
         document.addEventListener('visibilitychange', () => {
