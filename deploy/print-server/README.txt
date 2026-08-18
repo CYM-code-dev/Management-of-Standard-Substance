@@ -1,7 +1,7 @@
 Niimbot 标签打印服务 部署说明
 ================================
 
-目标电脑：实验室固定 IP 电脑（10.1.93.197）
+目标电脑：实验室连打印机的电脑（IP 以运行部署脚本时显示的本机 IP 为准）
 
 部署步骤（只做一次）
 --------------------
@@ -31,5 +31,6 @@ netsh advfirewall firewall delete rule name="NiimbotPrint5001"
 
 在公司服务器上验证连通
 ----------------------
-curl http://10.1.93.197:5001/connected
+curl http://<打印机电脑当前IP>:5001/connected
+（IP 见部署脚本结尾显示的 This PC IP；电脑 IP 变了就填新 IP）
 返回 JSON（connected true/false 均可）即通；连不上=服务没起或防火墙未放行

@@ -1038,6 +1038,70 @@ def admin_delete_departments(dept):
     return jsonify({"success": True})
 
 
+# ==================== 钉钉标液提醒：通知群管理 ====================
+@app.route('/api/admin/dingtalk', methods=['GET'])
+def admin_get_dingtalk():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    if (session.get('display_name') or '').strip() != _ADMIN_DISPLAY_NAME:
+        return jsonify({"success": False, "message": "无权限"}), 403
+    config = load_config()
+    return jsonify({"notify_groups": (config.get('dingtalk') or {}).get('notify_groups') or []})
+
+
+@app.route('/api/admin/dingtalk', methods=['POST'])
+def admin_set_dingtalk():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    if (session.get('display_name') or '').strip() != _ADMIN_DISPLAY_NAME:
+        return jsonify({"success": False, "message": "无权限"}), 403
+    groups = (request.get_json() or {}).get('notify_groups')
+    if not isinstance(groups, list):
+        return jsonify({"success": False, "message": "notify_groups 格式错误"}), 400
+    if len(groups) > 20:
+        return jsonify({"success": False, "message": "通知群数量过多（上限 20）"}), 400
+    cleaned = []
+    for i, g in enumerate(groups, 1):
+        if not isinstance(g, dict):
+            return jsonify({"success": False, "message": f"第 {i} 组格式错误"}), 400
+        webhook = (g.get('webhook') or '').strip()
+        secret = (g.get('secret') or '').strip()
+        names = []
+        for n in (g.get('configurators') or []):
+            n = str(n).strip()
+            if n and n not in names:
+                names.append(n)
+        if not webhook.startswith('https://oapi.dingtalk.com'):
+            return jsonify({"success": False, "message": f"第 {i} 组 webhook 不是钉钉机器人地址"}), 400
+        if not secret.startswith('SEC'):
+            return jsonify({"success": False, "message": f"第 {i} 组 secret 应以 SEC 开头"}), 400
+        if not names:
+            return jsonify({"success": False, "message": f"第 {i} 组配制人名单为空"}), 400
+        cleaned.append({'webhook': webhook, 'secret': secret, 'configurators': names})
+    config = load_config()
+    config.setdefault('dingtalk', {})['notify_groups'] = cleaned  # 只写 notify_groups，不动 dingtalk 其他键
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+    return jsonify({"success": True})
+
+
+@app.route('/api/admin/dingtalk/test', methods=['POST'])
+def admin_test_dingtalk():
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    if (session.get('display_name') or '').strip() != _ADMIN_DISPLAY_NAME:
+        return jsonify({"success": False, "message": "无权限"}), 403
+    data = request.get_json() or {}
+    webhook = (data.get('webhook') or '').strip()
+    secret = (data.get('secret') or '').strip()
+    if not webhook or not secret:
+        return jsonify({"success": False, "message": "缺少 webhook/secret"}), 400
+    import dingtalk_notify
+    ok, resp = dingtalk_notify.send_markdown(
+        "测试-标液提醒通道", "✅ 钉钉标液提醒通道测试成功。", webhook=webhook, secret=secret)
+    return jsonify({"success": ok, "data": resp})
+
+
 # ==================== 标液期间核查：导出名称预设 ====================
 @app.route('/api/lims/export_presets', methods=['GET'])
 def lims_get_export_presets():

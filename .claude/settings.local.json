@@ -203,7 +203,8 @@
       "Bash(ping -n 1 -w 3000 10.1.93.197)",
       "Bash(echo \"connect COM3: $\\(curl -s -m 15 -X POST http://10.1.93.197:5001/connect -H 'Content-Type: application/json' -d '{\"transport\":\"serial\",\"address\":\"COM3\"}'\\)\")",
       "Bash(echo \"connected now: $\\(curl -s -m 5 http://10.1.93.197:5001/connected\\)\")",
-      "Bash(.venv/Scripts/python --version)"
+      "Bash(.venv/Scripts/python --version)",
+      "Bash(powershell -NoProfile -Command \"\\(Get-NetRoute -DestinationPrefix 0.0.0.0/0 | Sort-Object RouteMetric | Select-Object -First 1 | Get-NetIPConfiguration | Select-Object -ExpandProperty IPv4Address\\).IPAddress\")"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -78,12 +78,18 @@ timeout /t 10 >nul
 rem ---- 7. self test ----
 curl -s -m 5 -o nul -w "local test http://localhost:5001  HTTP %%{http_code}\n" http://localhost:5001/connected
 
+rem ---- 8. show current LAN IP (auto-detected, not hardcoded) ----
+set "LOCAL_IP="
+for /f "delims=" %%i in ('powershell -NoProfile -Command "(Get-NetRoute -DestinationPrefix 0.0.0.0/0 ^| Sort-Object RouteMetric ^| Select-Object -First 1 ^| Get-NetIPConfiguration ^| Select-Object -ExpandProperty IPv4Address).IPAddress" 2^>nul') do set "LOCAL_IP=%%i"
+if not defined LOCAL_IP set "LOCAL_IP=localhost"
+
 echo.
 echo ============================================
 echo   Deploy done. Fully automatic background service.
 echo   Printer connects via Bluetooth or USB serial (COMx).
 echo   Any old console windows can be closed now.
+echo   This PC IP: %LOCAL_IP%
 echo   Verify from company server:
-echo     curl http://10.1.93.197:5001/connected
+echo     curl http://%LOCAL_IP%:5001/connected
 echo ============================================
 pause
