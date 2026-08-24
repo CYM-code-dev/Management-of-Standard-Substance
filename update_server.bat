@@ -6,6 +6,11 @@ set "PROJECT_DIR=%~dp0."
 
 cd /d "%PROJECT_DIR%"
 
+REM stop print server BEFORE git reset - node locks .node files in deploy\print-server
+schtasks /End /TN NiimbotPrint >nul 2>&1
+ping -n 3 127.0.0.1 >nul
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr /C:":5001 " ^| findstr /C:"LISTENING"') do taskkill /F /T /PID %%p >nul 2>&1
+
 echo [1/4] git fetch + reset...
 git fetch origin
 git reset --hard origin/main-1
@@ -68,5 +73,10 @@ if not exist "%PROJECT_DIR%\portal_config.ini" (
 )
 echo.
 
+echo [6/6] print server (NiimbotPrint, deploy\print-server)...
+schtasks /Run /TN NiimbotPrint >nul 2>&1
+if errorlevel 1 (echo [WARN] schtasks /Run NiimbotPrint failed) else (echo        started)
+
+echo.
 echo Done!
 pause
