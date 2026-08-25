@@ -4280,9 +4280,13 @@
             }
             // Multi-component: build concentration string for bbcdParseMultiConc
             const multiParts = rows.map(dl => {
+                // concentrationCount 存的是本组分单值"名称:值(单位)"（与 LIMS 前端同格式）；
+                // originalConcentration 在多组分行上是整串，当单值拼会造出重复名/重复行/丢组分
+                const cc = String(dl.concentrationCount || '').trim();
+                if (/^[^:;]+:[\d.]+\s*\([^)]+\)$/.test(cc)) return cc;
                 const name = (dl.groupName || '').trim();
                 const unit = (dl.originalUnit || '').trim();
-                const val = (dl.originalConcentration || '').trim();
+                const val = String(dl.originalConcentration || '').trim();
                 if (unit) return name + ':' + val + '(' + unit + ')';
                 return name + ':' + val;
             });
