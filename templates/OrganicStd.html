@@ -503,7 +503,7 @@
 
 <!-- 设置管理模态框 (管理员) -->
 <style>#adminPathsModal td{padding-top:.55rem;padding-bottom:.55rem}#adminPathsModal td .btn-sm{margin-top:2px;margin-bottom:2px}#adminPathsModal .row.g-2{margin-top:.75rem}#adminPathsModal .modal-footer .btn{margin:0 .25rem}</style>
-<div class="modal fade" id="adminPathsModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header bg-warning text-dark"><h5 class="modal-title"><i class="fas fa-users-cog me-2"></i>设置管理</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><ul class="nav nav-tabs mb-3" role="tablist"><li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#adminPathUserTab" type="button" role="tab"><i class="fas fa-user me-1"></i>个人设置</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#adminPathDeptTab" type="button" role="tab"><i class="fas fa-sitemap me-1"></i>部门设置</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#adminDingtalkTab" type="button" role="tab"><i class="fas fa-bell me-1"></i>钉钉提醒</button></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="adminPathUserTab" role="tabpanel"><div class="alert alert-info small"><strong>说明：</strong>为指定人员（真实姓名）配置个人设置。留空 = 使用该人员登录账号所在部门的设置；解析顺序：人员 &gt; 部门 &gt; 全局默认。</div><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>真实姓名</th><th>Excel 路径</th><th>证书路径</th><th>前缀(常/4/-18)</th><th>打印 IP</th><th style="width:130px">操作</th></tr></thead><tbody id="adminPathsBody"></tbody></table></div><hr><a class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" href="#adminUserForm" role="button" aria-expanded="false" aria-controls="adminUserForm"><i class="fas fa-chevron-down me-1"></i>添加 / 编辑个人设置</a><div class="collapse mt-3" id="adminUserForm"><div class="mb-2"><label class="form-label">真实姓名</label><input type="text" class="form-control" id="adminPathUsername" placeholder="输入真实姓名，如：沈佳芮"></div><div class="mb-2"><label class="form-label">Excel 文件 UNC 路径</label><input type="text" class="form-control" id="adminPathExcel" placeholder="留空使用部门/默认"></div><div class="mb-2"><label class="form-label">证书文件夹 UNC 路径</label><input type="text" class="form-control" id="adminPathCert" placeholder="留空使用部门/默认"></div><div class="mb-2"><label class="form-label">打印服务 IP（可选）</label><input type="text" class="form-control" id="adminPathIp" placeholder="留空使用部门设置"></div><div class="mb-2"><label class="form-label">编号前缀（可选，覆盖部门规则；三项均留空 = 继承）</label><div class="row g-2"><div class="col-4"><input type="text" class="form-control" id="adminPathRoom" maxlength="1" placeholder="常温"></div><div class="col-4"><input type="text" class="form-control" id="adminPathCold4" maxlength="1" placeholder="4℃"></div><div class="col-4"><input type="text" class="form-control" id="adminPathCold18" maxlength="1" placeholder="-18℃"></div></div></div><div class="text-end mt-2"><button type="button" class="btn btn-primary" id="adminUserSaveBtn">保存个人设置</button></div></div></div><div class="tab-pane fade" id="adminPathDeptTab" role="tabpanel"><h6><i class="fas fa-sitemap me-1"></i>部门设置（路径 + 编号规则 + 打印服务 + 存放位置）</h6><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>部门</th><th>Excel 路径</th><th>证书路径</th><th>前缀(常/4/-18)</th><th>打印 IP</th><th>存放位置</th><th style="width:130px">操作</th></tr></thead><tbody id="adminDeptsBody"></tbody></table></div><hr><a class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" href="#adminDeptForm" role="button" aria-expanded="false" aria-controls="adminDeptForm"><i class="fas fa-chevron-down me-1"></i>添加 / 编辑部门设置</a><div class="collapse mt-3" id="adminDeptForm"><div class="mb-2"><label class="form-label">部门名（须与登录部门一致）</label><input type="text" class="form-control" id="adminDeptName" list="adminPrintDeptList" placeholder="如：消费品实验室"><datalist id="adminPrintDeptList"><option value="日化实验室"></option><option value="食品接触材料实验室"></option><option value="消费品实验室"></option></datalist></div><div class="mb-2"><label class="form-label">Excel 文件 UNC 路径</label><input type="text" class="form-control" id="adminDeptExcel" placeholder="留空使用默认"></div><div class="mb-2"><label class="form-label">证书文件夹 UNC 路径</label><input type="text" class="form-control" id="adminDeptCert" placeholder="留空使用默认"></div><div class="mb-2"><label class="form-label">打印服务 IP（可选）</label><input type="text" class="form-control" id="adminDeptIp" placeholder="IP，如 10.1.93.197"></div><div class="mb-2"><label class="form-label">标准品存放位置</label><select class="form-select" id="adminDeptStorage"></select></div><div class="mb-2"><label class="form-label">编号前缀（常温 / 4℃ / -18℃）</label><div class="row g-2"><div class="col-4"><input type="text" class="form-control" id="adminDeptRoom" maxlength="1" placeholder="常温"></div><div class="col-4"><input type="text" class="form-control" id="adminDeptCold4" maxlength="1" placeholder="4℃"></div><div class="col-4"><input type="text" class="form-control" id="adminDeptCold18" maxlength="1" placeholder="-18℃"></div></div></div><div class="text-end mt-2"><button type="button" class="btn btn-primary" id="adminDeptSaveBtn">保存部门设置</button></div></div></div><div class="tab-pane fade" id="adminDingtalkTab" role="tabpanel"><div class="alert alert-info small"><strong>说明：</strong>标液即将过期提醒按<strong>配制人</strong>路由到各群；名单须与 LIMS 登录真实姓名完全一致，不在任何名单内的配制人不会被提醒。增删改后须点「保存全部」写入配置，下一轮提醒自动生效（无需重启）。</div><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>配制人名单</th><th>机器人</th><th style="width:200px">操作</th></tr></thead><tbody id="adminDingtalkGroupsBody"></tbody></table></div><hr><a class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" href="#adminDingtalkGroupForm" role="button" aria-expanded="false" aria-controls="adminDingtalkGroupForm"><i class="fas fa-chevron-down me-1"></i>添加 / 编辑通知群</a><div class="collapse mt-3" id="adminDingtalkGroupForm"><div class="mb-2"><label class="form-label">机器人 Webhook</label><input type="text" class="form-control" id="adminDingtalkWebhook" placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."></div><div class="mb-2"><label class="form-label">加签密钥（SEC 开头）</label><input type="text" class="form-control" id="adminDingtalkSecret" placeholder="SEC..."></div><div class="mb-2"><label class="form-label">配制人名单（顿号/逗号分隔）</label><input type="text" class="form-control" id="adminDingtalkMembers" placeholder="如：刘文丽、汤佳楠、李爱红"></div><div class="text-end mt-2"><button type="button" class="btn btn-primary" id="adminDingtalkGroupApplyBtn">加入列表</button></div></div><div class="text-end mt-3"><button type="button" class="btn btn-success" id="adminDingtalkSaveAllBtn"><i class="fas fa-save me-1"></i>保存全部</button></div></div></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button></div></div></div></div>
+<div class="modal fade" id="adminPathsModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header bg-warning text-dark"><h5 class="modal-title"><i class="fas fa-users-cog me-2"></i>设置管理</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><ul class="nav nav-tabs mb-3" role="tablist"><li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#adminPathUserTab" type="button" role="tab"><i class="fas fa-user me-1"></i>个人设置</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#adminPathDeptTab" type="button" role="tab"><i class="fas fa-sitemap me-1"></i>部门设置</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#adminDingtalkTab" type="button" role="tab"><i class="fas fa-bell me-1"></i>钉钉提醒</button></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="adminPathUserTab" role="tabpanel"><div class="alert alert-info small"><strong>说明：</strong>为指定人员（真实姓名）配置个人设置。留空 = 使用该人员登录账号所在部门的设置；解析顺序：人员 &gt; 部门 &gt; 全局默认。</div><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>真实姓名</th><th>Excel 路径</th><th>证书路径</th><th>前缀(常/4/-18)</th><th>打印 IP</th><th style="width:130px">操作</th></tr></thead><tbody id="adminPathsBody"></tbody></table></div><hr><a class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" href="#adminUserForm" role="button" aria-expanded="false" aria-controls="adminUserForm"><i class="fas fa-chevron-down me-1"></i>添加 / 编辑个人设置</a><div class="collapse mt-3" id="adminUserForm"><div class="mb-2"><label class="form-label">真实姓名</label><input type="text" class="form-control" id="adminPathUsername" placeholder="输入真实姓名，如：沈佳芮"></div><div class="mb-2"><label class="form-label">Excel 文件 UNC 路径</label><input type="text" class="form-control" id="adminPathExcel" placeholder="留空使用部门/默认"></div><div class="mb-2"><label class="form-label">证书文件夹 UNC 路径</label><input type="text" class="form-control" id="adminPathCert" placeholder="留空使用部门/默认"></div><div class="mb-2"><label class="form-label">打印服务 IP（可选）</label><input type="text" class="form-control" id="adminPathIp" placeholder="留空使用部门设置"></div><div class="mb-2"><label class="form-label">编号前缀（可选，覆盖部门规则；三项均留空 = 继承）</label><div class="row g-2"><div class="col-4"><input type="text" class="form-control" id="adminPathRoom" maxlength="1" placeholder="常温"></div><div class="col-4"><input type="text" class="form-control" id="adminPathCold4" maxlength="1" placeholder="4℃"></div><div class="col-4"><input type="text" class="form-control" id="adminPathCold18" maxlength="1" placeholder="-18℃"></div></div></div><div class="text-end mt-2"><button type="button" class="btn btn-primary" id="adminUserSaveBtn">保存个人设置</button></div></div></div><div class="tab-pane fade" id="adminPathDeptTab" role="tabpanel"><h6><i class="fas fa-sitemap me-1"></i>部门设置（路径 + 编号规则 + 打印服务 + 存放位置）</h6><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>部门</th><th>Excel 路径</th><th>证书路径</th><th>前缀(常/4/-18)</th><th>打印 IP</th><th>存放位置</th><th style="width:130px">操作</th></tr></thead><tbody id="adminDeptsBody"></tbody></table></div><hr><a class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" href="#adminDeptForm" role="button" aria-expanded="false" aria-controls="adminDeptForm"><i class="fas fa-chevron-down me-1"></i>添加 / 编辑部门设置</a><div class="collapse mt-3" id="adminDeptForm"><div class="mb-2"><label class="form-label">部门名（须与登录部门一致）</label><input type="text" class="form-control" id="adminDeptName" list="adminPrintDeptList" placeholder="如：消费品实验室"><datalist id="adminPrintDeptList"><option value="日化实验室"></option><option value="食品接触材料实验室"></option><option value="消费品实验室"></option></datalist></div><div class="mb-2"><label class="form-label">Excel 文件 UNC 路径</label><input type="text" class="form-control" id="adminDeptExcel" placeholder="留空使用默认"></div><div class="mb-2"><label class="form-label">证书文件夹 UNC 路径</label><input type="text" class="form-control" id="adminDeptCert" placeholder="留空使用默认"></div><div class="mb-2"><label class="form-label">打印服务 IP（可选）</label><input type="text" class="form-control" id="adminDeptIp" placeholder="IP，如 10.1.93.197"></div><div class="mb-2"><label class="form-label">标准品存放位置</label><select class="form-select" id="adminDeptStorage"></select></div><div class="mb-2"><label class="form-label">编号前缀（常温 / 4℃ / -18℃）</label><div class="row g-2"><div class="col-4"><input type="text" class="form-control" id="adminDeptRoom" maxlength="1" placeholder="常温"></div><div class="col-4"><input type="text" class="form-control" id="adminDeptCold4" maxlength="1" placeholder="4℃"></div><div class="col-4"><input type="text" class="form-control" id="adminDeptCold18" maxlength="1" placeholder="-18℃"></div></div></div><div class="text-end mt-2"><button type="button" class="btn btn-primary" id="adminDeptSaveBtn">保存部门设置</button></div></div></div><div class="tab-pane fade" id="adminDingtalkTab" role="tabpanel"><ul class="nav nav-pills mb-3" role="tablist"><li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#dingtalkGroupsPane" type="button" role="tab">标液过期提醒</button></li><li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#dingtalkExcelRemindPane" type="button" role="tab">标准品过期提醒</button></li></ul><div class="tab-content"><div class="tab-pane fade show active" id="dingtalkGroupsPane" role="tabpanel"><div class="alert alert-info small"><strong>说明：</strong>标液即将过期提醒按<strong>配制人</strong>路由到各群；名单须与 LIMS 登录真实姓名完全一致，不在任何名单内的配制人不会被提醒。增删改后须点「保存全部」写入配置，下一轮提醒自动生效（无需重启）。</div><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>配制人名单</th><th>机器人</th><th style="width:200px">操作</th></tr></thead><tbody id="adminDingtalkGroupsBody"></tbody></table></div><hr><a class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" href="#adminDingtalkGroupForm" role="button" aria-expanded="false" aria-controls="adminDingtalkGroupForm"><i class="fas fa-chevron-down me-1"></i>添加 / 编辑通知群</a><div class="collapse mt-3" id="adminDingtalkGroupForm"><div class="mb-2"><label class="form-label">机器人 Webhook</label><input type="text" class="form-control" id="adminDingtalkWebhook" placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."></div><div class="mb-2"><label class="form-label">加签密钥（SEC 开头）</label><input type="text" class="form-control" id="adminDingtalkSecret" placeholder="SEC..."></div><div class="mb-2"><label class="form-label">配制人名单（顿号/逗号分隔）</label><input type="text" class="form-control" id="adminDingtalkMembers" placeholder="如：刘文丽、汤佳楠、李爱红"></div><div class="text-end mt-2"><button type="button" class="btn btn-primary" id="adminDingtalkGroupApplyBtn">加入列表</button></div></div><div class="text-end mt-3"><button type="button" class="btn btn-success" id="adminDingtalkSaveAllBtn"><i class="fas fa-save me-1"></i>保存全部</button></div></div><div class="tab-pane fade" id="dingtalkExcelRemindPane" role="tabpanel"><div class="alert alert-info small"><strong>说明：</strong>按<strong>部门</strong>配置「标准品 Excel 月度过期提醒（30~60 天）」：每个部门扫描自己的 Excel（部门设置里的 Excel 路径），到期项发到该部门的提醒群。Webhook/加签密钥留空 = 使用默认/告警群。</div><div class="table-responsive"><table class="table table-sm table-bordered"><thead class="table-light"><tr><th>部门</th><th>Excel 路径</th><th>提醒状态</th><th style="width:150px">操作</th></tr></thead><tbody id="adminExcelRemindBody"></tbody></table></div><hr><a class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" href="#adminExcelRemindForm" role="button" aria-expanded="false" aria-controls="adminExcelRemindForm"><i class="fas fa-chevron-down me-1"></i>编辑提醒</a><div class="collapse mt-3" id="adminExcelRemindForm"><div class="alert alert-info small py-2">正在编辑：<strong id="adminExcelRemindDeptName"></strong></div><div class="mb-2"><label class="form-label">提醒群 Webhook（留空用默认群）</label><input type="text" class="form-control" id="adminExcelRemindWebhook" placeholder="https://oapi.dingtalk.com/robot/send?access_token=..."></div><div class="mb-2"><label class="form-label">加签密钥（SEC 开头，留空用默认群）</label><input type="text" class="form-control" id="adminExcelRemindSecret" placeholder="SEC..."></div><div class="row g-2"><div class="col-4"><label class="form-label">提前最小天数</label><input type="number" class="form-control" id="adminExcelRemindMinDays" min="0"></div><div class="col-4"><label class="form-label">提前最大天数</label><input type="number" class="form-control" id="adminExcelRemindMaxDays" min="0"></div><div class="col-4 d-flex align-items-end"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="adminExcelRemindEnabled" checked><label class="form-check-label" for="adminExcelRemindEnabled">启用提醒</label></div></div></div><div class="text-end mt-2"><button type="button" class="btn btn-primary" id="adminExcelRemindApplyBtn">应用</button></div></div></div></div></div></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button></div></div></div></div>
 
 <!-- 删除确认模态框 -->
 <div class="modal fade" id="deleteModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header bg-danger"><h5 class="modal-title">确认删除</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">确定要删除 <strong id="deleteItemName"></strong> 吗？</div><div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-danger" id="confirmDeleteBtn">确认删除</button></div></div></div></div>
@@ -1474,6 +1474,17 @@ function filterData() {
 
     // ---------- 部门设置（路径 + 编号规则） ----------
     let _adminDeptsData = {};
+    function remindSummaryHtml(rem) {
+        rem = rem || {};
+        if (!rem.enabled) return '<span class="text-muted">关</span>';
+        return '<span class="text-success">开·' + (rem.min_days ?? 30) + '~' + (rem.max_days ?? 60) + '天</span>';
+    }
+    function validateRemind(rem) {
+        if (rem.webhook && !rem.webhook.startsWith('https://oapi.dingtalk.com')) return '提醒 Webhook 须为钉钉机器人地址';
+        if (rem.secret && !rem.secret.startsWith('SEC')) return '提醒加签密钥应以 SEC 开头';
+        if (isNaN(rem.minDays) || isNaN(rem.maxDays) || rem.minDays < 0 || rem.maxDays < rem.minDays) return '提醒提前天数范围不合法（0 ≤ 最小 ≤ 最大）';
+        return '';
+    }
     async function loadAdminDepts() {
         const resp = await fetch('/api/admin/departments');
         if (!resp.ok) return;
@@ -1574,6 +1585,7 @@ function filterData() {
         _adminDingtalkGroups = data.notify_groups || [];
         _adminDingtalkEditIdx = -1;
         renderAdminDingtalkGroups();
+        renderAdminExcelRemind();
     }
     function renderAdminDingtalkGroups() {
         const tbody = document.getElementById('adminDingtalkGroupsBody');
@@ -1641,6 +1653,81 @@ function filterData() {
         else alert('保存失败：' + (result.message || '未知错误'));
     }
 
+    // ---------- 标准品 Excel 月度过期提醒（按部门） ----------
+    function renderAdminExcelRemind() {
+        const tbody = document.getElementById('adminExcelRemindBody');
+        tbody.innerHTML = '';
+        for (const [dept, entry] of Object.entries(_adminDeptsData)) {
+            const rem = entry.excelRemind || {};
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + dept + '</td>' +
+                '<td class="small">' + (entry.excelPath || '<em class="text-muted">未配置 Excel</em>') + '</td>' +
+                '<td class="small">' + remindSummaryHtml(rem) + '</td>' +
+                '<td><button class="btn btn-sm btn-outline-primary me-1" onclick="editAdminExcelRemind(\'' + dept + '\')">编辑</button>' +
+                '<button class="btn btn-sm btn-outline-success" onclick="testAdminExcelRemind(\'' + dept + '\')">测试</button></td>';
+            tbody.appendChild(tr);
+        }
+    }
+    let _adminRemindEditDept = null;
+    function editAdminExcelRemind(dept) {
+        const entry = _adminDeptsData[dept] || {};
+        const rem = entry.excelRemind || {};
+        _adminRemindEditDept = dept;
+        document.getElementById('adminExcelRemindDeptName').textContent = dept;
+        document.getElementById('adminExcelRemindWebhook').value = rem.webhook || '';
+        document.getElementById('adminExcelRemindSecret').value = rem.secret || '';
+        document.getElementById('adminExcelRemindMinDays').value = (rem.min_days ?? 30);
+        document.getElementById('adminExcelRemindMaxDays').value = (rem.max_days ?? 60);
+        document.getElementById('adminExcelRemindEnabled').checked = !!rem.enabled;
+        bootstrap.Collapse.getOrCreateInstance(document.getElementById('adminExcelRemindForm')).show();
+    }
+    async function applyAdminExcelRemindForm() {
+        if (!_adminRemindEditDept) { alert('请先点击某部门的「编辑」'); return; }
+        const mn = document.getElementById('adminExcelRemindMinDays').value;
+        const mx = document.getElementById('adminExcelRemindMaxDays').value;
+        const rem = {
+            webhook: document.getElementById('adminExcelRemindWebhook').value.trim(),
+            secret: document.getElementById('adminExcelRemindSecret').value.trim(),
+            enabled: document.getElementById('adminExcelRemindEnabled').checked,
+            minDays: mn === '' ? 30 : parseInt(mn, 10),
+            maxDays: mx === '' ? 60 : parseInt(mx, 10)
+        };
+        const remErr = validateRemind(rem);
+        if (remErr) { alert(remErr); return; }
+        const resp = await fetch('/api/admin/departments/remind', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                dept: _adminRemindEditDept,
+                remindWebhook: rem.webhook, remindSecret: rem.secret,
+                remindEnabled: rem.enabled, remindMinDays: rem.minDays, remindMaxDays: rem.maxDays
+            })
+        });
+        const result = await resp.json();
+        if (result.success) {
+            await loadAdminDepts();
+            renderAdminExcelRemind();
+            bootstrap.Collapse.getOrCreateInstance(document.getElementById('adminExcelRemindForm')).hide();
+            alert('保存成功，下一轮提醒自动生效');
+        } else alert('保存失败：' + (result.message || '未知错误'));
+    }
+    async function testAdminExcelRemind(dept) {
+        const entry = _adminDeptsData[dept] || {};
+        const rem = entry.excelRemind || {};
+        const webhook = rem.webhook || '';
+        const secret = rem.secret || '';
+        if (!webhook || !secret) { alert('该部门未单独配置提醒群（使用默认/告警群），无法在此单独测试；请先在「通知群」里测试默认群通道，或为该部门单独配置提醒群。'); return; }
+        if (!confirm('向「' + dept + '」的提醒群发送一条测试消息？')) return;
+        const resp = await fetch('/api/admin/dingtalk/test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({webhook, secret})
+        });
+        const result = await resp.json();
+        if (result.success) alert('测试消息已发送，请到群里确认');
+        else alert('发送失败：' + JSON.stringify(result.data || result.message || '未知错误'));
+    }
+
     // ---------- 初始化 ----------
     document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('adminDeptStorage').innerHTML = storageSelectHtml('');
@@ -1674,6 +1761,7 @@ function filterData() {
         document.getElementById('adminDeptSaveBtn').addEventListener('click', saveAdminDept);
         document.getElementById('adminDingtalkGroupApplyBtn').addEventListener('click', applyDingtalkGroupForm);
         document.getElementById('adminDingtalkSaveAllBtn').addEventListener('click', saveAdminDingtalkAll);
+        document.getElementById('adminExcelRemindApplyBtn').addEventListener('click', applyAdminExcelRemindForm);
         document.getElementById('searchNameCas').addEventListener('keypress', e => { if(e.key === 'Enter') filterData(); });
         document.getElementById('searchGroup').addEventListener('keypress', e => { if(e.key === 'Enter') filterData(); });
         document.getElementById('queryLabNoBtn').addEventListener('click', () => queryAndFill(1));

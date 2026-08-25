@@ -59,13 +59,13 @@ def _load_cfg():
         return {}
 
 
-def _excel_path():
-    """读 config.json 根的 defaults.excelPath（_load_cfg 只返回 dingtalk 段，取不到）。"""
+def _departments():
+    """读 config.json 根的 departments（_load_cfg 只返回 dingtalk 段，取不到）。"""
     try:
         with open(CONFIG_FILE, encoding="utf-8") as f:
-            return (json.load(f).get("defaults") or {}).get("excelPath") or ""
+            return (json.load(f).get("departments") or {})
     except Exception:
-        return ""
+        return {}
 
 
 def _load_state():
@@ -375,13 +375,9 @@ def _route_by_group(items, cfg):
     return out
 
 
-def _collect_excel_expiring(today, min_days, max_days):
-    """读默认 Excel 路径，返回「今天+min_days ≤ 有效期 ≤ 今天+max_days」的条目（按有效期升序）。
+def _collect_excel_expiring(path, today, min_days, max_days):
+    """读指定 Excel 路径，返回「今天+min_days ≤ 有效期 ≤ 今天+max_days」的条目（按有效期升序）。
     每条 {group, labNo, name, cas, expiry(datetime.date)}。读/解析异常上抛由调用方处理。"""
-    path = _excel_path()
-    if not path:
-        print(f"{_DINGTALK_LOG} defaults.excelPath 未配置，跳过 Excel 月度提醒")
-        return []
     rows = _get_lh().read_excel_expiry_rows(path)
     lo = today + datetime.timedelta(days=min_days)
     hi = today + datetime.timedelta(days=max_days)
@@ -479,14 +475,11 @@ def _build_message(items, cfg):
     return title, "\n".join(lines)
 
 
-def _build_excel_message(rows, cfg):
+def _build_excel_message(rows, min_days, max_days):
     """标准品 Excel 即将过期月度提醒的 markdown。rows 来自 _collect_excel_expiring。"""
     dates = sorted(r["expiry"] for r in rows)
     rng = dates[0].isoformat() if dates[0] == dates[-1] else f"{dates[0].isoformat()} ~ {dates[-1].isoformat()}"
     n = len(rows)
-    ee = cfg.get("excel_expiry") or {}
-    min_days = int(ee.get("min_days", 30))
-    max_days = int(ee.get("max_days", 60))
     title = f"📅 标准品即将过期月度提醒（{n}个）"
     lines = [
         f"以下 **{n}** 个标准品将于 **{min_days}~{max_days}天内**（{rng}）到期，请及时确认：",
@@ -571,14 +564,11 @@ def run_once():
 
 
 def run_excel_notify(min_days=None, max_days=None):
-    """执行一次 Excel 月度提醒：读默认 Excel→筛「今天+min_days~今天+max_days」到期→发送。
-    成功发送 或 确认无到期项 → 标记当天完成（持久化）；
-    任一环节失败 → 不标记，由调度器在窗口内重试。"""
+    """执行一次 Excel 月度提醒：遍历 departments，每个启用且配置了 excelPath 的部门
+    读其 Excel→筛「今天+min_days~今天+max_days」到期→发到该部门提醒群。
+    循环结束即标记当天完成（持久化）：单个部门失败不触发整体重试，避免已发部门重复发。"""
     global _last_excel_notify_date
     cfg = _load_cfg()
-    if not (cfg.get("excel_webhook") or cfg.get("webhook")):
-        print(f"{_DINGTALK_LOG} dingtalk 配置缺失，跳过 Excel 月度提醒")
-        return
     ee = cfg.get("excel_expiry") or {}
     if min_days is None:
         min_days = int(ee.get("min_days", 30))
@@ -586,28 +576,40 @@ def run_excel_notify(min_days=None, max_days=None):
         max_days = int(ee.get("max_days", 60))
     today = datetime.date.today()
 
-    try:
-        rows = _collect_excel_expiring(today, min_days, max_days)
-    except Exception as e:
-        print(f"{_DINGTALK_LOG} Excel 月度提醒采集失败: {e}")
-        return
-
-    if not rows:
-        print(f"{_DINGTALK_LOG} Excel 无即将过期标准品，不发送")
+    depts = _departments()
+    if not depts:
+        print(f"{_DINGTALK_LOG} departments 未配置，跳过 Excel 月度提醒")
         _last_excel_notify_date = today
         _save_state()
         return
 
-    title, md = _build_excel_message(rows, cfg)
-    # Excel 月度提醒走独立群（excel_webhook/excel_secret），未配置则回落全局 webhook/secret
-    ok, data = send_markdown(title, md, cfg,
-                             webhook=cfg.get("excel_webhook"),
-                             secret=cfg.get("excel_secret"))
-    print(f"{_DINGTALK_LOG} Excel 月度提醒发送 {len(rows)} 条，{'成功' if ok else '失败'}: {data}")
-    if ok:
-        _last_excel_notify_date = today
-        _save_state()
-    # 发送失败：不标记完成 → 自动重试
+    for name, d in depts.items():
+        rem = d.get("excelRemind") or {}
+        if not rem.get("enabled", True):
+            continue
+        path = (d.get("excelPath") or "").strip()
+        if not path:
+            continue
+        mn = int(rem.get("min_days", min_days))
+        mx = int(rem.get("max_days", max_days))
+        webhook = rem.get("webhook") or cfg.get("excel_webhook") or cfg.get("webhook")
+        secret = rem.get("secret") or cfg.get("excel_secret") or cfg.get("secret")
+        if not webhook or not secret:
+            print(f"{_DINGTALK_LOG} Excel 提醒[{name}] 缺少 webhook/secret，跳过")
+            continue
+        try:
+            rows = _collect_excel_expiring(path, today, mn, mx)
+        except Exception as e:
+            print(f"{_DINGTALK_LOG} Excel 提醒[{name}] 采集失败: {e}")
+            continue
+        if not rows:
+            continue
+        title, md = _build_excel_message(rows, mn, mx)
+        ok, data = send_markdown(title, md, cfg, webhook=webhook, secret=secret)
+        print(f"{_DINGTALK_LOG} Excel 提醒[{name}] 发送 {len(rows)} 条，{'成功' if ok else '失败'}: {data}")
+
+    _last_excel_notify_date = today
+    _save_state()
 
 
 # ==================== 设备使用率 月度提醒 ====================

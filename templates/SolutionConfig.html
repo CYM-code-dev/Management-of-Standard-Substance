@@ -767,6 +767,7 @@
               <option value="CK-SB295-CG"></option>
               <option value="CK-SB005-CG"></option>
               <option value="CK-SB294-CG"></option>
+              <option value="CK-SB056-CN"></option>
             </datalist>
             <div class="invalid-feedback" id="solDeviceError" style="display:none;"></div>
           </div>
@@ -2099,8 +2100,9 @@
                 const unit = item.numUnitName || 'g';
                 const conc = item.concentration || '';
                 const concUnit = item.concentrationUnitName || (unit === 'g' ? '%' : 'μg/mL');
-                const step = unit === 'mL' ? 'any' : '0.0001';
-                const minVal = unit === 'mL' ? '0.001' : '0.0001';
+                const gDec = bbcdGDecimals(document.getElementById('solDevice')?.value);
+                const step = unit === 'mL' ? 'any' : (gDec === 5 ? '0.00001' : '0.0001');
+                const minVal = unit === 'mL' ? '0.001' : (gDec === 5 ? '0.00001' : '0.0001');
                 switch (field.key) {
                     case 'name':
                         td.innerHTML = `<input type="text" class="form-control form-control-sm sol-row-name" value="${escapeAttr(item.name||'')}" title="${escapeAttr(item.name||'')}" data-idx="${idx}" style="text-overflow:ellipsis;">`;
@@ -2159,7 +2161,7 @@
                     const unit = item.numUnitName || 'g';
                     const val = parseFloat(qtyEl.value);
                     if (unit === 'g' && !isNaN(val) && val > 0) {
-                        qtyEl.value = val.toFixed(4);
+                        qtyEl.value = val.toFixed(bbcdGDecimals(document.getElementById('solDevice')?.value));
                     } else if (unit === 'mL' && !isNaN(val) && val > 0) {
                         const inputDecimals = (qtyEl.value.split('.')[1] || '').length;
                         qtyEl.value = val.toFixed(Math.min(3, Math.max(2, inputDecimals)));
@@ -2208,7 +2210,7 @@
         const vol = parseFloat(volEl.value);
         const qtyStr = qtyEl.value;
         const qtyDec = (qtyStr.split('.')[1] || '');
-        const maxDec = unit === 'mL' ? 3 : 4;
+        const maxDec = unit === 'mL' ? 3 : bbcdGDecimals(document.getElementById('solDevice')?.value);
         // 小数位超限立即标红
         if (qtyDec.length > maxDec) {
             qtyEl.classList.add('is-invalid');
@@ -2326,7 +2328,7 @@
                 // 1. 领用
                 const recResp = await fetch('/api/lims/receive', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({consumable_id: String(item.id), quantity: qty, unit: item.numUnitName || 'g', receive_date: document.getElementById('solConfigureDate').value + ' ' + new Date().toTimeString().slice(0, 8)})
+                    body: JSON.stringify({consumable_id: String(item.id), quantity: qty, unit: item.numUnitName || 'g', device_names: document.getElementById('solDevice')?.value.trim() || null, receive_date: document.getElementById('solConfigureDate').value + ' ' + new Date().toTimeString().slice(0, 8)})
                 });
                 const recData = await recResp.json();
                 if (!recData.success) { alert(`第${idx+1}条领用失败: ${recData.message}`); continue; }
@@ -2617,6 +2619,12 @@
     }
 
     function bbcdEsc(s) { return escapeHtml(s == null ? '' : String(s)); }
+
+    // 配置设备包含 CK-SB056-CN（忽略大小写）时 g 领用量取 5 位小数，否则 4 位（sol/bbcd 称量输入与后端 _g_decimals 共用规则）
+    const BB_CN_DEVICE = 'CK-SB056-CN';
+    function bbcdGDecimals(deviceVal) {
+        return String(deviceVal || '').toUpperCase().includes(BB_CN_DEVICE) ? 5 : 4;
+    }
 
     // 修约规则（与 A-B μg/mL 时一致）
     function bbcdRoundQty(v, decimals) { decimals = decimals || 2; const f = Math.pow(10, decimals); return Math.round(v * f) / f; }
@@ -3658,8 +3666,10 @@
             </td>` : '';
         const stockTitle = (!isPct && src.constantVolume > 0) ? ` title="剩余 ${src.constantVolume.toFixed(2)} mL"` : '';
         const maxAttr = (!isPct && src.constantVolume > 0) ? ` max="${src.constantVolume}"` : '';
-        const qtyStep = isPct ? '0.0001' : '0.001';
-        const qtyMin = isPct ? '0.0001' : '0.001';
+        // % 源（称量 g）：CK-SB056-CN 天平支持 5 位小数
+        const gDec = bbcdGDecimals(document.getElementById('bbcdDevice')?.value);
+        const qtyStep = isPct ? (gDec === 5 ? '0.00001' : '0.0001') : '0.001';
+        const qtyMin = isPct ? (gDec === 5 ? '0.00001' : '0.0001') : '0.001';
         const resultUnit = isPct ? (src.pctConcUnit || 'μg/mL') : src.concUnit;
         tr.innerHTML = `
             <td><span class="bbcd-c-order">${bbcdEsc(src.configureOrder)}</span></td>
@@ -3726,6 +3736,13 @@
         const qtyHeader = (anyPct && anyLiquid) ? '领用量(g/mL)' : (anyPct ? '领用量(g)' : '领用量(mL)');
         document.querySelector('#bbcdConfigTable thead').innerHTML = '<tr><th>编号</th><th>源名称</th><th>源浓度</th><th>' + qtyHeader + '</th><th style="min-width:90px;">溶剂/介质</th><th style="min-width:110px;width:110px;">定容体积(mL)</th><th style="min-width:160px;">计算浓度</th></tr>';
         sources.forEach((src, idx) => bbcdSeedSourceRow(src, idx, sources.length));
+
+        // % 源（称量 g）时显示配置设备：CK-SB056-CN 天平领用量支持 5 位小数（与详情模式一致）
+        const anyPctDev = sources.some(s => s.isPctSource);
+        const devLabel = document.getElementById('bbcdDeviceLabel');
+        const devInput = document.getElementById('bbcdDevice');
+        if (devLabel) devLabel.style.display = anyPctDev ? '' : 'none';
+        if (devInput) { devInput.style.display = anyPctDev ? '' : 'none'; devInput.value = ''; }
 
         document.querySelectorAll('#bbcdConfigArea input:not([type=hidden]), #bbcdConfigArea select').forEach(el => { el.readOnly = false; el.disabled = false; });
         bootstrap.Modal.getOrCreateInstance(document.getElementById('bbcdConfigModal')).show();
@@ -6167,7 +6184,7 @@
                 const unit = o.numUnitName || 'g';
                 const recResp = await fetch('/api/lims/receive', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({consumable_id: String(o.id), quantity: qty, unit, receive_date: receiveDate})
+                    body: JSON.stringify({consumable_id: String(o.id), quantity: qty, unit, device_names: document.getElementById('bbcdDevice')?.value.trim() || null, receive_date: receiveDate})
                 });
                 const recData = await recResp.json();
                 if (!recData.success) { alert(`领用失败 ${src.solutionName}: ${recData.message}`); return; }

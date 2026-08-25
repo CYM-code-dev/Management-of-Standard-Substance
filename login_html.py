@@ -69,16 +69,24 @@ def _fmt_vol(val):
     return f"{val:.{_vol_decimals(val)}f}"
 
 
-def _round_qty(val, unit):
+CN_DEVICE = 'CK-SB056-CN'
+
+
+def _g_decimals(device=None):
+    """g 领用量小数位：配置设备包含 CK-SB056-CN（忽略大小写）取 5，否则 4。与前端 bbcdGDecimals 共用规则。"""
+    return 5 if (device and CN_DEVICE in str(device).upper()) else 4
+
+
+def _round_qty(val, unit, device=None):
     if unit == 'mL':
         return round(val, 3)
-    return round(val, 4)
+    return round(val, _g_decimals(device))
 
 
-def _fmt_qty(val, unit):
+def _fmt_qty(val, unit, device=None):
     if unit == 'mL':
         return f"{val:.3f}"
-    return f"{val:.4f}"
+    return f"{val:.{_g_decimals(device)}f}"
 
 
 def _round_conc(val, conc_unit):
@@ -980,8 +988,42 @@ def admin_get_departments():
     print_routes = config.get('print_routes', {})
     merged = {}
     for dept in set(departments) | set(print_routes):
-        merged[dept] = {**(departments.get(dept) or {}), 'printIp': print_routes.get(dept, '')}
+        dept_cfg = departments.get(dept) or {}
+        rem = dept_cfg.get('excelRemind') or {}
+        merged[dept] = {
+            **dept_cfg,
+            'excelRemind': {
+                'webhook': rem.get('webhook') or '',
+                'secret': rem.get('secret') or '',
+                'enabled': bool(rem.get('enabled', True)),
+                'min_days': int(rem.get('min_days') or 30),
+                'max_days': int(rem.get('max_days') or 60),
+            },
+            'printIp': print_routes.get(dept, ''),
+        }
     return jsonify({"success": True, "departments": merged})
+
+
+def _parse_remind_payload(data):
+    """从请求体解析「标准品 Excel 月度过期提醒（30~60 天）」字段。
+    返回 (remind, err)：remind={webhook, secret, enabled, min_days, max_days}，err 非空=校验失败。"""
+    webhook = (data.get('remindWebhook') or '').strip()
+    secret = (data.get('remindSecret') or '').strip()
+    if webhook and not webhook.startswith('https://oapi.dingtalk.com'):
+        return None, "提醒 Webhook 不是钉钉机器人地址"
+    if secret and not secret.startswith('SEC'):
+        return None, "提醒加签密钥应以 SEC 开头"
+    try:
+        min_days = int(data.get('remindMinDays') or 30)
+        max_days = int(data.get('remindMaxDays') or 60)
+    except (TypeError, ValueError):
+        return None, "提醒提前天数须为整数"
+    if min_days < 0 or max_days < min_days:
+        return None, "提醒提前天数范围不合法（0 ≤ 最小 ≤ 最大）"
+    enabled = data.get('remindEnabled')
+    enabled = True if enabled is None else bool(enabled)
+    return {'webhook': webhook, 'secret': secret, 'enabled': enabled,
+            'min_days': min_days, 'max_days': max_days}, ""
 
 
 @app.route('/api/admin/departments', methods=['POST'])
@@ -996,6 +1038,9 @@ def admin_set_departments():
     cert_path = (data.get('certPath') or '').strip()
     print_ip = (data.get('printIp') or '').strip().removeprefix('http://').removeprefix('https://').rstrip('/')
     storage_loc = (data.get('storageLocation') or '').strip()
+    remind, remind_err = _parse_remind_payload(data)
+    if remind_err:
+        return jsonify({"success": False, "message": remind_err}), 400
     numbering, err = _parse_numbering_payload(data)
     if err:
         return jsonify({"success": False, "message": err}), 400
@@ -1006,7 +1051,7 @@ def admin_set_departments():
     if not (excel_path or cert_path or numbering or storage_loc):
         departments.pop(dept, None)  # 路径与前缀全空 = 删除部门条目（打印 IP 独立处理）
     else:
-        entry = {'excelPath': excel_path, 'certPath': cert_path}
+        entry = {'excelPath': excel_path, 'certPath': cert_path, 'excelRemind': remind}
         if numbering:
             entry['numbering'] = numbering
         if storage_loc:
@@ -1020,6 +1065,30 @@ def admin_set_departments():
     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
     _niimbot_print_routes_from_config()
+    return jsonify({"success": True})
+
+
+@app.route('/api/admin/departments/remind', methods=['POST'])
+def admin_set_departments_remind():
+    """只更新某部门的「标准品 Excel 月度过期提醒」配置，不动路径/编号等其他字段。"""
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    if (session.get('display_name') or '').strip() != _ADMIN_DISPLAY_NAME:
+        return jsonify({"success": False, "message": "无权限"}), 403
+    data = request.get_json() or {}
+    dept = (data.get('dept') or '').strip()
+    if not dept:
+        return jsonify({"success": False, "message": "部门名不能为空"}), 400
+    remind, remind_err = _parse_remind_payload(data)
+    if remind_err:
+        return jsonify({"success": False, "message": remind_err}), 400
+    config = load_config()
+    departments = config.setdefault('departments', {})
+    if dept not in departments:
+        return jsonify({"success": False, "message": "部门不存在"}), 400
+    departments[dept]['excelRemind'] = remind
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
     return jsonify({"success": True})
 
 
@@ -1645,7 +1714,7 @@ def lims_receive():
     try:
         qty_val = float(quantity)
         if unit == 'g':
-            formatted_qty = f"{qty_val:.4f}"
+            formatted_qty = f"{qty_val:.{_g_decimals(data.get('device_names'))}f}"
         else:  # mL
             formatted_qty = f"{qty_val:.3f}"
     except (ValueError, TypeError):
@@ -1720,7 +1789,7 @@ def lims_save_solution():
         original_unit = p.get('original_unit', '%')
         received_unit = p.get('received_unit', 'g')
         volume_ml = _round_vol(volume_ml)
-        use_quantity = _round_qty(use_quantity, received_unit)
+        use_quantity = _round_qty(use_quantity, received_unit, p.get('device_names'))
         if original_unit == '%':
             config_conc = purity_value / 100.0 * use_quantity * 1_000_000 / volume_ml
         else:
@@ -1734,7 +1803,7 @@ def lims_save_solution():
     receive_id = str(p.get('receive_id', ''))
     original_id = str(p.get('original_id', ''))
     original_name = p.get('original_name', '')
-    qty_display = _fmt_qty(use_quantity, received_unit)
+    qty_display = _fmt_qty(use_quantity, received_unit, p.get('device_names'))
     vol_display = _fmt_vol(volume_ml)
     conc_display = _fmt_conc(config_conc, original_unit)
 
@@ -2812,7 +2881,7 @@ def lims_save_solution_mix():
         original_unit = it.get('original_unit', '%')
         received_unit = it.get('received_unit', 'g')
         try:
-            use_quantity = _round_qty(float(it.get('use_quantity', 1)), received_unit)
+            use_quantity = _round_qty(float(it.get('use_quantity', 1)), received_unit, p.get('device_names'))
         except Exception:
             use_quantity = float(it.get('use_quantity', 1))
         receive_id = str(it.get('receive_id', ''))
@@ -2830,7 +2899,7 @@ def lims_save_solution_mix():
             config_conc = purity_value * use_quantity / volume_ml
         config_conc = _round_conc(config_conc, original_unit)
         conc_display = _fmt_conc(config_conc, original_unit)
-        qty_display = _fmt_qty(use_quantity, received_unit)
+        qty_display = _fmt_qty(use_quantity, received_unit, p.get('device_names'))
 
         detail_items.append({
             "id": None, "createDatetime": now_str, "serialVersionUID": None,
@@ -3660,14 +3729,14 @@ def _fill_rf10_09_item(doc, item_payload):
     try:
         purity_value = float(purity_str.replace('%', '').strip())
         vol_f = _round_vol(float(item_payload.get('volume_ml', '')))
-        qty_f = _round_qty(float(item_payload.get('use_quantity', '')), received_unit)
+        qty_f = _round_qty(float(item_payload.get('use_quantity', '')), received_unit, device_names)
         if original_unit == '%':
             config_conc_raw = purity_value / 100.0 * qty_f * 1_000_000 / vol_f
         else:
             config_conc_raw = purity_value * qty_f / vol_f
         config_conc = _round_conc(config_conc_raw, original_unit)
         conc = _fmt_conc(config_conc, original_unit)
-        use_qty = _fmt_qty(qty_f, received_unit)
+        use_qty = _fmt_qty(qty_f, received_unit, device_names)
         volume = _fmt_vol(vol_f)
     except Exception:
         conc = str(item_payload.get('config_conc', ''))
@@ -3826,14 +3895,14 @@ def lims_export_docx():
     try:
         purity_value = float(purity_str.replace('%', '').strip())
         vol_f = _round_vol(float(p.get('volume_ml', '')))
-        qty_f = _round_qty(float(p.get('use_quantity', '')), received_unit)
+        qty_f = _round_qty(float(p.get('use_quantity', '')), received_unit, device_names)
         if original_unit == '%':
             config_conc_raw = purity_value / 100.0 * qty_f * 1_000_000 / vol_f
         else:
             config_conc_raw = purity_value * qty_f / vol_f
         config_conc = _round_conc(config_conc_raw, original_unit)
         conc = _fmt_conc(config_conc, original_unit)
-        use_qty = _fmt_qty(qty_f, received_unit)
+        use_qty = _fmt_qty(qty_f, received_unit, device_names)
         volume = _fmt_vol(vol_f)
     except Exception:
         conc = str(p.get('config_conc', ''))
