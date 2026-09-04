@@ -5787,7 +5787,7 @@ def _niimbot_ensure_connected(server):
             if not start_niimbot_server():
                 return False, "打印服务未启动，自动重启失败，请手动运行 npm start"
         else:
-            return False, f"实验室打印服务未启动（{server}），请到该电脑运行 niimblue-cli server -p 5001 --cors"
+            return False, f"实验室打印服务未启动（{server}），系统将在约5分钟内自动恢复，请稍后重试；仍未恢复请到该电脑以管理员运行 start_print_server.bat"
     except Exception:
         pass
     # 扫描串口，过滤非打印机设备，逐个尝试连接

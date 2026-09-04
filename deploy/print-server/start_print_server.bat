@@ -9,6 +9,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
+schtasks /Change /TN NiimbotPrintWatchdog /ENABLE >nul 2>&1
 schtasks /Run /TN NiimbotPrint >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Task not found. Run deploy_print_server.bat first.

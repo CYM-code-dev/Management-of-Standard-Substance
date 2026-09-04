@@ -9,9 +9,10 @@ if errorlevel 1 (
     exit /b 1
 )
 
+schtasks /Change /TN NiimbotPrintWatchdog /DISABLE >nul 2>&1
 schtasks /End /TN NiimbotPrint >nul 2>&1
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr /C:":5001 " ^| findstr /C:"LISTENING"') do taskkill /F /PID %%p >nul 2>&1
-echo [OK] Print service stopped.
+echo [OK] Print service stopped (watchdog disabled too, so it stays stopped).
 echo       It will start again at next boot (or run start_print_server.bat).
 echo       To remove autostart completely:
 echo       schtasks /Delete /TN NiimbotPrint /F

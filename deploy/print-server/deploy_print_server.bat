@@ -57,14 +57,26 @@ netsh advfirewall firewall add rule name="NiimbotPrint5001" dir=in action=allow 
 if errorlevel 1 (echo [WARN] Firewall rule failed, company server may not reach this PC) else (echo [OK] Firewall allows TCP 5001)
 
 rem ---- 5. background service: scheduled task at boot, SYSTEM, no window ----
+rem Register-ScheduledTask instead of schtasks /Create: the CLI defaults kill the
+rem task after 72h running (ExecutionTimeLimit); PowerShell lets us remove that limit.
 reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v NiimbotPrintServer /f >nul 2>&1
 schtasks /Delete /TN NiimbotPrint /F >nul 2>&1
-schtasks /Create /TN NiimbotPrint /TR "\"%~dp0run_print_server.bat\"" /SC ONSTART /RU SYSTEM /F >nul
+powershell -NoProfile -Command "$a=New-ScheduledTaskAction -Execute '%~dp0run_print_server.bat'; $s=New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 10 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; $p=New-ScheduledTaskPrincipal -UserId SYSTEM -LogonType ServiceAccount -RunLevel Highest; Register-ScheduledTask -TaskName NiimbotPrint -Action $a -Trigger (New-ScheduledTaskTrigger -AtStartup) -Settings $s -Principal $p -Force" >nul
 if errorlevel 1 (
     echo [WARN] Task creation failed. Fallback: auto-start on logon with visible window.
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v NiimbotPrintServer /t REG_SZ /d "\"%~dp0run_print_server.bat\"" /f >nul
 ) else (
-    echo [OK] Background service installed: starts at boot, no window, no logon needed.
+    echo [OK] Background service installed: starts at boot, no 72h kill, no window, no logon needed.
+)
+
+rem ---- 5b. watchdog: health check every 5 min, revive service if dead or hung ----
+schtasks /Delete /TN NiimbotPrintWatchdog /F >nul 2>&1
+schtasks /Create /TN NiimbotPrintWatchdog /TR "\"%~dp0watchdog_print_server.bat\"" /SC MINUTE /MO 5 /RU SYSTEM /F >nul
+if errorlevel 1 (
+    echo [WARN] Watchdog task failed - no auto-revive if service hangs.
+) else (
+    schtasks /Run /TN NiimbotPrintWatchdog >nul 2>&1
+    echo [OK] Watchdog installed: checks every 5 min, auto-revives dead/hung service.
 )
 
 rem ---- 6. start service now (windowless) ----

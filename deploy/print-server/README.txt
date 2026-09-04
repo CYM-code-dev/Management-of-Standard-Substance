@@ -17,16 +17,20 @@ Niimbot 标签打印服务 部署说明
 日常使用（后台服务模式）
 ------------------------
 - 打印服务以 Windows 计划任务 NiimbotPrint 在后台运行（SYSTEM 账户，无窗口、无需登录，
-  开机自动启动、崩溃自动重启）
+  开机自动启动、崩溃自动重启；已取消 Windows 默认的 72 小时运行上限）
+- 看门狗任务 NiimbotPrintWatchdog 每 5 分钟检查一次 localhost:5001，服务挂掉/假死时
+  自动杀掉并拉起，通常 5 分钟内自愈，无需人工干预
 - 电脑上不需要保持任何黑窗口，关掉也不影响打印
 - 查看运行状态：schtasks /Query /TN NiimbotPrint
-- 手动停止：右键管理员运行 stop_print_server.bat（下次开机仍会自动启动）
-- 手动启动：右键管理员运行 start_print_server.bat（无窗口后台启动）
+- 手动停止：右键管理员运行 stop_print_server.bat（同时停看门狗，否则 5 分钟后会自动复活；
+  下次开机仍会自动启动）
+- 手动启动：右键管理员运行 start_print_server.bat（无窗口后台启动，并重新启用看门狗）
 - 打印机断电/拔线后再点一次打印即可，服务会自动重扫串口重连
 
 取消开机自启（如需）
 --------------------
 schtasks /Delete /TN NiimbotPrint /F
+schtasks /Delete /TN NiimbotPrintWatchdog /F
 netsh advfirewall firewall delete rule name="NiimbotPrint5001"
 
 在公司服务器上验证连通
