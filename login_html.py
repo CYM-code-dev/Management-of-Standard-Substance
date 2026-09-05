@@ -3110,6 +3110,7 @@ def lims_update_solution():
             return _expired_response()
         if not resp.ok:
             print(f"[updateObj1] status={resp.status_code} body={resp.text[:500]}")
+            print(f"[updateObj1] payload={json.dumps(payload, ensure_ascii=False)[:8000]}")
             return jsonify({"success": False, "message": f"LIMS 请求失败，状态码: {resp.status_code}"}), 502
         result = resp.json()
         if not result.get("success"):

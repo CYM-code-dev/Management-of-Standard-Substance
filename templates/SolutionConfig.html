@@ -3548,7 +3548,7 @@
                                 rowHTML += `<td rowspan="${totalRows}"><input type="number" id="bbcdVolume" class="form-control form-control-sm" step="0.01" min="0.01" value="10.00" style="-moz-appearance:textfield;"></td>`;
                             }
                         }
-                        rowHTML += `<td><span class="bbcd-c-conc">—</span><span class="bbcd-c-unit ms-1 text-muted small">${bbcdEsc(comp.unit)}</span></td>`;
+                        rowHTML += `<td class="text-nowrap"><input type="number" class="form-control form-control-sm d-inline-block bbcd-c-conc-input" style="width:92px" step="0.0001" min="0" placeholder="—" title="默认按公式计算，可直接修改"><span class="bbcd-c-unit ms-1 text-muted small">${bbcdEsc(comp.unit)}</span></td>`;
 
                         tr.innerHTML = rowHTML;
                         tbody.appendChild(tr);
@@ -3588,7 +3588,7 @@
                         <td><span class="bbcd-c-srcConc" title="剩余 ${tr._src.constantVolume.toFixed(2)} mL">${isNaN(tr._src.concValue) ? '—' : tr._src.concValue + ' ' + bbcdEsc(tr._src.concUnit)}</span></td>
                         <td><input type="number" class="form-control form-control-sm bbcd-c-qty" step="0.01" min="0.01" max="${tr._src.constantVolume}" style="-moz-appearance:textfield;"></td>
                         ${sharedCells}
-                        <td><span class="bbcd-c-conc">—</span><span class="bbcd-c-unit ms-1 text-muted small">${bbcdEsc(tr._src.concUnit)}</span></td>`;
+                        <td class="text-nowrap"><input type="number" class="form-control form-control-sm d-inline-block bbcd-c-conc-input" style="width:92px" step="0.0001" min="0" placeholder="—" title="默认按公式计算，可直接修改"><span class="bbcd-c-unit ms-1 text-muted small">${bbcdEsc(tr._src.concUnit)}</span></td>`;
                     tbody.appendChild(tr);
                     rowIdx++;
                 }
@@ -4166,9 +4166,9 @@
                             rowHTML += '<td rowspan="' + totalRows + '"><input type="number" id="bbcdVolume" class="form-control form-control-sm" step="0.01" min="0.01" value="' + bbcdEsc(dl.volume || '') + '" style="-moz-appearance:textfield;"></td>';
                         }
                     }
-                    const _concDisp = isPctSource ? (rec.concentration || '—') : (dl.configurationConcentration || '—');
-                    const _concHasUnit = String(_concDisp).includes('(');
-                    rowHTML += '<td><span class="bbcd-c-conc">' + bbcdEsc(_concDisp) + '</span>' + (_concHasUnit ? '' : '<span class="bbcd-c-unit ms-1 text-muted small">' + bbcdEsc(comp.unit) + '</span>') + '</td>';
+                    // 计算浓度允许手动修改：N-1 同款输入框（bbcdConcInputVal/_userEdited 机制，% 源由重算回填）
+                    const _concVal = isPctSource ? '' : String(dl.configurationConcentration || '').replace(/\s*\([^)]*\)/g, '');
+                    rowHTML += '<td class="text-nowrap"><input type="number" class="form-control form-control-sm d-inline-block bbcd-c-conc-input" style="width:92px" step="0.0001" min="0" placeholder="—" title="默认按公式计算，可直接修改" value="' + bbcdEsc(_concVal) + '"><span class="bbcd-c-unit ms-1 text-muted small">' + bbcdEsc(isPctSource ? (pctConcUnit || 'μg/mL') : comp.unit) + '</span></td>';
 
                     tr.innerHTML = rowHTML;
                     tbody.appendChild(tr);
@@ -4212,9 +4212,9 @@
                 rowHTML += '<td><span class="bbcd-c-srcConc">' + bbcdEsc(dl.originalConcentration || '—') + '</span></td>';
                 rowHTML += '<td><input type="number" class="form-control form-control-sm bbcd-c-qty" step="0.01" min="0.01" value="' + bbcdEsc(dl.receivedQuantity || '') + '" style="-moz-appearance:textfield;"></td>';
                 rowHTML += sharedCells;
-                const _concDisp2 = isPctSource ? (rec.concentration || '—') : (dl.configurationConcentration || '—');
-                const _concHasUnit2 = String(_concDisp2).includes('(');
-                rowHTML += '<td><span class="bbcd-c-conc">' + bbcdEsc(_concDisp2) + '</span>' + (_concHasUnit2 ? '' : '<span class="bbcd-c-unit ms-1 text-muted small">' + bbcdEsc(dl.configurationUnit || '') + '</span>') + '</td>';
+                // 计算浓度允许手动修改：N-1 同款输入框（% 源由重算回填）
+                const _concVal2 = isPctSource ? '' : String(dl.configurationConcentration || '').replace(/\s*\([^)]*\)/g, '');
+                rowHTML += '<td class="text-nowrap"><input type="number" class="form-control form-control-sm d-inline-block bbcd-c-conc-input" style="width:92px" step="0.0001" min="0" placeholder="—" title="默认按公式计算，可直接修改" value="' + bbcdEsc(_concVal2) + '"><span class="bbcd-c-unit ms-1 text-muted small">' + bbcdEsc(isPctSource ? (pctConcUnit || 'μg/mL') : (dl.configurationUnit || '')) + '</span></td>';
 
                 tr.innerHTML = rowHTML;
                 tbody.appendChild(tr);
@@ -5271,6 +5271,8 @@
         const tbody = document.querySelector('#bbcdConfigTable tbody');
         const rows = [...tbody.querySelectorAll('tr')];
         const nowStr = new Date().toISOString().slice(0,19).replace('T',' ');
+        // 官方 updateObj1 抓包：三行 detail 均带 medium（如"四氢呋喃"），移取/定容行 receivedQuantity=0
+        const mediumDVal = document.getElementById('bbcdMediumD')?.value.trim() || null;
         const dilutionVols = [];
 
         // 从表格第一行读取所有稀释体积
@@ -5325,7 +5327,7 @@
                 dilutionSix: null, dilutionSeven: null, dilutionEight: null,
                 dilutionNine: null, dilutionTen: null, dilutionEleven: null, dilutionTwelve: null,
                 remark: null, dataSeq: takeRec ? takeRec.dataSeq : dataSeq++,
-                receivedUint: null, medium: null,
+                receivedQuantity: 0, receivedUint: null, medium: mediumDVal,
                 consumableReceive: null, configurationProcess: null,
                 configurationRecordId: null, creatorName: takeRec ? takeRec.creatorName : null, creatorId: takeRec ? takeRec.creatorId : null,
                 modifierName: null, modifyDatetime: nowStr,
@@ -5352,7 +5354,7 @@
             dilutionSix: null, dilutionSeven: null, dilutionEight: null,
             dilutionNine: null, dilutionTen: null, dilutionEleven: null, dilutionTwelve: null,
             remark: null, dataSeq: volRec ? volRec.dataSeq : dataSeq++,
-            receivedUint: null, medium: null,
+            receivedQuantity: 0, receivedUint: null, medium: mediumDVal,
             consumableReceive: null, configurationProcess: null,
             configurationRecordId: null, creatorName: volRec ? volRec.creatorName : null, creatorId: volRec ? volRec.creatorId : null,
             modifierName: null, modifyDatetime: nowStr,
@@ -5405,7 +5407,7 @@
                     dilutionSix: null, dilutionSeven: null, dilutionEight: null,
                     dilutionNine: null, dilutionTen: null, dilutionEleven: null, dilutionTwelve: null,
                     remark: null, dataSeq: concRec ? concRec.dataSeq : dataSeq++,
-                    receivedQuantity: receiveQtyStr, receivedUint: 'mL', medium: null,
+                    receivedQuantity: receiveQtyStr, receivedUint: 'mL', medium: mediumDVal,
                     consumableReceive: concRec ? concRec.consumableReceive : null, configurationProcess: null,
                     configurationRecordId: null, dataid: src.id,
                     creatorName: concRec ? concRec.creatorName : null, creatorId: concRec ? concRec.creatorId : null,
@@ -5423,7 +5425,7 @@
                 for (let i = 0; i < count; i++) {
                     const concText = concCells[i]?.value.trim();
                     if (concText) {
-                        concValues.push(`${concText}${src.concUnit}`);
+                        concValues.push(`${concText}(${src.concUnit})`);
                         concCountValues.push(`${concText}(${src.concUnit})`);
                     }
                 }
@@ -5488,7 +5490,8 @@
             auditUserName: _viewRec2 ? _viewRec2.auditUserName : null,
             auditTime: _viewRec2 ? _viewRec2.auditTime : null,
             diluteConcentrationControl: _viewRec2 ? _viewRec2.diluteConcentrationControl : '[]',
-            pageType: _viewRec2 ? _viewRec2.pageType : ('SOLUTION_TYPE_' + _srcPrefix),
+            // 详情响应若无 pageType 该 key 会被 JSON.stringify 丢弃 → 服务端 NPE 500，故兜底 D
+            pageType: _viewRec2 ? (_viewRec2.pageType || 'SOLUTION_TYPE_D') : ('SOLUTION_TYPE_' + _srcPrefix),
             saveDetailList: JSON.stringify(saveDetailList),
             originalValidityDate: originalValidityDate,
             configurationTemplateId: _viewRec2 ? _viewRec2.configurationTemplateId : null,
@@ -5499,7 +5502,7 @@
             configurationProcess: null, nextAuditUserName: null,
             disposeUserName: null, disposeTime: null, disposeWay: null,
             configurationSolutionTemplateId: null, configurationRecordId: null,
-            receivedUint: _viewRec2 ? (_viewRec2.receivedUint || 'mL') : 'mL',
+            receivedUint: _viewRec2 ? (_viewRec2.receivedUint ?? 'mL') : 'mL',
             receivedQuantity: _viewRec2 ? (_viewRec2.receivedQuantity || 0) : receivedQuantityParts.join(';'),
         };
     }
