@@ -47,6 +47,11 @@ _last_excel_attempt_dt = None   # Excel月度提醒：上次尝试时刻 → 控
 _last_device_remind_date = None  # 设备使用率提醒：当天已发送 → 当天不再重试
 _last_device_check_date = None   # 设备使用率检查：当天已处理 → 当天不再重试
 _last_device_attempt_dt = None   # 设备使用率：上次尝试时刻 → 控制重试间隔
+_last_inventory_run = None       # 入库提醒：已完成时段 "YYYY-MM-DD HH:MM"（每天两个时段各自判重）
+_last_inventory_attempt_dt = None  # 入库提醒：上次尝试时刻 → 控制重试间隔
+
+# 入库提醒时段（工作日各查一次 LIMS 未入库样品并提醒）
+_INVENTORY_SLOTS = ("09:00", "14:30")
 
 
 # ==================== 配置 / 工作日 ====================
@@ -70,7 +75,8 @@ def _departments():
 
 def _load_state():
     """读取持久化状态（last_run_date / last_eod_alert_date / last_excel_notify_date /
-    last_device_remind_date / last_device_check_date），使重启后判重/补发正确。"""
+    last_device_remind_date / last_device_check_date / last_inventory_run），
+    使重启后判重/补发正确。"""
     global _last_run_date, _last_eod_alert_date, _last_excel_notify_date
     global _last_device_remind_date, _last_device_check_date
     try:
@@ -93,6 +99,9 @@ def _load_state():
         except Exception:
             continue
         globals()[target] = d
+    # last_inventory_run 是 "日期 时段" 复合串（如 "2026-09-10 09:00"），原样恢复
+    global _last_inventory_run
+    _last_inventory_run = st.get("last_inventory_run") or None
 
 
 def _save_state():
@@ -104,6 +113,7 @@ def _save_state():
             "last_excel_notify_date": _last_excel_notify_date.isoformat() if _last_excel_notify_date else None,
             "last_device_remind_date": _last_device_remind_date.isoformat() if _last_device_remind_date else None,
             "last_device_check_date": _last_device_check_date.isoformat() if _last_device_check_date else None,
+            "last_inventory_run": _last_inventory_run,
         }
         with open(STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(st, f, ensure_ascii=False, indent=2)
@@ -298,6 +308,74 @@ def _fetch_all(system, sol_type):
             break
         page += 1
     return items
+
+
+def _fetch_pending_inventory(system):
+    """查「轻工-释放项目统计」近30天样品，返回受理超4小时仍未入库的记录（按受理时间升序）。
+
+    pageCustomQueryStatistics：query 为 JSON 串（受理起止日期），acceptTime 形如
+    "2026-09-08 08"（小时精度），inventoryTime 为 null 表示未入库。"""
+    base = system.base_url
+    url = f"{base}/detectionManager/manager/statisticalAnalysis/pageCustomQueryStatistics"
+    headers = {"Referer": f"{base}/web/"}
+    today = datetime.date.today()
+    query = json.dumps({
+        "acceptStartTime": (today - datetime.timedelta(days=29)).isoformat(),
+        "acceptEndTime": today.isoformat(),
+    }, ensure_ascii=False)
+    now = datetime.datetime.now()
+    matches, page = [], 1
+    while page <= 50:
+        params = {
+            "_search": "false", "nd": str(int(time.time() * 1000)),
+            "pageSize": 9999, "pageNo": page, "sidx": "", "sord": "asc",
+            "query": query, "name": "自定义查询", "deputyName": "轻工-释放项目统计",
+            "pid": system.current_pid or "", "pname": system.current_real_name or "",
+            "loginId": system.current_pid or "",
+        }
+        resp = system.session.get(url, params=params, headers=headers, timeout=20)
+        rd = (resp.json() or {}).get("resultData") or {}
+        for it in rd.get("voList", []) or []:
+            if it.get("inventoryTime"):
+                continue
+            try:
+                at = datetime.datetime.strptime(str(it.get("acceptTime") or "").strip(),
+                                                "%Y-%m-%d %H")
+            except Exception:
+                continue
+            if now >= at + datetime.timedelta(hours=4):
+                matches.append(it)
+        if not rd.get("hasNext", False):
+            break
+        page += 1
+    matches.sort(key=lambda x: str(x.get("acceptTime") or ""))
+    return matches
+
+
+def _fetch_accept_users(system, detection_nos):
+    """按检测单号（detectionNo 去掉末3位样品序号，如 TN26090315001→TN26090315）查
+    detection/pageObj，返回 {单号: acceptUserName(客服)}。查不到的不入字典。"""
+    base = system.base_url
+    url = f"{base}/detectionManager/manager/detection/pageObj"
+    headers = {"Referer": f"{base}/web/"}
+    out = {}
+    for no in detection_nos:
+        params = {
+            "_search": "false", "nd": str(int(time.time() * 1000)),
+            "pageSize": 1, "pageNo": 1, "sidx": "", "sord": "asc",
+            "detectionType": "PRODUCT", "orgId": "", "acceptUserId": "",
+            "auditStatus": "", "keyword": no,
+            "pid": system.current_pid or "", "pname": system.current_real_name or "",
+            "loginId": system.current_pid or "",
+        }
+        try:
+            resp = system.session.get(url, params=params, headers=headers, timeout=20)
+            vo = ((resp.json() or {}).get("resultData") or {}).get("voList") or []
+            if vo and vo[0].get("acceptUserName"):
+                out[no] = vo[0]["acceptUserName"]
+        except Exception as e:
+            print(f"{_DINGTALK_LOG} 查客服失败 no={no}: {e}")
+    return out
 
 
 def _type_label(order):
@@ -665,8 +743,57 @@ def run_device_check():
         _save_state()
 
 
+def run_inventory_remind():
+    """样品入库提醒：查近30天「轻工-释放项目统计」中受理超4小时未入库的样品并通知。
+    无未入库项 → 标记本时段完成不发；发送失败 → 不标记，窗口内自动重试。"""
+    global _last_inventory_run
+    cfg = _load_cfg()
+    iv = cfg.get("inventory_remind") or {}
+    if not (iv.get("webhook") and iv.get("secret")):
+        print(f"{_DINGTALK_LOG} inventory_remind webhook/secret 未配置，跳过入库提醒")
+        return
+    system = _acquire_system(cfg)
+    if not system:
+        print(f"{_DINGTALK_LOG} 无可用 LIMS 会话，跳过入库提醒（不标记，下轮重试）")
+        return
+    try:
+        items = _fetch_pending_inventory(system)
+    except Exception as e:
+        print(f"{_DINGTALK_LOG} 入库提醒查询失败（不标记，下轮重试）: {e}")
+        return
+    now = datetime.datetime.now()
+    slot = max((s for s in _INVENTORY_SLOTS if now.strftime("%H:%M") >= s), default=None)
+    if not items:
+        print(f"{_DINGTALK_LOG} 近30天无受理超4小时未入库样品，不发送")
+        if slot:
+            _last_inventory_run = f"{now.date()} {slot}"
+            _save_state()
+        return
+    # 补查每条对应检测单的客服（acceptUserName）
+    nos = sorted({str(it.get("detectionNo") or "")[:-3] for it in items} - {""})
+    users = _fetch_accept_users(system, nos)
+    lines = []
+    for it in items:
+        segs = [f"受理 {it.get('acceptTime') or ''}",
+                f"项目 {it.get('projectName') or ''}"]
+        u = users.get(str(it.get("detectionNo") or "")[:-3])
+        if u:
+            segs.append(f"客服 {u}")
+        lines.append(f"- {it.get('detectionNo') or ''} {it.get('sampleName') or ''}"
+                     f"（{'，'.join(segs)}）")
+    md = (f"### 释放样品入库提醒\n以下 {len(items)} 个样品受理已超过4小时仍未入库，请及时入库：\n\n"
+          + "\n\n".join(lines))
+    ok, data = send_markdown("释放样品入库提醒", md, cfg,
+                             webhook=iv.get("webhook"), secret=iv.get("secret"))
+    print(f"{_DINGTALK_LOG} 入库提醒({len(items)}个)发送，{'成功' if ok else '失败'}: {data}")
+    if ok and slot:
+        _last_inventory_run = f"{now.date()} {slot}"
+        _save_state()
+
+
 def _worker():
     global _last_attempt_dt, _last_excel_attempt_dt, _last_device_attempt_dt
+    global _last_inventory_attempt_dt
     print(f"{_DINGTALK_LOG} 调度线程已启动")
     while _flag:
         try:
@@ -737,6 +864,22 @@ def _worker():
                       and _last_device_check_date != today and dev_retry_ok):
                     _last_device_attempt_dt = now
                     run_device_check()
+
+            # ===== 样品入库提醒（专用机器人，与上述支线独立）：
+            #   工作日 9:00 / 14:30 各查一次近30天受理超4小时未入库样品并提醒。
+            #   取"最新已到点时段"：错过 9:00 可补发，9:00 完成后 14:30 自然再触发。
+            iv = cfg.get("inventory_remind") or {}
+            if iv.get("enabled", True):
+                slot = max((s for s in _INVENTORY_SLOTS
+                            if now.strftime("%H:%M") >= s), default=None)
+                iv_retry_ok = (_last_inventory_attempt_dt is None
+                               or (now - _last_inventory_attempt_dt).total_seconds()
+                               >= retry_min * 60)
+                if (slot and is_workday(today, cfg)
+                        and _last_inventory_run != f"{today} {slot}"
+                        and iv_retry_ok):
+                    _last_inventory_attempt_dt = now
+                    run_inventory_remind()
         except Exception as e:
             print(f"{_DINGTALK_LOG} 调度异常: {e}")
         time.sleep(60)
@@ -761,6 +904,7 @@ if __name__ == "__main__":
     ap.add_argument("--run-excel-now", action="store_true", help="立即执行一次 Excel 月度提醒采集+发送")
     ap.add_argument("--run-device-remind", action="store_true", help="立即发送一次设备使用率提交提醒")
     ap.add_argument("--run-device-check", action="store_true", help="立即查 device_usage.csv 本期缺失并通知")
+    ap.add_argument("--run-inventory-now", action="store_true", help="立即执行一次样品入库提醒查询+发送")
     ap.add_argument("--test-send", action="store_true", help="发送一条测试消息验证加签通道")
     ap.add_argument("--test-ocr", action="store_true", help="强制走 OCR 登录并验证查询（不发钉钉、不写状态）")
     ap.add_argument("--check-workday", action="store_true", help="打印今天/下一工作日/Excel月度提醒目标日")
@@ -817,5 +961,7 @@ if __name__ == "__main__":
         run_device_remind()
     elif args.run_device_check:
         run_device_check()
+    elif args.run_inventory_now:
+        run_inventory_remind()
     else:
         ap.print_help()
