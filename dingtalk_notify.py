@@ -474,8 +474,30 @@ def _has_photo(system, sample_id):
     return bool(rd)
 
 
+def _order_sample_ids(system, detection_no, fallback):
+    """ListToNo 取整单全部样品 id。sample/pageObj 是不完整视图（部分样品不返回，
+    曾致有照片的单子被误报无照片），照片检查必须用 ListToNo；空则回退 pageObj 行。"""
+    base = system.base_url
+    url = f"{base}/detectionManager/manager/samplePhoto/ListToNo"
+    headers = {"Referer": f"{base}/web/"}
+    params = {
+        "_search": "false", "nd": str(int(time.time() * 1000)),
+        "pageSize": 9999, "pageNo": 1, "sidx": "", "sord": "asc",
+        "no": detection_no,
+        "pid": system.current_pid or "", "pname": system.current_real_name or "",
+        "loginId": system.current_pid or "",
+    }
+    resp = system.session.get(url, params=params, headers=headers, timeout=20)
+    rd = (resp.json() or {}).get("resultData")
+    items = rd.get("voList") if isinstance(rd, dict) else rd
+    ids = [it.get("id") for it in (items or []) if it.get("id")]
+    return ids or [s.get("id") for s in fallback]
+
+
 def _report_ok(system, detection_no):
-    """报告是否已 OK：reportGrant/pageObj 按 keyword=单号能查到记录即算报告已完成。"""
+    """报告是否已 OK：reportGrant/pageObj 按 keyword=单号能查到记录即算报告已完成。
+    不带 processStatus 过滤——报告状态会流转（待发放→待归档→已发放），
+    按"待发放"过滤会漏掉已发放的单子。"""
     base = system.base_url
     url = f"{base}/detectionManager/manager/reportGrant/pageObj"
     headers = {"Referer": f"{base}/web/"}
@@ -485,8 +507,7 @@ def _report_ok(system, detection_no):
         "pageSize": 1, "pageNo": 1, "sidx": "", "sord": "asc",
         "acceptStartDate": (today - datetime.timedelta(days=29)).isoformat(),
         "acceptEndDate": today.isoformat(),
-        "processStatus": "REPORT_PROCESS_STATUS_WAIT_GRANT",
-        "isOne": "1", "isComplete": "0", "sort": "0",
+        "sort": "0",
         "keyword": detection_no,
         "pid": system.current_pid or "", "pname": system.current_real_name or "",
         "loginId": system.current_pid or "",
@@ -932,7 +953,7 @@ def run_photo_remind():
     slot = max((s for s in _PHOTO_SLOTS if now.strftime("%H:%M") >= s), default=None)
     today_s = now.date().isoformat()
     # 已提醒过/已确认无需提醒的单号直接跳过；报告已OK的单号不再查照片；
-    # 其余逐单查照片，任一样品有照片即整单跳过
+    # 其余按 ListToNo 整单样品逐个查照片，任一样品有照片即整单跳过
     pending, seen = [], 0
     for no in sorted(groups):
         if no in _photo_reminded_nos or no in _photo_ok_nos:
@@ -941,7 +962,8 @@ def run_photo_remind():
         samples = groups[no]
         if _report_ok(system, no):
             _photo_ok_nos[no] = today_s  # 报告已OK，永久跳过（报告状态只进不退）
-        elif any(_has_photo(system, s.get("id")) for s in samples):
+        elif any(_has_photo(system, sid)
+                 for sid in _order_sample_ids(system, no, samples)):
             _photo_ok_nos[no] = today_s
         else:
             pending.append((no, samples))
