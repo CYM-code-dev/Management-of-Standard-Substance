@@ -61,6 +61,13 @@ _photo_ok_nos = {}               # 制样照片提醒：已确认有照片的单
 # 制样照片提醒时段（工作日各查一次）
 _PHOTO_SLOTS = ("10:00", "14:00")
 
+_last_order_run = None           # 16143下单提醒：已完成时段 "YYYY-MM-DD HH:MM"
+_last_order_attempt_dt = None    # 16143下单提醒：上次尝试时刻 → 控制重试间隔
+_order_reminded_nos = {}         # 16143下单提醒：已提醒过的单号 → 提醒日期（一次即止）
+
+# 16143项目下单提醒时段（工作日16:00一次）
+_ORDER_SLOTS = ("16:00",)
+
 
 # ==================== 配置 / 工作日 ====================
 def _load_cfg():
@@ -118,6 +125,11 @@ def _load_state():
                            if str(v) >= cutoff}
     _photo_ok_nos = {k: v for k, v in (st.get("photo_ok_nos") or {}).items()
                      if str(v) >= cutoff}
+    # 16143下单提醒：已完成时段 + 已提醒单号（一次即止），同一 cutoff 清理
+    global _last_order_run, _order_reminded_nos
+    _last_order_run = st.get("last_order_run") or None
+    _order_reminded_nos = {k: v for k, v in (st.get("order_reminded_nos") or {}).items()
+                           if str(v) >= cutoff}
 
 
 def _save_state():
@@ -133,6 +145,8 @@ def _save_state():
             "last_photo_run": _last_photo_run,
             "photo_reminded_nos": _photo_reminded_nos,
             "photo_ok_nos": _photo_ok_nos,
+            "last_order_run": _last_order_run,
+            "order_reminded_nos": _order_reminded_nos,
         }
         with open(STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(st, f, ensure_ascii=False, indent=2)
@@ -190,6 +204,18 @@ def next_workday(d, cfg=None):
         if is_workday(cur, cfg):
             return cur
         cur += datetime.timedelta(days=1)
+    return cur
+
+
+def prev_workday(d, cfg=None):
+    """d 之前（不含 d）最近的工作日。"""
+    cfg = cfg if cfg is not None else _load_cfg()
+    cur = d - datetime.timedelta(days=1)
+    # 上限 40 天，防配置异常死循环
+    for _ in range(40):
+        if is_workday(cur, cfg):
+            return cur
+        cur -= datetime.timedelta(days=1)
     return cur
 
 
@@ -515,6 +541,51 @@ def _report_ok(system, detection_no):
     resp = system.session.get(url, params=params, headers=headers, timeout=20)
     rd = (resp.json() or {}).get("resultData") or {}
     return bool(rd.get("voList"))
+
+
+def _date_md(val):
+    """受理/要求时间转 "MM-DD HH"：支持毫秒时间戳（pageAuditAll 的 acceptTime）
+    与 "YYYY-MM-DD HH:MM:SS.0" 字符串；失败原样返回截断值。"""
+    s = str(val or "").strip()
+    try:
+        return datetime.datetime.fromtimestamp(int(s) / 1000).strftime("%m-%d %H")
+    except Exception:
+        return s[5:13] if len(s) >= 13 else s
+
+
+def _fetch_order_audits(system, cfg):
+    """查受理日期在上一工作日~今天、16143项目（消费品实验室）、结果未审核的
+    明细行（resultCheckIn/pageAuditAll，按 检测单×项目 一行），按检测单号分组：
+    {detectionNo: [行, ...]}。"""
+    base = system.base_url
+    url = f"{base}/detectionManager/manager/resultCheckIn/pageAuditAll"
+    headers = {"Referer": f"{base}/web/detectionResultAuditListMgt.html?menuId=43"}
+    today = datetime.date.today()
+    start_d = prev_workday(today, cfg)
+    groups, page = {}, 1
+    while page <= 50:
+        params = {
+            "_search": "false", "nd": str(int(time.time() * 1000)),
+            "pageSize": 200, "pageNo": page, "sidx": "", "sord": "asc",
+            "acceptStartDate": start_d.isoformat(),
+            "acceptEndDate": today.isoformat(),
+            "decideProjectMethodName": "16143",
+            "decideProjectOrgName": "23",
+            "auditStatus": "CHECK_UNREVIEWED",
+            "pid": system.current_pid or "", "pname": system.current_real_name or "",
+            "loginId": system.current_pid or "",
+        }
+        resp = system.session.get(url, params=params, headers=headers, timeout=20)
+        rd = (resp.json() or {}).get("resultData") or {}
+        for it in rd.get("voList", []) or []:
+            sp = it.get("sampleProject") if isinstance(it.get("sampleProject"), dict) else {}
+            no = str(sp.get("detectionNo") or it.get("detectionNo") or "")
+            if no:
+                groups.setdefault(no, []).append(it)
+        if not rd.get("hasNext", False):
+            break
+        page += 1
+    return groups
 
 
 def _type_label(order):
@@ -998,9 +1069,65 @@ def run_photo_remind():
         _save_state()
 
 
+def run_order_remind():
+    """16143项目下单提醒：查上一工作日~今天受理、结果未审核的检测单并通知。
+    单号提醒过一次即写入状态永不重提；空结果不发；发送失败不标记窗口内重试。"""
+    global _last_order_run, _order_reminded_nos
+    cfg = _load_cfg()
+    orn = cfg.get("order_remind") or {}
+    if not (orn.get("webhook") and orn.get("secret")):
+        print(f"{_DINGTALK_LOG} order_remind webhook/secret 未配置，跳过16143下单提醒")
+        return
+    system = _acquire_system(cfg)
+    if not system:
+        print(f"{_DINGTALK_LOG} 无可用 LIMS 会话，跳过16143下单提醒（不标记，下轮重试）")
+        return
+    try:
+        groups = _fetch_order_audits(system, cfg)
+    except Exception as e:
+        print(f"{_DINGTALK_LOG} 16143下单提醒查询失败（不标记，下轮重试）: {e}")
+        return
+    now = datetime.datetime.now()
+    slot = max((s for s in _ORDER_SLOTS if now.strftime("%H:%M") >= s), default=None)
+    today_s = now.date().isoformat()
+    pending = {no: rows for no, rows in groups.items() if no not in _order_reminded_nos}
+    if not pending:
+        print(f"{_DINGTALK_LOG} 窗口内无新增16143未审核单子，不发送")
+        if slot:
+            _last_order_run = f"{now.date()} {slot}"
+            _save_state()
+        return
+    lines = []
+    for no in sorted(pending):
+        items = pending[no]
+        sps = [it.get("sampleProject") if isinstance(it.get("sampleProject"), dict) else {}
+               for it in items]
+        smalls = sorted({str(sp.get("sampleSmallNo") or "").strip() for sp in sps} - {""})
+        sp0 = sps[0] if sps else {}
+        segs = [f"受理 {_date_md(sp0.get('acceptTime'))}",
+                f"完成 {_date_md(sp0.get('requireTime'))}"]
+        if len(smalls) != 1:
+            segs.insert(0, f"小号 {'、'.join(smalls) or '-'}")
+        lines.append(f"- {no + (smalls[0] if len(smalls) == 1 else '')} "
+                     f"{sp0.get('sampleName') or ''}（{'，'.join(segs)}）")
+    md = (f"新增 **{len(pending)}** 单**16143**，请及时跟进：\n\n"
+          + "\n\n".join(lines))
+    ok, data = send_markdown("16143项目下单情况提醒", md, cfg,
+                             webhook=orn.get("webhook"), secret=orn.get("secret"))
+    print(f"{_DINGTALK_LOG} 16143下单提醒({len(pending)}单)发送，{'成功' if ok else '失败'}: {data}")
+    if not ok:
+        return  # 未标记，窗口内自动重试
+    _order_reminded_nos.update({no: today_s for no in pending})
+    cutoff = (now.date() - datetime.timedelta(days=45)).isoformat()
+    _order_reminded_nos = {k: v for k, v in _order_reminded_nos.items() if v >= cutoff}
+    if slot:
+        _last_order_run = f"{now.date()} {slot}"
+    _save_state()
+
+
 def _worker():
     global _last_attempt_dt, _last_excel_attempt_dt, _last_device_attempt_dt
-    global _last_inventory_attempt_dt, _last_photo_attempt_dt
+    global _last_inventory_attempt_dt, _last_photo_attempt_dt, _last_order_attempt_dt
     print(f"{_DINGTALK_LOG} 调度线程已启动")
     while _flag:
         try:
@@ -1104,6 +1231,22 @@ def _worker():
                         and ph_retry_ok):
                     _last_photo_attempt_dt = now
                     run_photo_remind()
+
+            # ===== 16143项目下单提醒（专用机器人，与上述支线独立）：
+            #   工作日 16:00 查上一工作日~今天受理、结果未审核的检测单并提醒；
+            #   单号提醒过一次即写入状态永不重提。错过 16:00 可补发。
+            orn = cfg.get("order_remind") or {}
+            if orn.get("enabled", True) and orn.get("webhook"):
+                o_slot = max((s for s in _ORDER_SLOTS
+                              if now.strftime("%H:%M") >= s), default=None)
+                o_retry_ok = (_last_order_attempt_dt is None
+                              or (now - _last_order_attempt_dt).total_seconds()
+                              >= retry_min * 60)
+                if (o_slot and is_workday(today, cfg)
+                        and _last_order_run != f"{today} {o_slot}"
+                        and o_retry_ok):
+                    _last_order_attempt_dt = now
+                    run_order_remind()
         except Exception as e:
             print(f"{_DINGTALK_LOG} 调度异常: {e}")
         time.sleep(60)
@@ -1130,6 +1273,7 @@ if __name__ == "__main__":
     ap.add_argument("--run-device-check", action="store_true", help="立即查 device_usage.csv 本期缺失并通知")
     ap.add_argument("--run-inventory-now", action="store_true", help="立即执行一次样品入库提醒查询+发送")
     ap.add_argument("--run-photo-now", action="store_true", help="立即执行一次制样照片提醒查询+发送")
+    ap.add_argument("--run-order-now", action="store_true", help="立即执行一次16143项目下单提醒查询+发送")
     ap.add_argument("--test-send", action="store_true", help="发送一条测试消息验证加签通道")
     ap.add_argument("--test-ocr", action="store_true", help="强制走 OCR 登录并验证查询（不发钉钉、不写状态）")
     ap.add_argument("--check-workday", action="store_true", help="打印今天/下一工作日/Excel月度提醒目标日")
@@ -1191,5 +1335,8 @@ if __name__ == "__main__":
     elif args.run_photo_now:
         _load_state()  # 手动跑也要恢复已提醒/有照片缓存，否则全量重查重发
         run_photo_remind()
+    elif args.run_order_now:
+        _load_state()  # 手动跑也要恢复已提醒单号，否则重复发送
+        run_order_remind()
     else:
         ap.print_help()
