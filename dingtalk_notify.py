@@ -53,6 +53,14 @@ _last_inventory_attempt_dt = None  # 入库提醒：上次尝试时刻 → 控�
 # 入库提醒时段（工作日各查一次 LIMS 未入库样品并提醒）
 _INVENTORY_SLOTS = ("09:00", "14:30")
 
+_last_photo_run = None           # 制样照片提醒：已完成时段 "YYYY-MM-DD HH:MM"（每天两个时段各自判重）
+_last_photo_attempt_dt = None    # 制样照片提醒：上次尝试时刻 → 控制重试间隔
+_photo_reminded_nos = {}         # 制样照片提醒：已提醒过的单号 → 提醒日期（一次即止）
+_photo_ok_nos = {}               # 制样照片提醒：已确认有照片的单号 → 确认日期（免重复查）
+
+# 制样照片提醒时段（工作日各查一次）
+_PHOTO_SLOTS = ("10:00", "14:00")
+
 
 # ==================== 配置 / 工作日 ====================
 def _load_cfg():
@@ -102,6 +110,14 @@ def _load_state():
     # last_inventory_run 是 "日期 时段" 复合串（如 "2026-09-10 09:00"），原样恢复
     global _last_inventory_run
     _last_inventory_run = st.get("last_inventory_run") or None
+    # 制样照片提醒：已完成时段 + 已提醒单号（一次即止）；45 天前旧编号清除（查询窗口仅30天）
+    global _last_photo_run, _photo_reminded_nos, _photo_ok_nos
+    _last_photo_run = st.get("last_photo_run") or None
+    cutoff = (datetime.date.today() - datetime.timedelta(days=45)).isoformat()
+    _photo_reminded_nos = {k: v for k, v in (st.get("photo_reminded_nos") or {}).items()
+                           if str(v) >= cutoff}
+    _photo_ok_nos = {k: v for k, v in (st.get("photo_ok_nos") or {}).items()
+                     if str(v) >= cutoff}
 
 
 def _save_state():
@@ -114,6 +130,9 @@ def _save_state():
             "last_device_remind_date": _last_device_remind_date.isoformat() if _last_device_remind_date else None,
             "last_device_check_date": _last_device_check_date.isoformat() if _last_device_check_date else None,
             "last_inventory_run": _last_inventory_run,
+            "last_photo_run": _last_photo_run,
+            "photo_reminded_nos": _photo_reminded_nos,
+            "photo_ok_nos": _photo_ok_nos,
         }
         with open(STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(st, f, ensure_ascii=False, indent=2)
@@ -171,6 +190,21 @@ def next_workday(d, cfg=None):
         if is_workday(cur, cfg):
             return cur
         cur += datetime.timedelta(days=1)
+    return cur
+
+
+def _add_workdays(d, n, cfg=None):
+    """d 之后第 n 个工作日（d 本身不计）。用于"受理日期+2个工作日"的宽限期判断。"""
+    cfg = cfg if cfg is not None else _load_cfg()
+    cur = d
+    found = 0
+    # 上限 60 天，防配置异常死循环
+    for _ in range(60):
+        cur += datetime.timedelta(days=1)
+        if is_workday(cur, cfg):
+            found += 1
+            if found >= n:
+                return cur
     return cur
 
 
@@ -376,6 +410,90 @@ def _fetch_accept_users(system, detection_nos):
         except Exception as e:
             print(f"{_DINGTALK_LOG} 查客服失败 no={no}: {e}")
     return out
+
+
+def _fetch_make_samples(system, cfg):
+    """查近30天受理、制样标记 A 的样品（sample/pageObj），剔除「未收样」和受理
+    未满 2 个工作日宽限期（含小时：受理时刻+2个工作日的同一时刻未到不算到期）的行，
+    按检测单号分组：{detectionNo: [样品行, ...]}。"""
+    base = system.base_url
+    url = f"{base}/detectionManager/manager/sample/pageObj"
+    headers = {"Referer": f"{base}/web/"}
+    today = datetime.date.today()
+    now = datetime.datetime.now()
+    groups, page = {}, 1
+    while page <= 50:
+        params = {
+            "_search": "false", "nd": str(int(time.time() * 1000)),
+            "pageSize": 9999, "pageNo": page, "sidx": "", "sord": "asc",
+            "acceptStartDate": (today - datetime.timedelta(days=29)).isoformat(),
+            "acceptEndDate": today.isoformat(),
+            "makeSampleMarkNames": "A",
+            "sampleReceiveStatus": "SAMPLE_RECEIVE_STATUS_ALREADY",
+            "pid": system.current_pid or "", "pname": system.current_real_name or "",
+            "loginId": system.current_pid or "",
+        }
+        resp = system.session.get(url, params=params, headers=headers, timeout=20)
+        rd = (resp.json() or {}).get("resultData") or {}
+        for it in rd.get("voList", []) or []:
+            if it.get("processStatus") == "未收样":
+                continue
+            try:
+                at = datetime.datetime.strptime(
+                    str(it.get("acceptTime") or "").strip(), "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                try:
+                    at = datetime.datetime.strptime(
+                        str(it.get("acceptTime") or "").strip(), "%Y-%m-%d %H")
+                except Exception:
+                    continue
+            due = datetime.datetime.combine(_add_workdays(at.date(), 2, cfg), at.time())
+            if now < due:
+                continue  # 受理未满2个工作日（到同一时刻），仍在宽限期内
+            no = str(it.get("detectionNo") or "")
+            if no:
+                groups.setdefault(no, []).append(it)
+        if not rd.get("hasNext", False):
+            break
+        page += 1
+    return groups
+
+
+def _has_photo(system, sample_id):
+    """样品照片是否已上传（selectPhoto 的 resultData 非空即有照片）。"""
+    base = system.base_url
+    url = f"{base}/detectionManager/manager/samplePhoto/selectPhoto"
+    headers = {"Referer": f"{base}/web/"}
+    params = {
+        "sampleId": sample_id,
+        "pid": system.current_pid or "", "pname": system.current_real_name or "",
+        "loginId": system.current_pid or "",
+    }
+    resp = system.session.get(url, params=params, headers=headers, timeout=20)
+    rd = (resp.json() or {}).get("resultData")
+    return bool(rd)
+
+
+def _report_ok(system, detection_no):
+    """报告是否已 OK：reportGrant/pageObj 按 keyword=单号能查到记录即算报告已完成。"""
+    base = system.base_url
+    url = f"{base}/detectionManager/manager/reportGrant/pageObj"
+    headers = {"Referer": f"{base}/web/"}
+    today = datetime.date.today()
+    params = {
+        "_search": "false", "nd": str(int(time.time() * 1000)),
+        "pageSize": 1, "pageNo": 1, "sidx": "", "sord": "asc",
+        "acceptStartDate": (today - datetime.timedelta(days=29)).isoformat(),
+        "acceptEndDate": today.isoformat(),
+        "processStatus": "REPORT_PROCESS_STATUS_WAIT_GRANT",
+        "isOne": "1", "isComplete": "0", "sort": "0",
+        "keyword": detection_no,
+        "pid": system.current_pid or "", "pname": system.current_real_name or "",
+        "loginId": system.current_pid or "",
+    }
+    resp = system.session.get(url, params=params, headers=headers, timeout=20)
+    rd = (resp.json() or {}).get("resultData") or {}
+    return bool(rd.get("voList"))
 
 
 def _type_label(order):
@@ -791,9 +909,76 @@ def run_inventory_remind():
         _save_state()
 
 
+def run_photo_remind():
+    """制样照片未上传提醒：查近30天勾选制样、受理满2个工作日且全部样品无照片的单子并通知。
+    单号提醒过一次即写入状态永不重提；查到照片的单号记入缓存免重复查；
+    分批（每批50单）发送，每批成功才标记该批，失败不标记窗口内重试。"""
+    global _last_photo_run, _photo_reminded_nos, _photo_ok_nos
+    cfg = _load_cfg()
+    ph = cfg.get("make_sample_photo_remind") or {}
+    if not (ph.get("webhook") and ph.get("secret")):
+        print(f"{_DINGTALK_LOG} make_sample_photo_remind webhook/secret 未配置，跳过制样照片提醒")
+        return
+    system = _acquire_system(cfg)
+    if not system:
+        print(f"{_DINGTALK_LOG} 无可用 LIMS 会话，跳过制样照片提醒（不标记，下轮重试）")
+        return
+    try:
+        groups = _fetch_make_samples(system, cfg)
+    except Exception as e:
+        print(f"{_DINGTALK_LOG} 制样照片提醒查询失败（不标记，下轮重试）: {e}")
+        return
+    now = datetime.datetime.now()
+    slot = max((s for s in _PHOTO_SLOTS if now.strftime("%H:%M") >= s), default=None)
+    today_s = now.date().isoformat()
+    # 已提醒过/已确认无需提醒的单号直接跳过；报告已OK的单号不再查照片；
+    # 其余逐单查照片，任一样品有照片即整单跳过
+    pending, seen = [], 0
+    for no in sorted(groups):
+        if no in _photo_reminded_nos or no in _photo_ok_nos:
+            continue
+        seen += 1
+        samples = groups[no]
+        if _report_ok(system, no):
+            _photo_ok_nos[no] = today_s  # 报告已OK，永久跳过（报告状态只进不退）
+        elif any(_has_photo(system, s.get("id")) for s in samples):
+            _photo_ok_nos[no] = today_s
+        else:
+            pending.append((no, samples))
+        if seen % 500 == 0:
+            print(f"{_DINGTALK_LOG} 制样照片检查进度 {seen} 单...")
+    _save_state()  # photo_ok 是事实缓存，不依赖发送结果，先落盘
+    if not pending:
+        print(f"{_DINGTALK_LOG} 近30天无制样后照片未上传的单子，不发送")
+        if slot:
+            _last_photo_run = f"{now.date()} {slot}"
+            _save_state()
+        return
+    for i in range(0, len(pending), 50):
+        chunk = pending[i:i + 50]
+        rows = [f"| {no} | {str(samples[0].get('acceptTime') or '')[:13]} |"
+                for no, samples in chunk]
+        tail = f"（第{i // 50 + 1}批，共{len(pending)}单）" if len(pending) > 50 else ""
+        md = ("### 制样照片未上传提醒\n"
+              f"以下单子已勾选制样但样品照片未上传，请及时上传{tail}：\n\n"
+              "| 单号 | 受理时间 |\n|---|---|\n" + "\n".join(rows))
+        ok, data = send_markdown("制样照片未上传提醒", md, cfg,
+                                 webhook=ph.get("webhook"), secret=ph.get("secret"))
+        print(f"{_DINGTALK_LOG} 制样照片提醒({len(chunk)}单)发送，{'成功' if ok else '失败'}: {data}")
+        if not ok:
+            return  # 未标记，窗口内自动重试剩余单
+        _photo_reminded_nos.update({no: today_s for no, _ in chunk})
+        cutoff = (now.date() - datetime.timedelta(days=45)).isoformat()
+        _photo_reminded_nos = {k: v for k, v in _photo_reminded_nos.items() if v >= cutoff}
+        _photo_ok_nos = {k: v for k, v in _photo_ok_nos.items() if v >= cutoff}
+        if slot:
+            _last_photo_run = f"{now.date()} {slot}"
+        _save_state()
+
+
 def _worker():
     global _last_attempt_dt, _last_excel_attempt_dt, _last_device_attempt_dt
-    global _last_inventory_attempt_dt
+    global _last_inventory_attempt_dt, _last_photo_attempt_dt
     print(f"{_DINGTALK_LOG} 调度线程已启动")
     while _flag:
         try:
@@ -880,6 +1065,23 @@ def _worker():
                         and iv_retry_ok):
                     _last_inventory_attempt_dt = now
                     run_inventory_remind()
+
+            # ===== 制样照片未上传提醒（专用机器人，与上述支线独立）：
+            #   工作日 10:00 / 14:00 各查一次近30天勾选制样、受理满2个工作日（含小时）
+            #   且全部样品无照片的单子；单号提醒过一次即写入状态永不重提。
+            #   取"最新已到点时段"：错过可补发，10:00 完成后 14:00 自然再触发。
+            ph = cfg.get("make_sample_photo_remind") or {}
+            if ph.get("enabled", True) and ph.get("webhook"):
+                p_slot = max((s for s in _PHOTO_SLOTS
+                              if now.strftime("%H:%M") >= s), default=None)
+                ph_retry_ok = (_last_photo_attempt_dt is None
+                               or (now - _last_photo_attempt_dt).total_seconds()
+                               >= retry_min * 60)
+                if (p_slot and is_workday(today, cfg)
+                        and _last_photo_run != f"{today} {p_slot}"
+                        and ph_retry_ok):
+                    _last_photo_attempt_dt = now
+                    run_photo_remind()
         except Exception as e:
             print(f"{_DINGTALK_LOG} 调度异常: {e}")
         time.sleep(60)
@@ -905,6 +1107,7 @@ if __name__ == "__main__":
     ap.add_argument("--run-device-remind", action="store_true", help="立即发送一次设备使用率提交提醒")
     ap.add_argument("--run-device-check", action="store_true", help="立即查 device_usage.csv 本期缺失并通知")
     ap.add_argument("--run-inventory-now", action="store_true", help="立即执行一次样品入库提醒查询+发送")
+    ap.add_argument("--run-photo-now", action="store_true", help="立即执行一次制样照片提醒查询+发送")
     ap.add_argument("--test-send", action="store_true", help="发送一条测试消息验证加签通道")
     ap.add_argument("--test-ocr", action="store_true", help="强制走 OCR 登录并验证查询（不发钉钉、不写状态）")
     ap.add_argument("--check-workday", action="store_true", help="打印今天/下一工作日/Excel月度提醒目标日")
@@ -963,5 +1166,8 @@ if __name__ == "__main__":
         run_device_check()
     elif args.run_inventory_now:
         run_inventory_remind()
+    elif args.run_photo_now:
+        _load_state()  # 手动跑也要恢复已提醒/有照片缓存，否则全量重查重发
+        run_photo_remind()
     else:
         ap.print_help()
