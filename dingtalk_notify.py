@@ -983,7 +983,7 @@ def run_photo_remind():
         tail = f"（第{i // 50 + 1}批，共{len(pending)}单）" if len(pending) > 50 else ""
         md = ("### 制样照片未上传提醒\n"
               f"以下单子已勾选制样但样品照片未上传，请及时上传{tail}：\n\n"
-              "| 单号 | 受理时间 |\n|---|---|\n" + "\n".join(rows))
+              "| 报验编号 | 受理时间 |\n|---|---|\n" + "\n".join(rows))
         ok, data = send_markdown("制样照片未上传提醒", md, cfg,
                                  webhook=ph.get("webhook"), secret=ph.get("secret"))
         print(f"{_DINGTALK_LOG} 制样照片提醒({len(chunk)}单)发送，{'成功' if ok else '失败'}: {data}")
