@@ -5980,6 +5980,15 @@
         });
     }
 
+    // 合并导出祖先行取量：mL 按 bbcdFmtQty 显示规则重排(>=0.1→2位)；
+    // LIMS 存储串为保存时 3 位(1.000)。g 保持原串(位数由设备决定，见 _fmt_qty/bbcdGDecimals)
+    function bbcdFmtMergedQty(qty, unit) {
+        const s = String(qty || '').trim();
+        if (!s || unit === 'g') return s;
+        const v = parseFloat(s);
+        return isFinite(v) ? bbcdFmtQty(v) : s;
+    }
+
     function bbcdBuildMergedPayload(dPayload, chainData) {
         const records = chainData.matched_records || [];
         const topAncestor = chainData.top_ancestor || {};
@@ -6029,7 +6038,7 @@
                         dilutionIdx,
                         originalName: dl.originalName || '',
                         originalConcentration: dl.originalConcentration || '',
-                        receivedQuantity: dl.receivedQuantity || '',
+                        receivedQuantity: bbcdFmtMergedQty(dl.receivedQuantity, dl.receivedUint || 'mL'),
                         receivedUint: dl.receivedUint || 'mL',
                         medium: dl.medium || r.medium || '',
                         volume: dl.volume || r.constant_volume || '',
@@ -6064,7 +6073,7 @@
                     originalName: r.parent_name || '',
                     originalConcentration: r.parent_concentration
                         ? `${r.parent_concentration}(${r.parent_conc_unit})` : '',
-                    receivedQuantity: r.received_quantity || '',
+                    receivedQuantity: bbcdFmtMergedQty(r.received_quantity, r.received_unit || 'mL'),
                     receivedUint: r.received_unit || 'mL',
                     medium: r.medium || '',
                     volume: r.constant_volume || '',
