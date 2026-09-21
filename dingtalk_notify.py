@@ -51,7 +51,7 @@ _last_inventory_run = None       # 入库提醒：已完成时段 "YYYY-MM-DD HH
 _last_inventory_attempt_dt = None  # 入库提醒：上次尝试时刻 → 控制重试间隔
 
 # 入库提醒时段（工作日各查一次 LIMS 未入库样品并提醒）
-_INVENTORY_SLOTS = ("09:00", "14:30")
+_INVENTORY_SLOTS = ("09:00", "15:00")
 
 _last_photo_run = None           # 制样照片提醒：已完成时段 "YYYY-MM-DD HH:MM"（每天两个时段各自判重）
 _last_photo_attempt_dt = None    # 制样照片提醒：上次尝试时刻 → 控制重试间隔
@@ -1200,8 +1200,8 @@ def _worker():
                     run_device_check()
 
             # ===== 样品入库提醒（专用机器人，与上述支线独立）：
-            #   工作日 9:00 / 14:30 各查一次近30天受理超4小时未入库样品并提醒。
-            #   取"最新已到点时段"：错过 9:00 可补发，9:00 完成后 14:30 自然再触发。
+            #   工作日 9:00 / 15:00 各查一次近30天受理超4小时未入库样品并提醒。
+            #   取"最新已到点时段"：错过 9:00 可补发，9:00 完成后 15:00 自然再触发。
             iv = cfg.get("inventory_remind") or {}
             if iv.get("enabled", True):
                 slot = max((s for s in _INVENTORY_SLOTS
