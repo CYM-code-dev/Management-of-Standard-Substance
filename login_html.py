@@ -9,6 +9,7 @@ import datetime
 import base64
 import hashlib
 import re
+import socket
 import uuid
 from io import BytesIO
 from urllib.parse import urlencode
@@ -6135,12 +6136,25 @@ if __name__ == '__main__':
     print("  登录页面: http://127.0.0.1:5000/login")
     print("  耗材查询主页: http://127.0.0.1:5000/")
     print("  有机标准品管理: http://127.0.0.1:5000/organic-std")
+    # 端口互斥探测：Werkzeug 默认 SO_REUSEADDR，Windows 下第二个实例能静默双绑定
+    # 5000 端口，导致两份钉钉调度线程、通知重复发送（2026-09-22 15:00 双发根因）。
+    # 裸 bind 不带 REUSEADDR：已有实例监听则抛错，双开在拉起打印/调度前即失败。
+    _probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        _probe.bind(('0.0.0.0', 5000))
+    except OSError:
+        sys.exit('[FATAL] 5000 端口已被占用：已有服务实例在运行，请勿重复启动'
+                 '（服务器重启请用 nssm restart FlaskStdMgr）')
+    finally:
+        _probe.close()
     start_niimbot_server()
-    # 钉钉标液过期提醒：仅在 reloader 子进程启动调度线程，避免双实例重复发送
-    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    debug = os.environ.get('FLASK_DEBUG') == '1'
+    # 钉钉过期提醒调度线程：debug(reloader) 时仅在子进程启动避免父子双调度；
+    # 非 debug 单进程直接启动（此时 WERKZEUG_RUN_MAIN 永不成立，不能用它做条件）。
+    if not (debug and os.environ.get('WERKZEUG_RUN_MAIN') != 'true'):
         try:
             import dingtalk_notify
             dingtalk_notify.start()
         except Exception as e:
             print(f"[DingTalk] 调度器启动失败: {e}")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=debug)
