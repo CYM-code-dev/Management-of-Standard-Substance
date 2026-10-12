@@ -917,7 +917,8 @@ function filterData() {
                 if (/^\d+$/.test(rawExpiry) && rawExpiry.length > 4) rawExpiry = excelDateToJSDate(Number(rawExpiry));
                 if (/^\d+$/.test(rawStorage) && rawStorage.length > 4) rawStorage = excelDateToJSDate(Number(rawStorage));
                 const record = { id: uid, originalId: rawOriginalId, group: (idx.group !== undefined && row[idx.group] !== undefined) ? row[idx.group].toString().trim() : '', labNo: rawLabNo, name: (idx.name !== undefined && row[idx.name] !== undefined) ? row[idx.name].toString().trim() : '', cas: (idx.cas !== undefined && row[idx.cas] !== undefined) ? row[idx.cas].toString().trim() : '', spec: (idx.spec !== undefined && row[idx.spec] !== undefined) ? row[idx.spec].toString().trim() : '', manufacturer: (idx.manufacturer !== undefined && row[idx.manufacturer] !== undefined) ? row[idx.manufacturer].toString().trim() : '', expiry: rawExpiry, location: (idx.location !== undefined && row[idx.location] !== undefined) ? row[idx.location].toString().trim() : '', storageDate: rawStorage, usage: (idx.usage !== undefined && row[idx.usage] !== undefined) ? row[idx.usage].toString().trim() : '未开封', remarks: (idx.remarks !== undefined && row[idx.remarks] !== undefined) ? row[idx.remarks].toString().trim() : '' };
-                if (record.group && record.name && record.cas) allRecords.push(record);
+                // 只要求名称+编号/CAS，组别列在 FCM 台账中常为空，不能作为行有效性条件
+                if (record.name && (record.originalId || record.cas)) allRecords.push(record);
             }
         }
         if (allRecords.length === 0) return false;
