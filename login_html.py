@@ -1312,6 +1312,22 @@ def serve_cert(filename):
 # ==================== 智能插入写入 Excel ====================
 _KNOWN_SHEET_NAMES = ['有机标准物质', 'FCM标准品']
 
+# FCM 多 sheet 台账（FCM-标准品.xlsx）：sheet 按存放温度分，内部编号前缀=sheet（A→室温 B→4℃ C→-18℃），
+# 内部编号在第 10 列，与单 sheet 的有机台账（编号在第 1 列、区域=sheet 内区块）是两套结构
+_FCM_SHEET_PREFIXES = {'室温': 'A', '4℃': 'B', '-18℃': 'C'}
+
+def _fcm_mode(wb):
+    """workbook 是否为 FCM 多 sheet 台账。返回 {sheet名: 前缀}（空 dict = 不是）。"""
+    return {s: p for s, p in _FCM_SHEET_PREFIXES.items() if s in wb.sheetnames}
+
+def _fcm_find_row(ws, inner_id):
+    """在 FCM sheet 第 10 列(内部编号)中找 inner_id，返回行号或 None。"""
+    for row in ws.iter_rows(min_row=2):
+        v = row[9].value if len(row) > 9 else None
+        if v is not None and str(v).strip() == inner_id:
+            return row[0].row
+    return None
+
 def detect_sheet_name(wb):
     """从 workbook 中自动检测目标 sheet 名"""
     for name in _KNOWN_SHEET_NAMES:
@@ -1602,6 +1618,33 @@ def add_to_excel():
 
         if ext == '.xlsx':
             wb = openpyxl.load_workbook(excel_path)
+            fcm_sheets = _fcm_mode(wb)
+            if fcm_sheets:
+                # FCM 多 sheet 台账：前缀决定 sheet，追加到该 sheet 末尾（sheet 内行按编号有序）
+                prefix = (new_original_id or '')[:1].upper()
+                target = next((s for s, p in fcm_sheets.items() if p == prefix), None)
+                if target is None:
+                    target = next(iter(fcm_sheets))  # 前缀不在规则内，兜底第一个（室温）
+                ws = wb[target]
+                if new_original_id and any(_fcm_find_row(wb[s], new_original_id) for s in fcm_sheets):
+                    wb.close()
+                    return jsonify({"success": False, "message": f"内部编号 {new_original_id} 已存在"}), 400
+                row_no = ws.max_row + 1
+                while row_no > 2 and is_row_empty([c.value for c in ws[row_no - 1]]):
+                    row_no -= 1  # 跳过表尾空行
+                # 列序：标准物质编号/中文名称/到货日期/供应商/CAS/规格/有效期/余量/用完作废日期/内部编号
+                vals = [record.get('labNo', ''), record.get('name', ''), record.get('storageDate', ''),
+                        record.get('manufacturer', ''), record.get('cas', ''), record.get('spec', ''),
+                        record.get('expiry', ''), record.get('usage', ''), '', new_original_id]
+                for col, v in enumerate(vals, 1):
+                    ws.cell(row=row_no, column=col, value=v)
+                if row_no > 2:
+                    for col in range(1, len(vals) + 1):
+                        copy_cell_style(ws.cell(row=row_no - 1, column=col), ws.cell(row=row_no, column=col))
+                wb.save(excel_path)
+                wb.close()
+                return jsonify({"success": True, "message": f"已添加到 [{target}] 表"})
+
             sheet_name = detect_sheet_name(wb) or '有机标准物质'
             numbering_rule = get_effective_numbering_rule(session.get('display_name', ''), session.get('org_name'), sheet_name)
             if sheet_name not in wb.sheetnames:
@@ -4865,6 +4908,24 @@ def update_excel_record():
 
         if ext == '.xlsx':
             wb = openpyxl.load_workbook(excel_path)
+            fcm_sheets = _fcm_mode(wb)
+            if fcm_sheets:
+                # FCM 多 sheet 台账：按内部编号(第10列)在三个温度 sheet 中定位
+                for s in fcm_sheets:
+                    row_no = _fcm_find_row(wb[s], lab_no)
+                    if row_no:
+                        ws = wb[s]
+                        # 列0=标准物质编号(CK码)，列1-7 表单可改，列8 用完/作废日期无对应字段、列9=定位键，均保留
+                        for field, col in [('originalId', 1), ('name', 2), ('storageDate', 3),
+                                           ('manufacturer', 4), ('cas', 5), ('spec', 6),
+                                           ('expiry', 7), ('usage', 8)]:
+                            ws.cell(row=row_no, column=col, value=record.get(field, ''))
+                        wb.save(excel_path)
+                        wb.close()
+                        return jsonify({"success": True, "message": f"已更新 [{s}] 表"})
+                wb.close()
+                return jsonify({"success": True, "message": f"Excel 中未找到内部编号 {lab_no}，跳过"})
+
             sheet_name = detect_sheet_name(wb)
             if not sheet_name or sheet_name not in wb.sheetnames:
                 wb.close()
@@ -4978,6 +5039,19 @@ def delete_excel_record():
 
         if ext == '.xlsx':
             wb = openpyxl.load_workbook(excel_path)
+            fcm_sheets = _fcm_mode(wb)
+            if fcm_sheets:
+                # FCM 多 sheet 台账：按内部编号(第10列)定位所在 sheet 后整行删除
+                for s in fcm_sheets:
+                    row_no = _fcm_find_row(wb[s], lab_no)
+                    if row_no:
+                        wb[s].delete_rows(row_no)
+                        wb.save(excel_path)
+                        wb.close()
+                        return jsonify({"success": True, "message": f"已从 [{s}] 表删除"})
+                wb.close()
+                return jsonify({"success": True, "message": f"Excel 中未找到内部编号 {lab_no}，跳过"})
+
             sheet_name = detect_sheet_name(wb)
             if not sheet_name or sheet_name not in wb.sheetnames:
                 wb.close()

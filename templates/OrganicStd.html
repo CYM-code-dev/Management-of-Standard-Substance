@@ -971,14 +971,16 @@ function filterData() {
     function getNextAvailableNumber(prefix) {
         const usedNumbers = new Set();
         standardsData.forEach(item => {
-            const origId = item.originalId || '';
-            if (prefix === '') {
-                if (/^\d+$/.test(origId)) usedNumbers.add(parseInt(origId, 10));
-            } else {
-                const regex = new RegExp(`^${prefix}(\\d+)$`, 'i');
-                const match = origId.match(regex);
-                if (match) usedNumbers.add(parseInt(match[1], 10));
-            }
+            // FCM 台账的编号在 labNo(内部编号)，有机台账在 originalId，两处都扫
+            [item.originalId, item.labNo].forEach(origId => {
+                origId = (origId || '').toString().trim();
+                if (prefix === '') {
+                    if (/^\d+$/.test(origId)) usedNumbers.add(parseInt(origId, 10));
+                } else {
+                    const match = origId.match(new RegExp(`^${prefix}(\\d+)$`, 'i'));
+                    if (match) usedNumbers.add(parseInt(match[1], 10));
+                }
+            });
         });
         let nextNum = 1;
         while (usedNumbers.has(nextNum)) nextNum++;
