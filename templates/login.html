@@ -162,7 +162,7 @@
             </div>
         </div>
         <input type="hidden" name="client_ua" id="clientUaField" value="">
-        <input type="hidden" name="next" value="/">
+        <input type="hidden" name="next" value="{{ request.args.get('next', '/') }}">
         <button type="submit" class="btn">登 录</button>
     </form>
     <div class="note">点击刷新验证码 · 登录成功后可保存密码</div>

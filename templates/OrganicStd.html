@@ -1326,15 +1326,39 @@ function filterData() {
     function openDeleteModal(id, name) { deleteTargetId = id; document.getElementById('deleteItemName').innerText = name; new bootstrap.Modal(document.getElementById('deleteModal')).show(); }
     window.openDeleteModal = openDeleteModal;
 
-    function confirmDelete() {
-        if (deleteTargetId) {
-            standardsData = standardsData.filter(s => s.id !== deleteTargetId);
-            localStorage.setItem('standardData', JSON.stringify(standardsData));
-            resetFilters();
-            updateGroupDatalist();
-            bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
-            deleteTargetId = null;
+    async function confirmDelete() {
+        if (!deleteTargetId) return;
+        const target = standardsData.find(s => s.id === deleteTargetId);
+        // 有 Excel 路径时先删 Excel，成功才移除本地（否则刷新后记录又回来）
+        if (excelUncPath && target) {
+            const btn = document.getElementById('confirmDeleteBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 同步 Excel...';
+            try {
+                const resp = await fetch('/api/delete_excel_record', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ record: { labNo: target.labNo } })
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    alert('从 Excel 删除失败：' + data.message);
+                    return;
+                }
+            } catch (err) {
+                alert('从 Excel 删除时发生错误：' + err.message);
+                return;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '确认删除';
+            }
         }
+        standardsData = standardsData.filter(s => s.id !== deleteTargetId);
+        localStorage.setItem('standardData', JSON.stringify(standardsData));
+        resetFilters();
+        updateGroupDatalist();
+        bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+        deleteTargetId = null;
     }
 
     async function saveSettingsAndLoad() {

@@ -30,6 +30,12 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
 app.secret_key = 'a-fixed-secret-key-for-login-system-2026'
+
+
+@app.after_request
+def _close_conn(resp):
+    resp.headers["Connection"] = "close"   # 服务重启后浏览器不会拿死连接发 POST（点击无反应）
+    return resp
 CORS(app, supports_credentials=True)
 
 # 仪器使用率上报（独立模块，开放不认证）
@@ -4950,6 +4956,68 @@ def update_excel_record():
 
     except Exception as e:
         return jsonify({"success": False, "message": f"更新 Excel 失败: {_excel_save_error_detail(e)}"}), 500
+
+
+@app.route('/api/delete_excel_record', methods=['POST'])
+def delete_excel_record():
+    """删除标准品：按实验室编号定位并整行删除（与 update_excel_record 同一表头定位逻辑）。"""
+    if not session.get('logged_in'):
+        return jsonify({"success": False, "message": "未登录"}), 401
+    try:
+        data = request.get_json(silent=True) or {}
+        record = data.get('record') or {}
+        lab_no = str(record.get('labNo', '')).strip()
+        if not lab_no:
+            return jsonify({"success": False, "message": "缺少实验室编号"}), 400
+
+        excel_path, _ = get_user_paths(session.get('display_name', ''), session.get('org_name'))
+        excel_path = excel_path.strip()
+        if not excel_path:
+            return jsonify({"success": False, "message": "未配置 Excel 路径"}), 400
+        ext = os.path.splitext(excel_path)[1].lower()
+
+        if ext == '.xlsx':
+            wb = openpyxl.load_workbook(excel_path)
+            sheet_name = detect_sheet_name(wb)
+            if not sheet_name or sheet_name not in wb.sheetnames:
+                wb.close()
+                return jsonify({"success": False, "message": "工作表不存在"}), 400
+            ws = wb[sheet_name]
+
+            header_row = None
+            lab_col = None
+            for row_idx in range(1, min(6, ws.max_row + 1)):
+                for col_idx, cell in enumerate(ws[row_idx], 1):
+                    if cell.value is not None and str(cell.value).strip() == '实验室编号':
+                        header_row, lab_col = row_idx, col_idx
+                        break
+                if header_row:
+                    break
+            if header_row is None:
+                wb.close()
+                return jsonify({"success": False, "message": "未找到含‘实验室编号’的表头行"}), 400
+
+            target_row = None
+            for row_idx in range(header_row + 1, ws.max_row + 1):
+                cv = ws.cell(row=row_idx, column=lab_col).value
+                if cv is not None and str(cv).strip() == lab_no:
+                    target_row = row_idx
+                    break
+            if target_row is None:
+                wb.close()
+                return jsonify({"success": True, "message": f"Excel 中未找到实验室编号 {lab_no}，跳过"})
+
+            ws.delete_rows(target_row)
+            wb.save(excel_path)
+            wb.close()
+            return jsonify({"success": True, "message": "已从 Excel 删除"})
+
+        else:
+            # ponytail: xlwt 无删行能力，现网台账为 .xlsx；.xls 需要时再补整表重写
+            return jsonify({"success": False, "message": "仅支持 .xlsx 删除，.xls 请手动删除"}), 400
+
+    except Exception as e:
+        return jsonify({"success": False, "message": f"删除 Excel 记录失败: {_excel_save_error_detail(e)}"}), 500
 
 
 
