@@ -880,8 +880,13 @@ def run_excel_notify(min_days=None, max_days=None):
             continue
         mn = int(rem.get("min_days", min_days))
         mx = int(rem.get("max_days", max_days))
-        webhook = rem.get("webhook") or cfg.get("excel_webhook") or cfg.get("webhook")
-        secret = rem.get("secret") or cfg.get("excel_secret") or cfg.get("secret")
+        if d.get("excelRemind"):
+            # 部门显式配置了提醒 → 只发部门自己的群；webhook 没配就跳过，不回退全局群（FCM 曾因此发进消费品群）
+            webhook = rem.get("webhook")
+            secret = rem.get("secret") or cfg.get("excel_secret") or cfg.get("secret")
+        else:
+            webhook = cfg.get("excel_webhook") or cfg.get("webhook")
+            secret = cfg.get("excel_secret") or cfg.get("secret")
         if not webhook or not secret:
             print(f"{_DINGTALK_LOG} Excel 提醒[{name}] 缺少 webhook/secret，跳过")
             continue
